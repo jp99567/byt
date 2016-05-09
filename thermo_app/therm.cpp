@@ -48,7 +48,8 @@ public:
 	struct Sensor {
 		explicit Sensor(const RomCode& rc)
 		:romcode(rc)
-		,curVal(badval){}
+		,curVal(badval)
+		,lastValid(badval){}
 
 		//Sensor(const Sensor&) = delete;
 
@@ -410,9 +411,7 @@ int main()
 	auto sample_time = std::chrono::system_clock::now();
 	while(!thread_util::shutdown_req){
 
-		if(!therm.measure()){
-			std::cerr << "measure error\n";
-		}
+		therm.measure();
 
 		sample_time += std::chrono::seconds(5);
 		if(sample_time < std::chrono::system_clock::now()){
