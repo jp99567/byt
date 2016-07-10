@@ -5,14 +5,14 @@ use warnings;
 use feature ':5.14';
 
 sub getCurTemp{
-	open(my $fd, '<', '/tmp/cur_temp') || die $!;
+	open(my $fd, '<', '/run/cur_temp') || die $!;
 	my $val = <$fd>;
 	close($fd);
 	return $val;
 }
 
 sub getTargetTemp{
-	open(my $fd, '<', '/tmp/target_temp') || die $!;
+	open(my $fd, '<', '/run/target_temp') || die $!;
 	my $val = <$fd>;
 	close($fd);
 	$val = $val*1;
@@ -25,14 +25,14 @@ sub getTargetTemp{
 sub heat($){
 	my $val = shift;
 	my $ch = $val ? '1' : '0';
-	open(my $fd, '>', '/tmp/heater') || die $!;
+	open(my $fd, '>', '/run/heater') || die $!;
 	print $fd $ch;
 	close($fd);
 	say STDOUT time(),' heating ',$ch;
 }
 
 sub isheating(){
-	open(my $fd, '<', '/tmp/heater') || die $!;
+	open(my $fd, '<', '/run/heater') || die $!;
 	my $v = <$fd>;
 	close($fd);
 	return int($v);
@@ -45,7 +45,7 @@ $SIG{INT} = sub{ $fini_req_flag = 1; say "stop..."; };
 sub print_state($$$){
 	my ( $heating, $target, $cur) = @_;
 	$heating = $heating ? 'ON' : 'OFF';
-	open(my $fd, '>', '/tmp/heater_stat') || die $!;
+	open(my $fd, '>', '/run/heater_stat') || die $!;
 	say $fd "heating: $heating\ntarget temp: $target deg\ncurrent temp: $cur deg";
 	close($fd);
 }
@@ -53,7 +53,7 @@ sub print_state($$$){
 sub print_state2($$$$){
 	my ( $heating, $target, $cur, $ratio) = @_;
 	$heating = $heating ? 'ON' : 'OFF';
-	open(my $fd, '>', '/tmp/heater_stat') || die $!;
+	open(my $fd, '>', '/run/heater_stat') || die $!;
 	say $fd "heating: $heating\ntarget temp: $target deg\ncurrent temp: $cur deg";
 	say $fd "power ratio: $ratio %";
 	close($fd);
@@ -61,8 +61,8 @@ sub print_state2($$$$){
 
 #naive first order
 sub thermostat(){
-	my $hysteresis = 0.1;
-	my $sample_interval = 10;
+	my $hysteresis = 0.05;
+	my $sample_interval = 1;
 	
 	while(!$fini_req_flag){
 		my $cur = getCurTemp()*1;
