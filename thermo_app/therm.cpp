@@ -151,7 +151,7 @@ bool OwThermNet::measure()
 
 			////////////////
 			if(t!=badval && i.romcode == mrc){
-				FILE *f = fopen("/tmp/cur_temp", "w");
+				FILE *f = fopen("/run/cur_temp", "w");
 				fprintf(f, "%.4f\n", t);
 				fclose(f);
 			}

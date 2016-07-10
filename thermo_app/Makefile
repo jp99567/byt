@@ -3,7 +3,7 @@ MACHINE = $(shell uname -m)
 
 CC = g++
 CPPFLAGS = -Wall -g3 -pthread -std=gnu++0x
-LFLAGS = -pthread
+LFLAGS = -pthread -flto
 LIBS = -lpq -lrt
 SRCS = log_trace_debug.cpp pgdbwrapper.cpp exporter.cpp therm.cpp data.cpp thread_util.cpp
 #SRCS = *.cpp
