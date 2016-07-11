@@ -6,7 +6,7 @@ cd `dirname $0`
 IPADDR=`./get-current`
 [[ -n $IPADDR ]]
 TMPF=/run/tmp/ip-addr-byt.txt
-
+echo `date` check >> /tmp/check-script
 if [[ -f $TMPF ]] && [[ $(<$TMPF) == $IPADDR ]]; then
 	exit
 fi

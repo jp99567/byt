@@ -5,7 +5,8 @@ set -e
 [[ -n $1 ]]
 ADDRFILE=ip-addr.txt
 echo $1 > $ADDRFILE
+echo `date` push1 >> /tmp/check-script
 git commit --all --message="changed ip $1"
 git pull --rebase
 git push
-
+echo `date` push2 >> /tmp/check-script
