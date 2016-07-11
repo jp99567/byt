@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -ex
+
+cd `dirname $0`
+IPADDR=`./get-current`
+[[ -n $IPADDR ]]
+TMPF=/run/tmp/ip-addr-byt.txt
+
+if [[ -f $TMPF ]] && [[ $(<$TMPF) == $IPADDR ]]; then
+	exit
+fi
+
+ping -c1 $IPADDR
+./push $IPADDR
+echo $IPADDR > $TMPF

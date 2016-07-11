@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -ex
+
+[[ -n $1 ]]
+echo push $1 
+
