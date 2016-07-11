@@ -1,7 +1,11 @@
 #!/bin/bash
 
-set -ex
+set -e
 
 [[ -n $1 ]]
-echo push $1 
+ADDRFILE=ip-addr.txt
+echo $1 > $ADDRFILE
+git commit --all --message="changed ip $1"
+git pull --rebase
+git push
 
