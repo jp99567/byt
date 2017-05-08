@@ -1,0 +1,8 @@
+
+*.o
+*.so
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+.metadata
+RemoteSystemsTempFiles
