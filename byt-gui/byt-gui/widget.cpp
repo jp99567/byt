@@ -24,14 +24,22 @@ Widget::Widget(QWidget *parent)
     setLayout(layout);
     bytConn = new TcpConnection;
     bytConn->moveToThread(&ioThread);
+    bytClient = new BytRequest(bytConn->getClientChannel());
+    bytClient->moveToThread(&clientThread);
     connect(connection, &QPushButton::toggled, this, &Widget::onConnectionButtonChecked);
     connect(&ioThread, &QThread::finished, bytConn, &QObject::deleteLater);
+    connect(&clientThread, &QThread::finished, bytClient, &QObject::deleteLater);
     connect(this, &Widget::connectionReq, bytConn, &TcpConnection::connectTo);
+    connect(audioCh1, &QPushButton::clicked, bytClient, &BytRequest::c1);
+    connect(audioCh2, &QPushButton::clicked, bytClient, &BytRequest::c2);
     ioThread.start();
+    clientThread.start();
 }
 
 Widget::~Widget()
 {
+    clientThread.quit();
+    clientThread.wait();
     ioThread.quit();
     ioThread.wait();
 }

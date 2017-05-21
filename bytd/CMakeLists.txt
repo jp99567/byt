@@ -11,5 +11,6 @@ find_package(Boost COMPONENTS system REQUIRED)
 include_directories(/home/j/workspace/spdlog-0.13.0/include)
 add_executable (bytd main.cpp gen-req/request_types.cpp gen-req/request_constants.cpp gen-req/BytRequest.cpp)
 target_link_libraries(bytd ${Boost_SYSTEM_LIBRARY} Threads::Threads thrift)
+set(CMAKE_BUILD_TYPE Debug)
 set_property(TARGET bytd PROPERTY CXX_STANDARD 14)
 

@@ -14,13 +14,18 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
         widget.cpp \
-    tcpconnection.cpp
+    tcpconnection.cpp\
+    gen-req/BytRequest.cpp \
+    lbidich/packet.cpp
 
 HEADERS  += widget.h \
     bytrequestclient.h \
-    tcpconnection.h
+    tcpconnection.h \
+    lbidich/packet.h \
+    lbidich/iconnection.h \
+    lbidich/channel.h
 
-LIBS += -lthriftc
+LIBS += -lthrift
 
 INCLUDEPATH += /home/j/workspace/repo/bytd
 

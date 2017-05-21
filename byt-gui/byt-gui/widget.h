@@ -8,6 +8,7 @@
 class QPushButton;
 class QLabel;
 class TcpConnection;
+class BytRequest;
 
 class Widget : public QWidget
 {
@@ -27,7 +28,9 @@ private:
     QPushButton* audioCh2;
     QLabel * connInfo;
     TcpConnection* bytConn;
+    BytRequest* bytClient;
     QThread ioThread;
+    QThread clientThread;
 
 private slots:
     void onConnectionButtonChecked(bool on);

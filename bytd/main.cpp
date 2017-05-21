@@ -18,6 +18,8 @@
 #include <thrift/server/TThreadedServer.h>
 #include <spdlog/spdlog.h>
 #include "gen-req/BytRequest.h"
+#include "lbidich/packet.h"
+#include "lbidich/iconnection.h"
 
 
 std::shared_ptr<spdlog::logger> logger() {
@@ -30,7 +32,7 @@ std::shared_ptr<spdlog::logger> logger() {
 using boost::asio::ip::tcp;
 using apache::thrift::transport::TTransport;
 
-class tcp_connection
+class tcp_connection : public std::enable_shared_from_this<tcp_connection>
 {
 public:
   using sPtr = std::shared_ptr<tcp_connection>;
@@ -47,11 +49,61 @@ public:
 
   void start()
   {
+	  do_read();
+/*
     boost::asio::async_write(socket_, boost::asio::buffer(std::string("ABC")),
     		[this](const boost::system::error_code& error,
       size_t bytes_transferred){
     	handle_write(error, bytes_transferred);
-    });
+    });*/
+  }
+
+  ~tcp_connection()
+    {
+  	  LOG_INFO("destruct tcp:connection");
+    }
+
+  void do_read()
+  {
+	  auto self = shared_from_this();
+	  socket_.async_read_some(boost::asio::buffer(bufIn),
+	  	  [this,self](const boost::system::error_code& error, size_t bytes_transferred){
+		  	  if(!error){
+		  		  LOG_INFO("read: {}", bytes_transferred);
+	  			  auto ptr = std::cbegin(bufIn);
+	  			  auto end = std::cbegin(bufIn) + bytes_transferred;
+	  			  do{
+	  				   ptr = packetIn.load(ptr, end-ptr);
+	  				   if(ptr){
+	  					   auto id = (lbidich::ChannelId)packetIn.getHeader().chId;
+	  					   onNewPacket(id, packetIn.getMsg());
+	  				   }
+	  				   if(ptr == end)
+	  					   break;
+	  			  }
+	  			  while(ptr);
+
+	  			  do_read();
+	  		  }
+	  		  else{
+	  			  LOG_INFO("read error {}:{}:{}", error.category().name(),
+	  					  error.message(),
+	  					  error.value());
+	  		  }
+	  	  });
+  }
+
+  void onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf buf)
+  {
+	  switch(ch)
+	  {
+	  	  case lbidich::ChannelId::auth:
+	  		  LOG_INFO("auth:{}", buf.size());
+	  		  break;
+	  	  default:
+	  		  LOG_INFO("channel unknown {}", int(ch));
+	  		  break;
+	  }
   }
 
 private:
@@ -60,13 +112,15 @@ private:
   {
   }
 
-  void handle_write(const boost::system::error_code& /*error*/,
-      size_t /*bytes_transferred*/)
+  void handle_write(const boost::system::error_code& error,
+      size_t bytes_transferred)
   {
+
   }
 
   tcp::socket socket_;
-  std::string message_;
+  lbidich::PacketIn packetIn;
+  std::array<uint8_t, 64> bufIn;
 };
 
 class ZweiKanalServer : public apache::thrift::transport::TServerTransport
@@ -171,10 +225,12 @@ private:
   void handle_accept(tcp_connection::sPtr new_connection,
       const boost::system::error_code& error)
   {
-	  LOG_INFO("new connection");
-    if (!error)
-    {
+    if (!error){
+      LOG_INFO("new connection");
       new_connection->start();
+    }
+    else{
+    	LOG_INFO("accept error {}:{}", error.category().name(), error.value());
     }
 
     start_accept();
