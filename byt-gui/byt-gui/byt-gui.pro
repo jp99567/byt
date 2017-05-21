@@ -23,7 +23,8 @@ HEADERS  += widget.h \
     tcpconnection.h \
     lbidich/packet.h \
     lbidich/iconnection.h \
-    lbidich/channel.h
+    lbidich/channel.h \
+    lbidich/byttransport.h
 
 LIBS += -lthrift
 
