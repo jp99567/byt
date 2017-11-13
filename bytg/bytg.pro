@@ -24,8 +24,9 @@ HEADERS  += widget.h \
     lbidich/channel.h \
     lbidich/byttransport.h
 
-LIBS += -lthrift
+INCLUDEPATH += ../../thrift-0.10.0/lib/cpp/src
 
-INCLUDEPATH += /home/j/workspace/repo/bytd
+unix:LIBS += -L../../thrift-0.10.0-x86_64/lib/
+LIBS += -lthrift
 
 CONFIG += c++14
