@@ -4,13 +4,11 @@
 #
 #-------------------------------------------------
 
-QT       += core gui network
+QT += network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-TARGET = byt-gui
 TEMPLATE = app
-
 
 SOURCES += main.cpp\
         widget.cpp \
@@ -30,5 +28,4 @@ LIBS += -lthrift
 
 INCLUDEPATH += /home/j/workspace/repo/bytd
 
-CONFIG -= c++11
-QMAKE_CXXFLAGS += -Werror -std=gnu++14
+CONFIG += c++14
