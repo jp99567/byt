@@ -29,4 +29,6 @@ private:
 } /* namespace Util */
 
 #define LOG_INFO(...) Util::Log::instance().get()->info(__VA_ARGS__)
+#define LOG_ERR(...) Util::Log::instance().get()->error(__VA_ARGS__)
+#define LOG_DBG(...) Util::Log::instance().get()->debug(__VA_ARGS__)
 

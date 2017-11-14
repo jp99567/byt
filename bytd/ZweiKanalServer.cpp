@@ -2,6 +2,16 @@
 
 #include "Log.h"
 
+class Transport : public apache::thrift::transport::TTransport
+{
+public:
+	Transport(tcp_connection::sPtr conn)
+	:conn(conn){}
+
+private:
+	tcp_connection::sPtr conn;
+};
+
 ZweiKanalServer::ZweiKanalServer(boost::asio::io_service &io_service)
     :io_service(io_service)
     ,acceptor(io_service, tcp::endpoint(tcp::v4(), 1981))
@@ -49,9 +59,14 @@ void ZweiKanalServer::close()
 boost::shared_ptr<apache::thrift::transport::TTransport> ZweiKanalServer::acceptImpl()
 {
     std::unique_lock<std::mutex> lk(lock);
-    cvaccept.wait(lk, [this]{return !conns.empty() || interruptReq});
+    cvaccept.wait(lk, [this]{return !conns.empty() || interruptReq;});
     if(!interruptReq)
     {
+    	if(!conns.empty()){
+    		auto tcp = conns.front();
+    		conns.pop();
+    		return boost::shared_ptr<TTransport>(new Transport(tcp));
+    	}
         return boost::shared_ptr<TTransport>(nullptr);
     }
     else

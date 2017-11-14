@@ -7,6 +7,8 @@
 
 using boost::asio::ip::tcp;
 
+class IConnServer;
+
 class tcp_connection : public std::enable_shared_from_this<tcp_connection>
 {
 public:
@@ -26,10 +28,6 @@ public:
 
   ~tcp_connection();
 
-  void do_read();
-
-  void onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf buf);
-
 private:
   tcp_connection(boost::asio::io_service& io_service,  IConnServer& connServ)
     :socket_(io_service)
@@ -40,8 +38,11 @@ private:
   void handle_write(const boost::system::error_code& error,
       size_t bytes_transferred)
   {
-
   }
+
+  void do_read();
+  bool onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf buf);
+  std::string connectionInfo() const;
 
   tcp::socket socket_;
   lbidich::PacketIn packetIn;

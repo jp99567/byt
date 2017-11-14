@@ -62,10 +62,6 @@ private:
 
   void addVerified(tcp_connection::sPtr connection) override;
 
-  void addInvader(tcp_connection::sPtr) override
-  {
-  }
-
   bool interruptReq = false;
   std::thread ioThread;
   boost::asio::io_service& io_service;

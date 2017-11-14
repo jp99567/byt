@@ -15,7 +15,7 @@ void tcp_connection::start()
 
 tcp_connection::~tcp_connection()
 {
-    LOG_INFO("destruct tcp:connection");
+    LOG_INFO("destruct tcp:connection {}", connectionInfo());
 }
 
 void tcp_connection::do_read()
@@ -31,7 +31,8 @@ void tcp_connection::do_read()
                 ptr = packetIn.load(ptr, end-ptr);
                 if(ptr){
                     auto id = (lbidich::ChannelId)packetIn.getHeader().chId;
-                    onNewPacket(id, packetIn.getMsg());
+                    if(!onNewPacket(id, packetIn.getMsg()))
+                    	return;
                 }
                 if(ptr == end)
                     break;
@@ -48,7 +49,7 @@ void tcp_connection::do_read()
     });
 }
 
-void tcp_connection::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf buf)
+bool tcp_connection::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf buf)
 {
     switch(ch)
     {
@@ -58,12 +59,24 @@ void tcp_connection::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf buf)
         LOG_INFO("auth:{} {}", buf.size(), authMsg);
         if(authMsg == "Na Straz!")
         {
-            connServ.addVerified()
+            connServ.addVerified(shared_from_this());
+        }
+        else
+        {
+        	LOG_ERR("auth failed {}", connectionInfo());
+        	return false;
         }
     }
         break;
     default:
-        LOG_INFO("channel unknown {}", int(ch));
+        LOG_ERR("channel unknown {}", int(ch));
         break;
     }
+    return true;
 }
+
+std::string tcp_connection::connectionInfo() const
+{
+	return "TODO";
+}
+
