@@ -5,17 +5,18 @@
 
 using lbidich::ChannelId;
 
-
-
 TcpConnection::TcpConnection()
     :channelDown(ChannelId::down, *this)
     ,channelUp(ChannelId::up, *this)
     ,transport({ {ChannelId::down, boost::shared_ptr<apache::thrift::transport::TTransport>(new BytTransport(channelDown))},
                  {ChannelId::up,    boost::shared_ptr<apache::thrift::transport::TTransport>(new   BytTransport(channelUp))} } )
+    ,onNewMsgCallbacks({ {ChannelId::down, [](lbidich::DataBuf){} },
+                         {ChannelId::up, [](lbidich::DataBuf){}   } })
 {
     socket = std::unique_ptr<QAbstractSocket>(new QTcpSocket(this));
     connect(socket.get(), &QAbstractSocket::stateChanged, this, &TcpConnection::stateChanged);
     connect(this, &TcpConnection::writeReq, this, &TcpConnection::writeReqSlot, Qt::ConnectionType::QueuedConnection);
+    connect(socket.get(), QAbstractSocket::readyRead(), this, &TcpConnection::readReadySlot);
     connect(socket.get(), &QAbstractSocket::connected, [this]{
         writeReqSlot(lbidich::packMsg2((uint8_t)ChannelId::auth, "Na Straz!"));
     });
@@ -39,6 +40,36 @@ void TcpConnection::writeReqSlot(lbidich::DataBuf data)
             std::copy(std::cbegin(data)+written, std::cend(data), std::back_inserter(dataWr));
         }
         return; //TODO
+}
+
+void TcpConnection::readReadySlot()
+{
+    qint64 readSize = 0;
+    do{
+        readSize = socket->read(dataRd, sizeof(dataRd));
+
+        if(readSize <= 0)
+        {
+            qDebug() << "QAbstractSocket::read" << socket->errorString();
+            break;
+        }
+
+        auto ptr = dataRd;
+        auto end = ptr + readSize;
+
+        do{
+            ptr = packetIn.load(ptr, end-ptr);
+            if(ptr){
+                auto id = (lbidich::ChannelId)packetIn.getHeader().chId;
+                if(!onNewPacket(id, packetIn.getMsg()))
+                    return;
+            }
+            if(ptr == end)
+                break;
+        }
+        while(ptr);
+    }
+    while(readSize == sizeof(dataRd));
 }
 
 TcpConnection::~TcpConnection()

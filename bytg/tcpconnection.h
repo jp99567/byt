@@ -10,7 +10,8 @@
 #include "lbidich/channel.h"
 #include "lbidich/byttransport.h"
 
-namespace lbidich{
+namespace lbidich
+{
 
 class IoBase : public IIo
 {
@@ -31,9 +32,9 @@ public:
 
     bool put(lbidich::ChannelId chId, const uint8_t* msg, unsigned len) override;
 
-    void setOnNewMsgCbk(lbidich::ChannelId/* chId*/, onNewDataCbk /*cbk*/) override
+    void setOnNewMsgCbk(lbidich::ChannelId chId, onNewDataCbk cbk) override
     {
-        //TODO
+        onNewMsgCallbacks[chId] = cbk;
     }
 
 public slots:
@@ -47,11 +48,14 @@ private:
     std::unique_ptr<QAbstractSocket> socket;
     lbidich::PacketIn packetIn;
     std::vector<uint8_t> dataWr;
+    uint8_t dataRd[256];
     lbidich::Channel channelDown;
     lbidich::Channel channelUp;
     std::map<lbidich::ChannelId, boost::shared_ptr<apache::thrift::transport::TTransport>> transport;
+    std::map<lbidich::ChannelId, onNewDataCbk> onNewMsgCallbacks;
 
 private slots:
     void stateChanged(QAbstractSocket::SocketState state);
     void writeReqSlot(lbidich::DataBuf data);
+    void readReadySlot();
 };

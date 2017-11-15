@@ -14,6 +14,7 @@ class AppContainer
 	boost::asio::io_service io_service;
 	boost::asio::signal_set signals;
 	apache::thrift::server::TThreadedServer server;
+
 public:
 	AppContainer()
 	:signals(io_service, SIGINT, SIGTERM)
@@ -32,8 +33,6 @@ public:
 	{
 		server.serve();
 	}
-
-private:
 };
 
 int main()

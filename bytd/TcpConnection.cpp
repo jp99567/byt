@@ -27,6 +27,7 @@ void tcp_connection::do_read()
             LOG_INFO("read: {}", bytes_transferred);
             auto ptr = std::cbegin(bufIn);
             auto end = std::cbegin(bufIn) + bytes_transferred;
+
             do{
                 ptr = packetIn.load(ptr, end-ptr);
                 if(ptr){

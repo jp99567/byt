@@ -9,7 +9,17 @@ class Channel : public IConnection
 public:
     Channel(ChannelId chId, IIo& io)
         :chId(chId)
-        ,io(io){}
+        ,io(io)
+    {
+        io.setOnNewMsgCbk(chId,[this](DataBuf msg){
+            onNewMsg(std::move(msg));
+        });
+    }
+
+    ~Channel()
+    {
+        io.setOnNewMsgCbk(chId,[](DataBuf){});
+    }
 
     bool isOpen() const override
     {
