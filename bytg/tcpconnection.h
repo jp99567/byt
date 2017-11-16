@@ -58,6 +58,7 @@ signals:
 
 private:
     std::unique_ptr<QAbstractSocket> socket;
+    bool onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf msg) override;
 
 private slots:
     void stateChanged(QAbstractSocket::SocketState state);

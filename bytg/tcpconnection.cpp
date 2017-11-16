@@ -95,8 +95,10 @@ bool IoBase::onNewData(const uint8_t* ptr, const uint8_t* end)
 
 bool IoBase::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf msg)
 {
+    onNewDataCbk[ch](std::move(msg));
     return true;
 }
+
 }
 
 TcpConnection::~TcpConnection()
@@ -117,6 +119,10 @@ bool TcpConnection::put(lbidich::ChannelId chId, const uint8_t *msg, unsigned le
 
 void TcpConnection::connectTo() {
     socket->connectToHost("127.0.0.1", 1981);
+}
+
+bool TcpConnection::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf msg)
+{
 }
 
 void TcpConnection::stateChanged(QAbstractSocket::SocketState state)
