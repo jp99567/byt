@@ -6,12 +6,6 @@
 using lbidich::ChannelId;
 
 TcpConnection::TcpConnection()
-    :channelDown(ChannelId::down, *this)
-    ,channelUp(ChannelId::up, *this)
-    ,transport({ {ChannelId::down, boost::shared_ptr<apache::thrift::transport::TTransport>(new BytTransport(channelDown))},
-                 {ChannelId::up,    boost::shared_ptr<apache::thrift::transport::TTransport>(new   BytTransport(channelUp))} } )
-    ,onNewMsgCallbacks({ {ChannelId::down, [](lbidich::DataBuf){} },
-                         {ChannelId::up, [](lbidich::DataBuf){}   } })
 {
     socket = std::unique_ptr<QAbstractSocket>(new QTcpSocket(this));
     connect(socket.get(), &QAbstractSocket::stateChanged, this, &TcpConnection::stateChanged);
@@ -57,19 +51,52 @@ void TcpConnection::readReadySlot()
         const uint8_t* ptr = dataRd;
         const uint8_t* end = ptr + readSize;
 
-        do{
-            ptr = packetIn.load(ptr, end-ptr);
-            if(ptr){
-                auto id = (lbidich::ChannelId)packetIn.getHeader().chId;
-                /*if(!onNewPacket(id, packetIn.getMsg()))
-                    return;*/
-            }
-            if(ptr == end)
-                break;
+
+
+        if(!onNewData(ptr, end))
+        {
+            qDebug() << "read: invalid data";
         }
-        while(ptr);
     }
     while(readSize == sizeof(dataRd));
+}
+
+namespace lbidich
+{
+
+IoBase::IoBase()
+    :channelDown(ChannelId::down, *this)
+    ,channelUp(ChannelId::up, *this)
+    ,transport({ {ChannelId::down, boost::shared_ptr<apache::thrift::transport::TTransport>(new BytTransport(channelDown))},
+                 {ChannelId::up,    boost::shared_ptr<apache::thrift::transport::TTransport>(new   BytTransport(channelUp))} } )
+    ,onNewMsgCallbacks({ {ChannelId::down, [](lbidich::DataBuf){} },
+                         {ChannelId::up, [](lbidich::DataBuf){}   } })
+{
+
+}
+
+bool IoBase::onNewData(const uint8_t* ptr, const uint8_t* end)
+{
+    do{
+        ptr = packetIn.load(ptr, end-ptr);
+        if(ptr){
+            auto chid = (lbidich::ChannelId)packetIn.getHeader().chId;
+            lbidich::DataBuf msg = packetIn.getMsg();
+            return onNewPacket(chid, std::move(msg) );
+        }
+        if(ptr == end)
+            break;
+    }
+    while(ptr);
+
+    return true;
+}
+
+
+bool IoBase::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf msg)
+{
+    return true;
+}
 }
 
 TcpConnection::~TcpConnection()

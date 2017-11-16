@@ -15,12 +15,24 @@ namespace lbidich
 
 class IoBase : public IIo
 {
+public:
+    IoBase();
+protected:
+    lbidich::PacketIn packetIn;
+    std::vector<uint8_t> dataWr;
+    uint8_t dataRd[256];
+    lbidich::Channel channelDown;
+    lbidich::Channel channelUp;
+    std::map<lbidich::ChannelId, boost::shared_ptr<apache::thrift::transport::TTransport>> transport;
+    std::map<lbidich::ChannelId, onNewDataCbk> onNewMsgCallbacks;
 
+    bool onNewData(const uint8_t *ptr, const uint8_t *end);
+    virtual bool onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf msg);
 };
 
 }
 
-class TcpConnection : public QObject, public lbidich::IIo
+class TcpConnection : public QObject, public lbidich::IoBase
 {
     Q_OBJECT
 public:
@@ -46,13 +58,6 @@ signals:
 
 private:
     std::unique_ptr<QAbstractSocket> socket;
-    lbidich::PacketIn packetIn;
-    std::vector<uint8_t> dataWr;
-    uint8_t dataRd[256];
-    lbidich::Channel channelDown;
-    lbidich::Channel channelUp;
-    std::map<lbidich::ChannelId, boost::shared_ptr<apache::thrift::transport::TTransport>> transport;
-    std::map<lbidich::ChannelId, onNewDataCbk> onNewMsgCallbacks;
 
 private slots:
     void stateChanged(QAbstractSocket::SocketState state);
