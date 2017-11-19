@@ -1,2 +1,1 @@
-# barbora
-dvakrat meraj
+another home automation project
