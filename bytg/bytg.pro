@@ -15,7 +15,8 @@ SOURCES += main.cpp\
     tcpconnection.cpp\
     gen-req/BytRequest.cpp \
     lbidich/packet.cpp \
-    lbidich/io.cpp
+    lbidich/io.cpp \
+    bytrequestclient.cpp
 
 HEADERS  += widget.h \
     bytrequestclient.h \
