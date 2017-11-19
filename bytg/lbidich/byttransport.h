@@ -15,29 +15,29 @@ public:
 
     bool isOpen() override
     {   auto rv = connection->isOpen();
-        qDebug() << "BytTransport::isOpen()" << rv;
+        //qDebug() << "BytTransport::isOpen()" << rv;
         return rv;
     }
 
     void open() override
     {
-        qDebug() << "BytTransport::open()";
+        //qDebug() << "BytTransport::open()";
         if(!connection->open())
             throw TTransportException(TTransportException::NOT_OPEN, "Cannot open base TTransport.");
     }
 
     void close() override
     {
-        qDebug() << "BytTransport::close()";
+        //qDebug() << "BytTransport::close()";
         if(!connection->close())
             throw TTransportException(TTransportException::NOT_OPEN, "Cannot close base TTransport.");
     }
 
     uint32_t read_virt(uint8_t* buf, uint32_t len) override
     {
-        qDebug() << "BytTransport::read() req:" << len;
+        //qDebug() << "BytTransport::read() req:" << len;
        auto size = connection->recv(buf, len);
-       qDebug() << "BytTransport::read()" << size << '/' << len;
+       //qDebug() << "BytTransport::read()" << size << '/' << len;
        if(size == 0)
            throw TTransportException(TTransportException::END_OF_FILE);
        else if(size < 0)
@@ -47,7 +47,7 @@ public:
 
     void write_virt(const uint8_t* buf, uint32_t len) override
     {
-        qDebug() << "BytTransport::write()" << len;
+        //qDebug() << "BytTransport::write()" << len;
       if(!connection->send(buf, len))
         throw TTransportException(TTransportException::UNKNOWN);
     }

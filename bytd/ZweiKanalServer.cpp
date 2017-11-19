@@ -1,16 +1,7 @@
 #include "ZweiKanalServer.h"
+#include "lbidich/byttransport.h"
 
 #include "Log.h"
-
-class Transport : public apache::thrift::transport::TTransport
-{
-public:
-	Transport(tcp_connection::sPtr conn)
-	:conn(conn){}
-
-private:
-	tcp_connection::sPtr conn;
-};
 
 ZweiKanalServer::ZweiKanalServer(boost::asio::io_service &io_service)
     :io_service(io_service)
@@ -65,7 +56,7 @@ boost::shared_ptr<apache::thrift::transport::TTransport> ZweiKanalServer::accept
     	if(!conns.empty()){
     		auto tcp = conns.front();
     		conns.pop();
-    		return boost::shared_ptr<TTransport>(new Transport(tcp));
+    		return tcp->getClientChannel();
     	}
         return boost::shared_ptr<TTransport>(nullptr);
     }

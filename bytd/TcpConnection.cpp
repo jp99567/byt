@@ -1,6 +1,7 @@
 #include "TcpConnection.h"
 #include "Log.h"
 #include "IconnServer.h"
+#include "lbidich/channel.h"
 
 void tcp_connection::start()
 {
@@ -56,7 +57,7 @@ bool tcp_connection::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf buf)
     {
     case lbidich::ChannelId::auth:
     {
-        std::string authMsg(std::begin(buf), std::end(buf));
+        std::string authMsg(std::begin(buf), std::end(buf)-1);
         LOG_INFO("auth:{} {}", buf.size(), authMsg);
         if(authMsg == "Na Straz!")
         {
@@ -69,6 +70,9 @@ bool tcp_connection::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf buf)
         }
     }
         break;
+    case lbidich::ChannelId::down:
+    case lbidich::ChannelId::up:
+        return lbidich::IoBase::onNewPacket(ch, std::move(buf));
     default:
         LOG_ERR("channel unknown {}", int(ch));
         break;
@@ -79,5 +83,13 @@ bool tcp_connection::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf buf)
 std::string tcp_connection::connectionInfo() const
 {
 	return "TODO";
+}
+
+
+boost::shared_ptr<apache::thrift::transport::TTransport> tcp_connection::getClientChannel()
+{
+    auto channel = std::make_unique<lbidich::Channel>(lbidich::ChannelId::down, shared_from_this());
+    return boost::shared_ptr<apache::thrift::transport::TTransport>(
+               new BytTransport(std::move(channel)));
 }
 

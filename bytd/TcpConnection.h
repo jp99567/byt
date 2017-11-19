@@ -4,12 +4,14 @@
 #include <boost/asio.hpp>
 #include "lbidich/packet.h"
 #include "lbidich/iconnection.h"
+#include "lbidich/io.h"
+#include "lbidich/byttransport.h"
 
 using boost::asio::ip::tcp;
 
 class IConnServer;
 
-class tcp_connection : public std::enable_shared_from_this<tcp_connection>
+class tcp_connection : public lbidich::IoBase, public std::enable_shared_from_this<tcp_connection>
 {
 public:
   using sPtr = std::shared_ptr<tcp_connection>;
@@ -25,6 +27,9 @@ public:
   }
 
   void start();
+  bool put(lbidich::ChannelId chId, const uint8_t* msg, unsigned len) override {}
+
+  boost::shared_ptr<apache::thrift::transport::TTransport> getClientChannel();
 
   ~tcp_connection();
 

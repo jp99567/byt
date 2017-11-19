@@ -2,6 +2,8 @@
 
 #include "iconnection.h"
 #include <memory>
+#include  <condition_variable>
+#include <queue>
 
 namespace lbidich {
 

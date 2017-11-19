@@ -7,59 +7,71 @@ using lbidich::ChannelId;
 
 TcpConnection::TcpConnection()
 {
-    io = Io::create(*this);
     socket = std::unique_ptr<QAbstractSocket>(new QTcpSocket(this));
     connect(socket.get(), &QAbstractSocket::stateChanged, this, &TcpConnection::stateChanged);
     connect(this, &TcpConnection::writeReq, this, &TcpConnection::writeReqSlot, Qt::ConnectionType::QueuedConnection);
     connect(socket.get(), &QAbstractSocket::readyRead, this, &TcpConnection::readReadySlot);
     connect(socket.get(), &QAbstractSocket::connected, [this]{
+        io = Io::create(*this);
         writeReqSlot(lbidich::packMsg2((uint8_t)ChannelId::auth, "Na Straz!"));
     });
 }
 
 void TcpConnection::writeReqSlot(lbidich::DataBuf data)
 {
+    if(!io)
+        return;
+
     qDebug() << "writeReqSlot" << data.size();
-/*        if(dataWr.size() > 0){
+        auto& dataWr = io->getDataWr();
+        if(dataWr.size() > 0){
             std::copy(std::cbegin(data), std::cend(data), std::back_inserter(dataWr));
             return;
         }
 
         auto written = socket->write((const char*)data.data(), data.size());
         qDebug() << "socket->write" << written;
+
         if(written == -1)
+        {
+            qDebug() << socket->errorString();
+            io->onClose();
+            io = nullptr;
             return;
+        }
 
         if(written < (qint64)data.size())
         {
             std::copy(std::cbegin(data)+written, std::cend(data), std::back_inserter(dataWr));
         }
-        return; //TODO*/
+        return;
 }
 
 void TcpConnection::readReadySlot()
-{/*
+{
+    if(!io)
+        return;
+    
     qint64 readSize = 0;
     do{
-        readSize = socket->read((char*)dataRd, sizeof(dataRd));
+        readSize = socket->read(dataRd, sizeof(dataRd));
 
         if(readSize <= 0)
         {
             qDebug() << "QAbstractSocket::read" << socket->errorString();
+            //TODO check
             break;
         }
 
-        const uint8_t* ptr = dataRd;
-        const uint8_t* end = ptr + readSize;
+        auto ptr = (const uint8_t*)dataRd;
+        auto end = ptr + readSize;
 
-
-
-        if(!onNewData(ptr, end))
+        if(!io->onNewData(ptr, end))
         {
             qDebug() << "read: invalid data";
         }
     }
-    while(readSize == sizeof(dataRd));*/
+    while(readSize == sizeof(dataRd));
 }
 
 TcpConnection::~TcpConnection()
@@ -69,36 +81,26 @@ TcpConnection::~TcpConnection()
 
 boost::shared_ptr<apache::thrift::transport::TTransport> TcpConnection::getClientChannel()
 {
+    if(!io)
+        return nullptr;
+
     auto channel = std::make_unique<lbidich::Channel>(ChannelId::down, io);
     return boost::shared_ptr<apache::thrift::transport::TTransport>(
                 new BytTransport(std::move(channel)));
 }
 
-bool TcpConnection::put(lbidich::ChannelId chId, const uint8_t *msg, unsigned len)
+bool TcpConnection::put(lbidich::DataBuf msg)
 {
-    emit writeReq(lbidich::packMsg((uint8_t)chId, msg, len));
+    if(!socket->isValid())
+        return false;
+    
+    emit writeReq(std::move(msg));
     return true;
 }
 
 void TcpConnection::connectTo()
 {
     socket->connectToHost("127.0.0.1", 1981);
-}
-
-bool TcpConnection::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf msg)
-{
-    switch(ch)
-    {
-    case lbidich::ChannelId::auth:
-        break;
-    case lbidich::ChannelId::down:
-    case lbidich::ChannelId::up:
-        return io->onNewPacket(ch, std::move(msg));
-    default:
-        return false;
-    }
-
-    return true;
 }
 
 void TcpConnection::stateChanged(QAbstractSocket::SocketState state)
@@ -109,6 +111,21 @@ void TcpConnection::stateChanged(QAbstractSocket::SocketState state)
 
 bool Io::put(lbidich::ChannelId chId, const uint8_t *msg, unsigned len)
 {
-    emit tcp.writeReq(lbidich::packMsg((uint8_t)chId, msg, len));
+    return tcp.put(lbidich::packMsg((uint8_t)chId, msg, len));
+}
+
+bool Io::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf msg)
+{
+    switch(ch)
+    {
+    case lbidich::ChannelId::auth:
+        break;
+    case lbidich::ChannelId::down:
+    case lbidich::ChannelId::up:
+        return lbidich::IoBase::onNewPacket(ch, std::move(msg));
+    default:
+        return false;
+    }
+
     return true;
 }
