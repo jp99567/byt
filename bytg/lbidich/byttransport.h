@@ -9,34 +9,34 @@ class BytTransport : public apache::thrift::transport::TTransport
 {
 public:
 
-    BytTransport(lbidich::IConnection& conn)
-        :connection(conn)
+    BytTransport(std::unique_ptr<lbidich::IConnection> conn)
+        :connection(std::move(conn))
     {}
 
-    virtual bool isOpen()
-    {   auto rv = connection.isOpen();
+    bool isOpen() override
+    {   auto rv = connection->isOpen();
         qDebug() << "BytTransport::isOpen()" << rv;
         return rv;
     }
 
-    virtual void open()
+    void open() override
     {
         qDebug() << "BytTransport::open()";
-        if(!connection.open())
+        if(!connection->open())
             throw TTransportException(TTransportException::NOT_OPEN, "Cannot open base TTransport.");
     }
 
-    virtual void close()
+    void close() override
     {
         qDebug() << "BytTransport::close()";
-        if(!connection.close())
+        if(!connection->close())
             throw TTransportException(TTransportException::NOT_OPEN, "Cannot close base TTransport.");
     }
 
-    virtual uint32_t read_virt(uint8_t* buf, uint32_t len)
+    uint32_t read_virt(uint8_t* buf, uint32_t len) override
     {
         qDebug() << "BytTransport::read() req:" << len;
-       auto size = connection.recv(buf, len);
+       auto size = connection->recv(buf, len);
        qDebug() << "BytTransport::read()" << size << '/' << len;
        if(size == 0)
            throw TTransportException(TTransportException::END_OF_FILE);
@@ -45,13 +45,13 @@ public:
        return size;
     }
 
-    virtual void write_virt(const uint8_t* buf, uint32_t len)
+    void write_virt(const uint8_t* buf, uint32_t len) override
     {
         qDebug() << "BytTransport::write()" << len;
-      if(!connection.send(buf, len))
+      if(!connection->send(buf, len))
         throw TTransportException(TTransportException::UNKNOWN);
     }
 
 private:
-    lbidich::IConnection& connection;
+    std::unique_ptr<lbidich::IConnection> connection;
 };

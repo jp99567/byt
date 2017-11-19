@@ -14,7 +14,8 @@ SOURCES += main.cpp\
         widget.cpp \
     tcpconnection.cpp\
     gen-req/BytRequest.cpp \
-    lbidich/packet.cpp
+    lbidich/packet.cpp \
+    lbidich/io.cpp
 
 HEADERS  += widget.h \
     bytrequestclient.h \
@@ -22,7 +23,8 @@ HEADERS  += widget.h \
     lbidich/packet.h \
     lbidich/iconnection.h \
     lbidich/channel.h \
-    lbidich/byttransport.h
+    lbidich/byttransport.h \
+    lbidich/io.h
 
 INCLUDEPATH += ../../thrift-0.10.0/lib/cpp/src
 

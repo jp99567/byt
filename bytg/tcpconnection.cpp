@@ -7,6 +7,7 @@ using lbidich::ChannelId;
 
 TcpConnection::TcpConnection()
 {
+    io = Io::create(*this);
     socket = std::unique_ptr<QAbstractSocket>(new QTcpSocket(this));
     connect(socket.get(), &QAbstractSocket::stateChanged, this, &TcpConnection::stateChanged);
     connect(this, &TcpConnection::writeReq, this, &TcpConnection::writeReqSlot, Qt::ConnectionType::QueuedConnection);
@@ -19,7 +20,7 @@ TcpConnection::TcpConnection()
 void TcpConnection::writeReqSlot(lbidich::DataBuf data)
 {
     qDebug() << "writeReqSlot" << data.size();
-        if(dataWr.size() > 0){
+/*        if(dataWr.size() > 0){
             std::copy(std::cbegin(data), std::cend(data), std::back_inserter(dataWr));
             return;
         }
@@ -33,11 +34,11 @@ void TcpConnection::writeReqSlot(lbidich::DataBuf data)
         {
             std::copy(std::cbegin(data)+written, std::cend(data), std::back_inserter(dataWr));
         }
-        return; //TODO
+        return; //TODO*/
 }
 
 void TcpConnection::readReadySlot()
-{
+{/*
     qint64 readSize = 0;
     do{
         readSize = socket->read((char*)dataRd, sizeof(dataRd));
@@ -58,47 +59,7 @@ void TcpConnection::readReadySlot()
             qDebug() << "read: invalid data";
         }
     }
-    while(readSize == sizeof(dataRd));
-}
-
-namespace lbidich
-{
-
-IoBase::IoBase()
-    :channelDown(ChannelId::down, *this)
-    ,channelUp(ChannelId::up, *this)
-    ,transport({ {ChannelId::down, boost::shared_ptr<apache::thrift::transport::TTransport>(new BytTransport(channelDown))},
-                 {ChannelId::up,    boost::shared_ptr<apache::thrift::transport::TTransport>(new   BytTransport(channelUp))} } )
-    ,onNewMsgCallbacks({ {ChannelId::down, [](lbidich::DataBuf){} },
-                         {ChannelId::up, [](lbidich::DataBuf){}   } })
-{
-
-}
-
-bool IoBase::onNewData(const uint8_t* ptr, const uint8_t* end)
-{
-    do{
-        ptr = packetIn.load(ptr, end-ptr);
-        if(ptr){
-            auto chid = (lbidich::ChannelId)packetIn.getHeader().chId;
-            lbidich::DataBuf msg = packetIn.getMsg();
-            return onNewPacket(chid, std::move(msg) );
-        }
-        if(ptr == end)
-            break;
-    }
-    while(ptr);
-
-    return true;
-}
-
-
-bool IoBase::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf msg)
-{
-    onNewDataCbk[ch](std::move(msg));
-    return true;
-}
-
+    while(readSize == sizeof(dataRd));*/
 }
 
 TcpConnection::~TcpConnection()
@@ -108,7 +69,9 @@ TcpConnection::~TcpConnection()
 
 boost::shared_ptr<apache::thrift::transport::TTransport> TcpConnection::getClientChannel()
 {
-    return transport[ChannelId::down];
+    auto channel = std::make_unique<lbidich::Channel>(ChannelId::down, io);
+    return boost::shared_ptr<apache::thrift::transport::TTransport>(
+                new BytTransport(std::move(channel)));
 }
 
 bool TcpConnection::put(lbidich::ChannelId chId, const uint8_t *msg, unsigned len)
@@ -117,12 +80,25 @@ bool TcpConnection::put(lbidich::ChannelId chId, const uint8_t *msg, unsigned le
     return true;
 }
 
-void TcpConnection::connectTo() {
+void TcpConnection::connectTo()
+{
     socket->connectToHost("127.0.0.1", 1981);
 }
 
 bool TcpConnection::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf msg)
 {
+    switch(ch)
+    {
+    case lbidich::ChannelId::auth:
+        break;
+    case lbidich::ChannelId::down:
+    case lbidich::ChannelId::up:
+        return io->onNewPacket(ch, std::move(msg));
+    default:
+        return false;
+    }
+
+    return true;
 }
 
 void TcpConnection::stateChanged(QAbstractSocket::SocketState state)
@@ -130,3 +106,9 @@ void TcpConnection::stateChanged(QAbstractSocket::SocketState state)
     qDebug() << state;
 }
 
+
+bool Io::put(lbidich::ChannelId chId, const uint8_t *msg, unsigned len)
+{
+    emit tcp.writeReq(lbidich::packMsg((uint8_t)chId, msg, len));
+    return true;
+}

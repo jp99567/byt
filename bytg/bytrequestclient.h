@@ -16,16 +16,17 @@ class BytRequest : public QObject
 {
     Q_OBJECT
 public:
-    BytRequest(boost::shared_ptr<apache::thrift::transport::TTransport> clientChannel, QObject* parent = nullptr)
+    BytRequest(TcpConnection& tcp, QObject* parent = nullptr)
         :QObject(parent)
+        ,tcp(tcp)
     {
         using apache::thrift::transport::TTransport;
         using apache::thrift::transport::TBufferedTransport;
         using apache::thrift::protocol::TBinaryProtocol;
 
-        boost::shared_ptr<TTransport> transport(new TBufferedTransport(clientChannel));
+        boost::shared_ptr<TTransport> transport(new TBufferedTransport(tcp.getClientChannel()));
         boost::shared_ptr<apache::thrift::protocol::TProtocol> protocol(new TBinaryProtocol(transport));
-        client = std::unique_ptr<doma::BytRequestClient>(new doma::BytRequestClient(protocol));
+        client = std::make_unique<doma::BytRequestClient>(protocol);
     }
 
     ~BytRequest()
@@ -64,5 +65,6 @@ public slots:
     }
 
 private:
+    TcpConnection& tcp;
     std::unique_ptr<doma::BytRequestClient> client;
 };

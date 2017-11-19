@@ -27,8 +27,8 @@ private:
     QPushButton* audioCh1;
     QPushButton* audioCh2;
     QLabel * connInfo;
-    TcpConnection* bytConn;
-    BytRequest* bytClient;
+    std::unique_ptr<TcpConnection> bytConn;
+    std::unique_ptr<BytRequest> bytClient;
     QThread ioThread;
     QThread clientThread;
 

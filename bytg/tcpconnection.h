@@ -6,33 +6,29 @@
 #include <functional>
 #include <condition_variable>
 #include <QAbstractSocket>
+#include "lbidich/io.h"
 #include "lbidich/packet.h"
 #include "lbidich/channel.h"
 #include "lbidich/byttransport.h"
 
-namespace lbidich
-{
+class TcpConnection;
 
-class IoBase : public IIo
+class Io : public lbidich::IoBase, public std::enable_shared_from_this<Io>
 {
 public:
-    IoBase();
-protected:
-    lbidich::PacketIn packetIn;
-    std::vector<uint8_t> dataWr;
-    uint8_t dataRd[256];
-    lbidich::Channel channelDown;
-    lbidich::Channel channelUp;
-    std::map<lbidich::ChannelId, boost::shared_ptr<apache::thrift::transport::TTransport>> transport;
-    std::map<lbidich::ChannelId, onNewDataCbk> onNewMsgCallbacks;
+    bool put(lbidich::ChannelId chId, const uint8_t *msg, unsigned len) override;
 
-    bool onNewData(const uint8_t *ptr, const uint8_t *end);
-    virtual bool onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf msg);
+    static std::shared_ptr<Io> create(TcpConnection& tcp)
+    {
+        return std::shared_ptr<Io>(new Io(tcp));
+    }
+
+private:
+   Io(TcpConnection& tcp):tcp(tcp){}
+   TcpConnection& tcp;
 };
 
-}
-
-class TcpConnection : public QObject, public lbidich::IoBase
+class TcpConnection : public QObject
 {
     Q_OBJECT
 public:
@@ -42,12 +38,7 @@ public:
 
     boost::shared_ptr<apache::thrift::transport::TTransport> getClientChannel();
 
-    bool put(lbidich::ChannelId chId, const uint8_t* msg, unsigned len) override;
-
-    void setOnNewMsgCbk(lbidich::ChannelId chId, onNewDataCbk cbk) override
-    {
-        onNewMsgCallbacks[chId] = cbk;
-    }
+    bool put(lbidich::ChannelId chId, const uint8_t* msg, unsigned len);
 
 public slots:
     void connectTo();
@@ -58,10 +49,12 @@ signals:
 
 private:
     std::unique_ptr<QAbstractSocket> socket;
-    bool onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf msg) override;
+    std::shared_ptr<Io> io;
+    bool onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf msg);
 
 private slots:
     void stateChanged(QAbstractSocket::SocketState state);
     void writeReqSlot(lbidich::DataBuf data);
     void readReadySlot();
 };
+

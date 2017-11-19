@@ -1,24 +1,26 @@
 #pragma once
 
 #include "iconnection.h"
+#include <memory>
 
 namespace lbidich {
 
 class Channel : public IConnection
 {
 public:
-    Channel(ChannelId chId, IIo& io)
+    Channel(ChannelId chId, std::shared_ptr<IIo> io)
         :chId(chId)
         ,io(io)
     {
-        io.setOnNewMsgCbk(chId,[this](DataBuf msg){
+        io->setOnNewMsgCbk(chId, [this](DataBuf msg){
             onNewMsg(std::move(msg));
         });
     }
 
     ~Channel()
     {
-        io.setOnNewMsgCbk(chId,[](DataBuf){});
+        io->setOnNewMsgCbk(chId,[](DataBuf){});
+        onNewMsg({});
     }
 
     bool isOpen() const override
@@ -28,7 +30,8 @@ public:
 
     virtual bool send(const uint8_t* data, unsigned size)
     {
-        return io.put(chId, data, size);
+        opened = io->put(chId, data, size);
+        return opened;
     }
 
     int recv(uint8_t* data, unsigned size) override
@@ -36,7 +39,7 @@ public:
         std::unique_lock<std::mutex> guard(lck);
         cv.wait(guard, [this]{return !msgs.empty() || !opened;});
         if(!opened)
-            return false;
+            return -1;
 
         auto req = size;
         while(req)
@@ -64,7 +67,7 @@ public:
         return size;
     }
 
-    void onNewMsg(lbidich::DataBuf msg)
+    void onNewMsg(DataBuf msg)
     {
         std::unique_lock<std::mutex> guard(lck);
         opened = msg.size() > 0;
@@ -86,8 +89,8 @@ private:
     const ChannelId chId;
     std::mutex lck;
     std::condition_variable cv;
-    std::queue<lbidich::DataBuf> msgs;
+    std::queue<DataBuf> msgs;
     bool opened = true;
-    IIo& io;
+    std::shared_ptr<IIo> io;
 };
 }
