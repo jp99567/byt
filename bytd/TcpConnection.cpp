@@ -28,8 +28,11 @@ void tcp_connection::do_read()
                 ptr = packetIn.load(ptr, end-ptr);
                 if(ptr){
                     auto id = (lbidich::ChannelId)packetIn.getHeader().chId;
-                    if(!onNewPacket(id, packetIn.getMsg()))
+                    if(!onNewPacket(id, packetIn.getMsg())){
+                        onClose();
+                        connServ.rmFrom(shared_from_this());
                     	return;
+                    }
                 }
                 if(ptr == end)
                     break;
@@ -43,6 +46,7 @@ void tcp_connection::do_read()
                      error.message(),
                      error.value());
             onClose();
+            connServ.rmFrom(shared_from_this());
         }
     });
 }
@@ -78,7 +82,9 @@ bool tcp_connection::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf buf)
 
 std::string tcp_connection::connectionInfo() const
 {
-	return "TODO";
+    if(socket_.is_open())
+	return socket_.remote_endpoint().address().to_string();
+    return "---";
 }
 
 

@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <thread>
 #include <queue>
+#include <set>
 #include "IconnServer.h"
 #include "TcpConnection.h"
 
@@ -61,6 +62,7 @@ private:
       const boost::system::error_code& error);
 
   void addVerified(tcp_connection::sPtr connection) override;
+  void rmFrom(tcp_connection::sPtr connection) override;
 
   bool interruptReq = false;
   std::thread ioThread;
@@ -69,4 +71,5 @@ private:
   std::mutex lock;
   std::condition_variable cvaccept;
   std::queue<tcp_connection::sPtr> conns;
+  std::set<std::weak_ptr<tcp_connection>, std::owner_less<std::weak_ptr<tcp_connection>>> activeConns;
 };

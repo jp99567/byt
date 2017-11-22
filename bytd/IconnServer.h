@@ -6,5 +6,6 @@ class IConnServer
 {
 public:
 	virtual void addVerified(tcp_connection::sPtr connection) = 0;
+        virtual void rmFrom(tcp_connection::sPtr connection) = 0;
 	virtual ~IConnServer(){}
 };

@@ -37,7 +37,17 @@ void ZweiKanalServer::interrupt()
 
 void ZweiKanalServer::interruptChildren()
 {
-    LOG_INFO("accept interrupt children not implemented");
+    LOG_INFO("accept interrupt children");
+    lock.lock();
+    auto tmpCopy = std::move(activeConns);
+    lock.unlock();
+    
+    for(auto p : tmpCopy)
+    {
+        auto sp = p.lock();
+        if(sp)
+            sp->onClose();
+    }
 }
 
 void ZweiKanalServer::close()
@@ -56,6 +66,7 @@ boost::shared_ptr<apache::thrift::transport::TTransport> ZweiKanalServer::accept
     	if(!conns.empty()){
     		auto tcp = conns.front();
     		conns.pop();
+                activeConns.emplace(tcp);
     		return tcp->getClientChannel();
     	}
         return boost::shared_ptr<TTransport>(nullptr);
@@ -96,4 +107,15 @@ void ZweiKanalServer::addVerified(tcp_connection::sPtr connection)
     std::unique_lock<std::mutex> guard(lock);
     conns.emplace(connection);
     cvaccept.notify_one();
+}
+
+void ZweiKanalServer::rmFrom(tcp_connection::sPtr connection)
+{
+    std::unique_lock<std::mutex> guard(lock);
+    std::weak_ptr<tcp_connection> wp = connection;
+    
+    auto it = activeConns.find(wp);
+    
+    if( it != std::end(activeConns) )
+        activeConns.erase(it);
 }

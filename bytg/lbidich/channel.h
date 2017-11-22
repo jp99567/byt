@@ -32,7 +32,11 @@ public:
 
     bool send(const uint8_t* data, unsigned size) override
     {
-        opened = io->put(chId, data, size);
+        if(opened){
+            opened = io->put(chId, data, size);
+            if(!opened)
+                closing = true;
+        }
         return opened;
     }
 
@@ -41,7 +45,14 @@ public:
         std::unique_lock<std::mutex> guard(lck);
         cv.wait(guard, [this]{return !msgs.empty() || !opened;});
         if(!opened)
+        {
+            if(closing)
+            {
+                closing = false;
+                return 0;
+            }
             return -1;
+        }
 
         auto req = size;
         while(req)
@@ -51,12 +62,13 @@ public:
             if(buf.size() == 0)
             {
                 opened = false;
+                closing = size > req;
                 do{
                     msgs.pop();
                 }
                 while(!msgs.empty());
 
-                return 0;
+                return size-req;
             }
             
             if(req < buf.size())
@@ -84,7 +96,6 @@ public:
     void onNewMsg(DataBuf msg)
     {
         std::unique_lock<std::mutex> guard(lck);
-        opened = msg.size() > 0;
         msgs.emplace(std::move(msg));
         cv.notify_one();
     }
@@ -96,7 +107,10 @@ public:
 
     bool close() override
     {
-        return false;
+        std::unique_lock<std::mutex> guard(lck);
+        opened = false;;
+        cv.notify_one();
+        return true;
     }
 
 private:
@@ -105,6 +119,7 @@ private:
     std::condition_variable cv;
     std::queue<DataBuf> msgs;
     bool opened = true;
+    bool closing = false;
     std::shared_ptr<IIo> io;
 };
 }
