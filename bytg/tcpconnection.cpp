@@ -54,6 +54,7 @@ void TcpConnection::readReadySlot()
     
     qint64 readSize = 0;
     do{
+        qDebug() << "socket read blocking...";
         readSize = socket->read(dataRd, sizeof(dataRd));
 
         if(readSize <= 0)
@@ -63,6 +64,7 @@ void TcpConnection::readReadySlot()
             break;
         }
 
+        qDebug() << "socket read" << readSize;
         auto ptr = (const uint8_t*)dataRd;
         auto end = ptr + readSize;
 

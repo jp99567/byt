@@ -19,7 +19,7 @@ public:
 
     bool onNewData(const uint8_t *ptr, const uint8_t *end);
     virtual bool onNewPacket(ChannelId ch, DataBuf msg);
-    bool onClose();
+    void onClose();
 
 protected:
     PacketIn packetIn;

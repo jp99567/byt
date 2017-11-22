@@ -2,16 +2,11 @@
 #include "Log.h"
 #include "IconnServer.h"
 #include "lbidich/channel.h"
+#include "lbidich/packet.h"
 
 void tcp_connection::start()
 {
     do_read();
-    /*
-    boost::asio::async_write(socket_, boost::asio::buffer(std::string("ABC")),
-                [this](const boost::system::error_code& error,
-      size_t bytes_transferred){
-        handle_write(error, bytes_transferred);
-    });*/
 }
 
 tcp_connection::~tcp_connection()
@@ -47,6 +42,7 @@ void tcp_connection::do_read()
             LOG_INFO("read error {}:{}:{}", error.category().name(),
                      error.message(),
                      error.value());
+            onClose();
         }
     });
 }
@@ -93,3 +89,20 @@ boost::shared_ptr<apache::thrift::transport::TTransport> tcp_connection::getClie
                new BytTransport(std::move(channel)));
 }
 
+bool tcp_connection::put(lbidich::ChannelId chId, const uint8_t* msg, unsigned int len)
+{
+    auto self = shared_from_this();
+    boost::asio::async_write(socket_, boost::asio::buffer(lbidich::packMsg((uint8_t)chId, msg, len)),
+                [this,self](const boost::system::error_code& error, size_t bytes_transferred)
+    {
+        if(!error){
+            LOG_INFO("write: {}", bytes_transferred);
+        }
+        else{
+            LOG_ERR("write error {}:{}:{}", error.category().name(),
+                     error.message(),
+                     error.value());
+        }
+    });
+    return true;
+}

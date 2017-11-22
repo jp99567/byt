@@ -30,7 +30,7 @@ public:
         return opened;
     }
 
-    virtual bool send(const uint8_t* data, unsigned size)
+    bool send(const uint8_t* data, unsigned size) override
     {
         opened = io->put(chId, data, size);
         return opened;
@@ -47,6 +47,18 @@ public:
         while(req)
         {
             auto& buf = msgs.front();
+            
+            if(buf.size() == 0)
+            {
+                opened = false;
+                do{
+                    msgs.pop();
+                }
+                while(!msgs.empty());
+
+                return 0;
+            }
+            
             if(req < buf.size())
             {
                 std::copy_n(std::cbegin(buf), size, data);

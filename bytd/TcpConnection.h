@@ -27,7 +27,7 @@ public:
   }
 
   void start();
-  bool put(lbidich::ChannelId chId, const uint8_t* msg, unsigned len) override {}
+  bool put(lbidich::ChannelId chId, const uint8_t* msg, unsigned len) override;
 
   boost::shared_ptr<apache::thrift::transport::TTransport> getClientChannel();
 

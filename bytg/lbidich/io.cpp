@@ -30,7 +30,7 @@ bool IoBase::onNewPacket(ChannelId ch, DataBuf msg)
     return true;
 }
 
-bool IoBase::onClose()
+void IoBase::onClose()
 {
     for(auto& ch : onNewMsgCallbacks)
     {

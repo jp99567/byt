@@ -40,10 +40,12 @@ int main()
   try
   {
       AppContainer().run();
+      LOG_INFO("GRACEFULLY");
   }
   catch (std::exception& e)
   {
-      std::cerr << e.what() << std::endl;
+      LOG_ERR("crash {}", e.what());
+      return 1;
   }
 
   return 0;
