@@ -27,8 +27,6 @@ Widget::Widget(QWidget *parent)
     bytClient.reset(new BytRequest(*bytConn));
     bytClient->moveToThread(&clientThread);
     connect(connection, &QPushButton::toggled, this, &Widget::onConnectionButtonChecked);
-    connect(&ioThread, &QThread::finished, bytConn.get(), &QObject::deleteLater);
-    connect(&clientThread, &QThread::finished, bytClient.get(), &QObject::deleteLater);
     connect(this, &Widget::connectionReq, bytConn.get(), &TcpConnection::connectTo);
     connect(audioCh1, &QPushButton::clicked, bytClient.get(), &BytRequest::c1);
     connect(audioCh2, &QPushButton::clicked, bytClient.get(), &BytRequest::c2);

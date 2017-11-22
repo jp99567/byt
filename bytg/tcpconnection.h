@@ -51,7 +51,7 @@ signals:
     void writeReq(lbidich::DataBuf data);
 
 private:
-    std::unique_ptr<QAbstractSocket> socket;
+    QAbstractSocket* socket;
     std::shared_ptr<Io> io;
     char dataRd[256];
 

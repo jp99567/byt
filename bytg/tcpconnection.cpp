@@ -7,11 +7,11 @@ using lbidich::ChannelId;
 
 TcpConnection::TcpConnection()
 {
-    socket = std::unique_ptr<QAbstractSocket>(new QTcpSocket(this));
-    connect(socket.get(), &QAbstractSocket::stateChanged, this, &TcpConnection::stateChanged);
+    socket = new QTcpSocket(this);
+    connect(socket, &QAbstractSocket::stateChanged, this, &TcpConnection::stateChanged);
     connect(this, &TcpConnection::writeReq, this, &TcpConnection::writeReqSlot, Qt::ConnectionType::QueuedConnection);
-    connect(socket.get(), &QAbstractSocket::readyRead, this, &TcpConnection::readReadySlot);
-    connect(socket.get(), &QAbstractSocket::connected, [this]{
+    connect(socket, &QAbstractSocket::readyRead, this, &TcpConnection::readReadySlot);
+    connect(socket, &QAbstractSocket::connected, [this]{
         io = Io::create(*this);
         writeReqSlot(lbidich::packMsg2((uint8_t)ChannelId::auth, "Na Straz!"));
     });
