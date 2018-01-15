@@ -42,7 +42,7 @@ class OwThermNet {
 	};
 
 public:
-	explicit OwThermNet(Exporter& e);
+	explicit OwThermNet(Exporter& e, const RomCode& mainSensor);
 	~OwThermNet();
 
 	struct Sensor {
@@ -84,9 +84,11 @@ private:
 	bool presence();
 	void write_simple_cmd(Cmd cmd);
 	int search_triplet(bool branch_direction);
+
 	int mFd;
 	std::vector<Sensor> mMeas;
 	Exporter& mExporter;
+	const RomCode mrc;
 };
 
 int OwThermNet::search_triplet(bool branch_direction)
@@ -119,8 +121,6 @@ bool OwThermNet::measure()
 
 	bool rv(true);
 	ThermScratchpad res;
-	constexpr RomCode mrc({0x28,{0x7F,0xC8,0x0A,0x06,0,0},0x74});
-	// 287FC80A06000074
 
 	Sample sample;
 	for(auto& i: mMeas){
@@ -309,8 +309,9 @@ bool OwThermNet::read_rom(RomCode& rc)
 	return true;
 }
 
-OwThermNet::OwThermNet(Exporter& e)
+OwThermNet::OwThermNet(Exporter& e, const RomCode& mainSensor)
 	:mExporter(e)
+	,mrc(mainSensor)
 {
 	mFd = open("/dev/owtherm",  O_RDWR);
 	if( mFd < 0 ) SYSDIE;
@@ -323,7 +324,7 @@ OwThermNet::~OwThermNet()
 
 } //namespace ow
 
-static void load_read_predefined_romcodes(std::set<ow::RomCode>& s)
+static void load_read_predefined_romcodes(std::set<ow::RomCode>& s, ow::RomCode& main)
 {
 	std::ifstream config("predefined_romcodes.txt");
 	if(!config.good()) SYSDIE;
@@ -331,11 +332,16 @@ static void load_read_predefined_romcodes(std::set<ow::RomCode>& s)
 	std::string tmp;
 
 	ow::RomCode tmprc;
+	bool first = true;
 	while(config.good()){
 		if(config >> tmp && tmp[0]!='#'){
 			tmprc = tmp;
 			if(!s.insert(tmprc).second){
 				DIES("duplicates:%s", tmp.c_str());
+			}
+			if(first){
+				main = tmprc;
+				first = false;
 			}
 		}
 	}
@@ -344,12 +350,13 @@ static void load_read_predefined_romcodes(std::set<ow::RomCode>& s)
 int main()
 {
 	std::set<ow::RomCode> predefined;
-	load_read_predefined_romcodes(predefined);
+	ow::RomCode mainSensor;
+	load_read_predefined_romcodes(predefined, mainSensor);
 
 	if(predefined.empty()) DIES("no predefined sensors");
 
 	ow::Exporter exporter;
-	ow::OwThermNet therm(exporter);
+	ow::OwThermNet therm(exporter, mainSensor);
 
 	bool search_success(false);
 	int try_nr(10);
