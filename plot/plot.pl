@@ -44,7 +44,7 @@ use DBI;
 use Data::Dumper;
 use Getopt::Std;
 
-my $dbh = DBI->connect('dbi:Pg:dbname=home_automation') or die $DBI::errstr;
+my $dbh = DBI->connect('dbi:Pg:dbname='.$ENV{PGDATABASE}) or die $DBI::errstr;
 sub dbqt($){ return $dbh->quote(shift) ;}
 
 my %opts;
@@ -58,7 +58,7 @@ sub arg2timestamp($){
 	dbqt($a);
 }
 
-my $t_from = dbqt('today').'::timestamp - '.dbqt('24:00:00').'::time';
+my $t_from = dbqt('now').'::timestamp - '.dbqt('08:00:00').'::time';
 if(exists($opts{f})){
 	$t_from = arg2timestamp $opts{f};
 }
@@ -74,7 +74,7 @@ if(exists($opts{F})){
 }
 die 'invalid filter length' unless $filter > 0; 
 
-my @place = ('vonkuJ');
+my @place = ('izbaSZ');
 if(exists($opts{p})){
 	@place = split /,/, $opts{p};
 }
@@ -89,7 +89,7 @@ SET timezone TO 'CET';
 SELECT to_char(t at time zone 'UTC', 'MonDD-HH24:MI:SS'), val, extract(epoch from t)
 FROM temperature,temp_meas_place
 WHERE place_id=temp_meas_place.id AND val IS NOT NULL
-AND temp_meas_place.name=$place_id_dbqt AND t AT time zone 'UTC' >= $t_from $and_t_to
+AND temp_meas_place.name=$place_id_dbqt AND t >= $t_from $and_t_to
 ORDER BY t
 ENDSQL
 
@@ -109,13 +109,13 @@ ENDSQL
 }
 
 my $gpbatch = <<ENDGNUPLOT;
-set terminal wxt persist
+set terminal qt persist
 set xdata time
 set timefmt "%b%d-%H:%M:%S"
 set grid
 ENDGNUPLOT
 
-open(my $gnuplot, '|-', 'gnuplot') or die $!;
+open(my $gnuplot, '|-', 'gnuplot5-qt') or die $!;
 
 my @plots = ();
 my $plot_style = 'lines';

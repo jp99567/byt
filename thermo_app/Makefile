@@ -2,7 +2,7 @@
 MACHINE = $(shell uname -m)
 
 CC = g++
-CPPFLAGS = -Wall -g3 -pthread -std=gnu++0x
+CPPFLAGS = -Wall -O2 -flto -pthread -std=gnu++11
 LFLAGS = -pthread -flto
 LIBS = -lpq -lrt
 SRCS = log_trace_debug.cpp pgdbwrapper.cpp exporter.cpp therm.cpp data.cpp thread_util.cpp
@@ -10,11 +10,7 @@ SRCS = log_trace_debug.cpp pgdbwrapper.cpp exporter.cpp therm.cpp data.cpp threa
 OBJS = $(SRCS:.cpp=.o) 
 MAIN = app
 
-ifeq ( $(MACHINE), "armv7l" )
-	INCLUDES = -I/mnt/bbdevel/workspace/owtherm
-else
 	INCLUDES = -I../owtherm
-endif
 
 #
 # The following part of the makefile is generic; it can be used to 

@@ -4,7 +4,7 @@
 #include <linux/miscdevice.h>
 #include <linux/fs.h>
 #include <linux/gpio.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 #include <linux/delay.h>
 #include "owtherm.h"
 
