@@ -20,6 +20,8 @@ public:
 		return logger;
 	}
 
+	void sysdie();
+
 private:
 	Log();
 
@@ -28,7 +30,9 @@ private:
 
 } /* namespace Util */
 
-#define LOG_INFO(...) Util::Log::instance().get()->info(__VA_ARGS__)
-#define LOG_ERR(...) Util::Log::instance().get()->error(__VA_ARGS__)
-#define LOG_DBG(...) Util::Log::instance().get()->debug(__VA_ARGS__)
+#define LogINFO(...) Util::Log::instance().get()->info(__VA_ARGS__)
+#define LogERR(...) Util::Log::instance().get()->error(__VA_ARGS__)
+#define LogDBG(...) Util::Log::instance().get()->debug(__VA_ARGS__)
+#define LogSYSDIE Util::Log::instance().sysdie()
+#define LogDIE(...) {Util::Log::instance().get()->error(__VA_ARGS__); std::runtime_error("die");}
 

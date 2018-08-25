@@ -39,7 +39,7 @@ public:
 
     ~TcpConnection();
 
-    boost::shared_ptr<apache::thrift::transport::TTransport> getClientChannel();
+    std::shared_ptr<apache::thrift::transport::TTransport> getClientChannel();
 
     bool put(lbidich::DataBuf msg);
 

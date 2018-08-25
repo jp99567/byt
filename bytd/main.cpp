@@ -1,6 +1,5 @@
 
 #include <iostream>
-#include <boost/make_shared.hpp>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/server/TThreadedServer.h>
 #include <thrift/transport/TBufferTransports.h>
@@ -18,13 +17,13 @@ class AppContainer
 public:
 	AppContainer()
 	:signals(io_service, SIGINT, SIGTERM)
-	,server(boost::make_shared<doma::BytRequestProcessorFactory>(boost::make_shared<BytRequestFactory>()),
-			boost::make_shared<ZweiKanalServer>(io_service),
-		    boost::make_shared<apache::thrift::transport::TBufferedTransportFactory>(),
-		    boost::make_shared<apache::thrift::protocol::TBinaryProtocolFactory>())
+	,server(std::make_shared<doma::BytRequestProcessorFactory>(std::make_shared<BytRequestFactory>()),
+			std::make_shared<ZweiKanalServer>(io_service),
+		    std::make_shared<apache::thrift::transport::TBufferedTransportFactory>(),
+		    std::make_shared<apache::thrift::protocol::TBinaryProtocolFactory>())
     {
 		signals.async_wait([this](auto error, auto signum){
-			LOG_INFO("signal {}",signum);
+			LogINFO("signal {}",signum);
 			server.stop();
 		});
     }
@@ -40,11 +39,11 @@ int main()
   try
   {
       AppContainer().run();
-      LOG_INFO("GRACEFULLY");
+      LogINFO("GRACEFULLY");
   }
   catch (std::exception& e)
   {
-      LOG_ERR("crash {}", e.what());
+      LogERR("crash {}", e.what());
       return 1;
   }
 

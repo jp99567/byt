@@ -11,23 +11,23 @@ ZweiKanalServer::ZweiKanalServer(boost::asio::io_service &io_service)
 
 ZweiKanalServer::~ZweiKanalServer()
 {
-    LOG_INFO("destruct ~ZweiKanalServer");
+    LogINFO("destruct ~ZweiKanalServer");
 }
 
 void ZweiKanalServer::listen()
 {
-    LOG_INFO("listen");
+    LogINFO("listen");
 
     ioThread = std::thread([this]{
 	  start_accept();
 	  io_service.run();
-	  LOG_INFO("io thread finished");
+	  LogINFO("io thread finished");
   });
 }
 
 void ZweiKanalServer::interrupt()
 {
-    LOG_INFO("accept interrupt requested by server");
+    LogINFO("accept interrupt requested by server");
     {
         std::unique_lock<std::mutex> lk(lock);
         interruptReq = true;
@@ -37,7 +37,7 @@ void ZweiKanalServer::interrupt()
 
 void ZweiKanalServer::interruptChildren()
 {
-    LOG_INFO("accept interrupt children");
+    LogINFO("accept interrupt children");
     lock.lock();
     auto tmpCopy = std::move(activeConns);
     lock.unlock();
@@ -52,12 +52,12 @@ void ZweiKanalServer::interruptChildren()
 
 void ZweiKanalServer::close()
 {
-    LOG_INFO("close server");
+    LogINFO("close server");
     io_service.stop();
     ioThread.join();
 }
 
-boost::shared_ptr<apache::thrift::transport::TTransport> ZweiKanalServer::acceptImpl()
+std::shared_ptr<apache::thrift::transport::TTransport> ZweiKanalServer::acceptImpl()
 {
     std::unique_lock<std::mutex> lk(lock);
     cvaccept.wait(lk, [this]{return !conns.empty() || interruptReq;});
@@ -69,7 +69,7 @@ boost::shared_ptr<apache::thrift::transport::TTransport> ZweiKanalServer::accept
                 activeConns.emplace(tcp);
     		return tcp->getClientChannel();
     	}
-        return boost::shared_ptr<TTransport>(nullptr);
+        return std::shared_ptr<TTransport>(nullptr);
     }
     else
     {
@@ -92,11 +92,11 @@ void ZweiKanalServer::start_accept()
 void ZweiKanalServer::handle_accept(tcp_connection::sPtr new_connection, const boost::system::error_code &error)
 {
     if (!error){
-        LOG_INFO("new connection");
+        LogINFO("new connection");
         new_connection->start();
     }
     else{
-        LOG_INFO("accept error {}:{}", error.category().name(), error.value());
+        LogINFO("accept error {}:{}", error.category().name(), error.value());
     }
 
     start_accept();

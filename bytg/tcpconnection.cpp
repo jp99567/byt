@@ -81,13 +81,13 @@ TcpConnection::~TcpConnection()
     qDebug() << "destroy" << "~TcpConnection";
 }
 
-boost::shared_ptr<apache::thrift::transport::TTransport> TcpConnection::getClientChannel()
+std::shared_ptr<apache::thrift::transport::TTransport> TcpConnection::getClientChannel()
 {
     if(!io)
         return nullptr;
 
     auto channel = std::make_unique<lbidich::Channel>(ChannelId::down, io);
-    return boost::shared_ptr<apache::thrift::transport::TTransport>(
+    return std::shared_ptr<apache::thrift::transport::TTransport>(
                 new BytTransport(std::move(channel)));
 }
 
@@ -102,7 +102,7 @@ bool TcpConnection::put(lbidich::DataBuf msg)
 
 void TcpConnection::connectTo()
 {
-    socket->connectToHost("127.0.0.1", 1981);
+    socket->connectToHost("bbb2", 1981);
 }
 
 void TcpConnection::stateChanged(QAbstractSocket::SocketState state)

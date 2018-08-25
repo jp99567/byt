@@ -52,7 +52,7 @@ public:
   void close() override;
 
 protected:
-  boost::shared_ptr<TTransport> acceptImpl() override;
+  std::shared_ptr<TTransport> acceptImpl() override;
 
 private:
 

@@ -63,8 +63,8 @@ void BytRequest::buildClient()
     using apache::thrift::transport::TBufferedTransport;
     using apache::thrift::protocol::TBinaryProtocol;
 
-    boost::shared_ptr<TTransport> transport(new TBufferedTransport(tcp.getClientChannel()));
-    boost::shared_ptr<apache::thrift::protocol::TProtocol> protocol(new TBinaryProtocol(transport));
+    std::shared_ptr<TTransport> transport(new TBufferedTransport(tcp.getClientChannel()));
+    std::shared_ptr<apache::thrift::protocol::TProtocol> protocol(new TBinaryProtocol(transport));
     client = std::make_unique<doma::BytRequestClient>(protocol);
 }
 

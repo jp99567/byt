@@ -13,7 +13,7 @@
 #include <cstring>
 #include <set>
 #include <fstream>
-#include "log_trace_debug.h"
+#include "Log.h"
 #include "owtherm.h"
 #include "exporter.h"
 #include "thread_util.h"
@@ -95,26 +95,26 @@ int OwThermNet::search_triplet(bool branch_direction)
 {
 	int tmp(branch_direction);
 	int err = ioctl(mFd, OWTHERM_IOCTL_SERCH_TRIPLET, &tmp);
-	if(err)	SYSDIE;
+	if(err)	LogSYSDIE;
 	return tmp;
 }
 
 void OwThermNet::write_simple_cmd(Cmd cmd)
 {
-	if( 1 != write(mFd, &cmd, 1)) SYSDIE;
+	if( 1 != write(mFd, &cmd, 1)) LogSYSDIE;
 }
 
 bool OwThermNet::measure()
 {
 	if(!presence()){
-		ERRORS("no presence");
+		LogERR("no presence");
 		return false;
 	}
 
 	write_simple_cmd(Cmd::SKIP_ROM);
 
 	int tmp(1);
-	if(ioctl(mFd, OWTHERM_IOCTL_STRONG_PWR, &tmp)) SYSDIE;
+	if(ioctl(mFd, OWTHERM_IOCTL_STRONG_PWR, &tmp)) LogSYSDIE;
 
 	write_simple_cmd(Cmd::CONVERT);
 	std::this_thread::sleep_for(std::chrono::milliseconds(750));
@@ -132,12 +132,12 @@ bool OwThermNet::measure()
 			//check 0550 85 deg - conversion failed
 			if( (uint16_t)res.temperature == 0x0550 &&
 				abs(i.lastValid-85) > 1.5){
-				ERRORS("invalid value 85");
+				LogERR("invalid value 85");
 				t = badval;
 			}
 
 			if(t > 125 || t < -55){
-				ERRORS("out of range:%f", t);
+				LogERR("out of range:{}", t);
 				t = badval;
 			}
 		}
@@ -175,7 +175,7 @@ void OwThermNet::search()
 	mMeas.clear();
 	do{
 		if(!presence()){
-			ERRORS("no sensor on the bus");
+			LogERR("no sensor on the bus");
 			return;
 		}
 
@@ -196,7 +196,7 @@ void OwThermNet::search()
 
 			int res = search_triplet(dir);
 			if(expext_b00 && res != 0){
-				ERRORS("search failed, b00 expected");
+				LogERR("search failed, b00 expected");
 				return;
 			}
 
@@ -207,7 +207,7 @@ void OwThermNet::search()
 				}
 			}
 			else if(res == 3){
-				ERRORS("search failed, b11");
+				LogERR("search failed, b11");
 				return;
 			}
 			else{
@@ -225,7 +225,7 @@ void OwThermNet::search()
 			tmp.push_back(Sensor(rc));
 		}
 		else{
-			ERRORS("search: crc error");
+			LogERR("search: crc error");
 		}
 	}
 	while(last_branch >= 0);
@@ -237,7 +237,7 @@ bool OwThermNet::presence()
 {
 	int tmp;
 	int err = ioctl(mFd, OWTHERM_IOCTL_PRESENCE, &tmp);
-	if(err)	SYSDIE;
+	if(err)	LogSYSDIE;
 
 	switch(tmp){
 	case 0:
@@ -263,29 +263,29 @@ bool OwThermNet::presence()
 bool OwThermNet::read_scratchpad(const RomCode& rc, ThermScratchpad& v)
 {
 	if(!presence()){
-		ERRORS("no presence");
+		LogERR("no presence");
 		return false;
 	}
 
 	write_simple_cmd(Cmd::MATCH_ROM);
 
 	int n = write(mFd, &rc, sizeof(rc));
-	if(n!=sizeof(rc)) SYSDIE;
+	if(n!=sizeof(rc)) LogSYSDIE;
 
 	write_simple_cmd(Cmd::READ_SCRATCHPAD);
 
-	if(sizeof(v) != read(mFd, &v, sizeof(v))) SYSDIE;
+	if(sizeof(v) != read(mFd, &v, sizeof(v))) LogSYSDIE;
 
 	if( (v.conf != 0x7F ) ||
 		(v.reserved[0]!=0xFF) ||
 		(v.reserved[2]!=0x10) ){
-		ERRORS("scrratchpad: %02X %02X %02X %02X %02X",
+		LogERR("scrratchpad: {:02X} {:02X} {:02X} {:02X} {:02X}",
 				(uint8_t)v.alarmH, (uint8_t)v.alarmL, v.conf, v.reserved[0], v.reserved[2] );
 		return false;
 	}
 
 	if(!check_crc(v)){
-		ERRORS("scratchpad crc error");
+		LogERR("scratchpad crc error");
 		return false;
 	}
 
@@ -300,7 +300,7 @@ bool OwThermNet::read_rom(RomCode& rc)
 	write_simple_cmd(Cmd::READ_ROM);
 
 	int n = read(mFd, &rc, sizeof(rc));
-	if(n!=sizeof(rc)) SYSDIE;
+	if(n!=sizeof(rc)) LogSYSDIE;
 
 	if(!check_crc(rc)){
 		std::cerr << "error crc\n";
@@ -314,12 +314,12 @@ OwThermNet::OwThermNet(Exporter& e, const RomCode& mainSensor)
 	,mrc(mainSensor)
 {
 	mFd = open("/dev/owtherm",  O_RDWR);
-	if( mFd < 0 ) SYSDIE;
+	if( mFd < 0 ) LogSYSDIE;
 }
 
 OwThermNet::~OwThermNet()
 {
-	if(close(mFd)) SYSDIE;
+	if(close(mFd)) LogSYSDIE;
 }
 
 } //namespace ow
@@ -327,7 +327,7 @@ OwThermNet::~OwThermNet()
 static void load_read_predefined_romcodes(std::set<ow::RomCode>& s, ow::RomCode& main)
 {
 	std::ifstream config("predefined_romcodes.txt");
-	if(!config.good()) SYSDIE;
+	if(!config.good()) LogSYSDIE;
 	config.exceptions(std::ifstream::badbit);
 	std::string tmp;
 
@@ -337,7 +337,7 @@ static void load_read_predefined_romcodes(std::set<ow::RomCode>& s, ow::RomCode&
 		if(config >> tmp && tmp[0]!='#'){
 			tmprc = tmp;
 			if(!s.insert(tmprc).second){
-				DIES("duplicates:%s", tmp.c_str());
+				LogDIE("duplicates:{}", tmp);
 			}
 			if(first){
 				main = tmprc;
@@ -353,7 +353,7 @@ int main()
 	ow::RomCode mainSensor;
 	load_read_predefined_romcodes(predefined, mainSensor);
 
-	if(predefined.empty()) DIES("no predefined sensors");
+	if(predefined.empty()) LogDIE("no predefined sensors");
 
 	ow::Exporter exporter;
 	ow::OwThermNet therm(exporter, mainSensor);
@@ -369,7 +369,7 @@ int main()
 		bool goto_break(false);
 		for(auto& i: therm.measurment()){
 			if(!found.insert(i.romcode).second){
-				ERRORS("duplicate");
+				LogERR("duplicate");
 				goto_break = true;
 			}
 		}
@@ -387,9 +387,8 @@ int main()
 										  begin(tmpv));
 
 			if(it!=begin(tmpv)){
-				ERRORS("missing sensors:");
 				for(auto i=begin(tmpv); i!=it; ++i){
-					std::cerr << '\t' << (std::string)*i << '\n';
+					LogERR("missing sensor: {}", (std::string)*i);
 				}
 			}
 
@@ -398,9 +397,8 @@ int main()
 									 begin(tmpv));
 
 			if(it!=begin(tmpv)){
-				ERRORS("new sensors:");
 				for(auto i=begin(tmpv); i!=it; ++i){
-					std::cerr << '\t' << (std::string)*i << '\n';
+					LogERR("new sensors: {}", (std::string)*i);
 				}
 			}
 		}
@@ -409,12 +407,12 @@ int main()
 	while(--try_nr > 0);
 
 	if(!search_success)
-		DIES("search failed");
+		LogDIE("search failed");
 
 	thread_util::set_sig_handler();
 	thread_util::sigblock(false, true);
 
-	INFO("measure start");
+	LogINFO("measure start");
 	auto sample_time = std::chrono::system_clock::now();
 	while(!thread_util::shutdown_req){
 

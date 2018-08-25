@@ -14,7 +14,7 @@ Widget::Widget(QWidget *parent)
     audioPowerOn = new QPushButton("denon");
     audioCh1 = new QPushButton("ch1");
     audioCh2 = new QPushButton("ch2");
-    connInfo = new QLabel("unknown");
+    connInfo = new QLabel("disconnected");
     auto layout = new QVBoxLayout;
     layout->addWidget(connection);
     layout->addWidget(connInfo);

@@ -10,7 +10,7 @@
 #include <cassert>
 #include <iostream>
 #include <sstream>
-#include "log_trace_debug.h"
+#include "Log.h"
 
 static constexpr char conninfo[]  = "connect_timeout = 10";
 
@@ -40,12 +40,12 @@ bool PgDbWrapper::connect()
 		PQreset(mConn);
 	}
 	auto t2 = std::chrono::system_clock::now();
-	INFO("DB connection attempt %llusec", std::chrono::duration_cast<std::chrono::seconds>(t2-t1).count());
+	LogINFO("DB connection attempt {}usec", std::chrono::duration_cast<std::chrono::seconds>(t2-t1).count());
 
     /* Check to see that the backend connection was successfully made */
     if (PQstatus(mConn) != CONNECTION_OK)
     {
-        fprintf(stderr, "connect db: %s\n", PQerrorMessage(mConn));
+        LogERR("connect db: {}", PQerrorMessage(mConn));
         return false;
     }
     return true;
@@ -100,11 +100,11 @@ bool PgDbWrapper::insertSamples(const SqlCmd& sqlcmd) const
     {
     	rv = false;
     	auto dur = std::chrono::duration_cast<std::chrono::seconds>(t2-t1).count();
-        ERRORS("INSERT failed: %d %s %llusec", PQresultStatus(res), PQerrorMessage(mConn), dur);
+        LogERR("INSERT failed: {} {} {}usec", PQresultStatus(res), PQerrorMessage(mConn), dur);
     }
     else if(std::stoi(PQcmdTuples(res)) != count){
     	rv = false;
-    	ERRORS("not expected inserted count: %s", PQcmdTuples(res));
+    	LogERR("not expected inserted count: {}", PQcmdTuples(res));
     }
     PQclear(res);
 

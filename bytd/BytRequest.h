@@ -12,12 +12,12 @@ public:
 
 	void audioSelectChannel(const int8_t chnum) override
 	{
-		LOG_INFO("audioSelectChannel {}", (int)chnum);
+		LogINFO("audioSelectChannel {}", (int)chnum);
 	}
 
 	double ampers() override
 	{
-		LOG_INFO("ampers");
+		LogINFO("ampers");
 		return 7.7;
 	}
 

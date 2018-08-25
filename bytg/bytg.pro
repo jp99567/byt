@@ -27,9 +27,9 @@ HEADERS  += widget.h \
     lbidich/byttransport.h \
     lbidich/io.h
 
-INCLUDEPATH += ../../thrift-0.10.0/lib/cpp/src
+#INCLUDEPATH += ../../thrift-0.10.0/lib/cpp/src
 
-unix:LIBS += -L../../thrift-0.10.0-x86_64/lib/
+#unix:LIBS += -L../../thrift-0.10.0-x86_64/lib/
 LIBS += -lthrift
 
 CONFIG += c++14

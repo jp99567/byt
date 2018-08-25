@@ -2,7 +2,7 @@
 
 #include <csignal>
 #include <pthread.h>
-#include "log_trace_debug.h"
+#include "Log.h"
 
 namespace thread_util
 {
@@ -17,11 +17,11 @@ void sigblock(bool block, bool block_alarm)
 	sigaddset(&set, SIGINT);
 	sigaddset(&set, SIGTERM);
 	int err = pthread_sigmask(block ? SIG_BLOCK : SIG_UNBLOCK, &set, nullptr);
-	if(err) SYSDIE;
+	if(err) LogSYSDIE;
 	sigemptyset(&set);
 	sigaddset(&set, SIGALRM);
 	err = pthread_sigmask(block_alarm ? SIG_BLOCK : SIG_UNBLOCK, &set, nullptr);
-	if(err) SYSDIE;
+	if(err) LogSYSDIE;
 }
 
 void set_thread_name(const char *name)
@@ -39,7 +39,7 @@ void set_sig_handler()
 	std::signal(SIGINT, sig_hdl);
 	std::signal(SIGTERM, sig_hdl);
 	std::signal(SIGALRM, [](int sig){
-		ERRORS("alarm");
+		LogERR("alarm");
 	});
 }
 

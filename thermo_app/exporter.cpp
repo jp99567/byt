@@ -10,7 +10,7 @@
 #include <cassert>
 #include <iostream>
 #include "thread_util.h"
-#include "log_trace_debug.h"
+#include "Log.h"
 #include <stddef.h>
 #include <dirent.h>
 #include <iomanip>
@@ -37,11 +37,11 @@ Exporter::Exporter()
 Exporter::~Exporter()
 {
 	mFini = true;
-	close(4); //pgsock
-	alarm(2);
+	//close(4); //pgsock
+	::alarm(2);
 	mCond.notify_one();
 	mTask.join();
-	INFO("export finish nice");
+	LogINFO("export finish nice");
 }
 
 bool Exporter::put(Sample&& v)
@@ -192,7 +192,7 @@ void Exporter::restore_backup()
 
 	dirp = opendir(".");
 	if(!dirp){
-		SYSDIE;
+		LogSYSDIE;
 	}
 
 	std::vector<std::string> v;
@@ -201,7 +201,7 @@ void Exporter::restore_backup()
 	{
 		int err = readdir_r(dirp, dp, &res);
 		if(err){
-			SYSDIE;
+			LogSYSDIE;
 		}
 		else if(res){
 			if(DT_REG==res->d_type||DT_LNK==res->d_type){
@@ -223,10 +223,10 @@ void Exporter::restore_backup()
 		unsigned count = std::stoi(f.substr(21));
 		auto cmd = load_file(f);
 		if(mDB.insertSamples(PgDbWrapper::SqlCmd(cmd, count))){
-			if(unlink(f.c_str())) SYSDIE;
+			if(unlink(f.c_str())) LogSYSDIE;
 		}
 		else if(mDB.connectionOK()){
-			if(rename(f.c_str(), filename("rejected").c_str())) SYSDIE;
+			if(rename(f.c_str(), filename("rejected").c_str())) LogSYSDIE;
 		}
 	}
 }

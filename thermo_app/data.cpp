@@ -6,11 +6,11 @@
  */
 
 #include "data.h"
+#include "Log.h"
 #include <sstream>
 #include <iomanip>
 #include <iostream>
 #include <string.h>
-#include "log_trace_debug.h"
 
 namespace ow
 {
@@ -82,7 +82,7 @@ RomCode& RomCode::operator=(const std::string& str)
 	std::stringstream s(str);
 
 	if(str.size() < sizeof(*this)*2)
-		DIES("mismatch %s", str.c_str());
+		LogERR("mismatch size {}", str);
 
 	std::string u;
 	uint8_t *c = (uint8_t*)this;
@@ -93,7 +93,7 @@ RomCode& RomCode::operator=(const std::string& str)
 	}
 
 	if(!check_crc(*this))
-		DIES("mismatch %s", str.c_str());
+		LogERR("mismatch crc {}", str);
 
 	return *this;
 }
