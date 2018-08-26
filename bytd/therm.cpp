@@ -421,6 +421,7 @@ int main()
 		sample_time += std::chrono::seconds(5);
 		if(sample_time < std::chrono::system_clock::now()){
 			sample_time = std::chrono::system_clock::now();
+			continue;
 		}
 		std::this_thread::sleep_until(sample_time);
 	}

@@ -82,7 +82,7 @@ RomCode& RomCode::operator=(const std::string& str)
 	std::stringstream s(str);
 
 	if(str.size() < sizeof(*this)*2)
-		LogERR("mismatch size {}", str);
+		LogDIE("mismatch size {}", str);
 
 	std::string u;
 	uint8_t *c = (uint8_t*)this;
@@ -93,7 +93,7 @@ RomCode& RomCode::operator=(const std::string& str)
 	}
 
 	if(!check_crc(*this))
-		LogERR("mismatch crc {}", str);
+		LogDIE("mismatch crc {}", str);
 
 	return *this;
 }

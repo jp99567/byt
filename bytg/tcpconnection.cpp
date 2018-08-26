@@ -25,7 +25,7 @@ void TcpConnection::writeReqSlot(lbidich::DataBuf data)
     qDebug() << "writeReqSlot" << data.size();
         auto& dataWr = io->getDataWr();
         if(dataWr.size() > 0){
-            std::copy(std::cbegin(data), std::cend(data), std::back_inserter(dataWr));
+            std::copy(std::begin(data), std::end(data), std::back_inserter(dataWr));
             return;
         }
 
@@ -42,7 +42,7 @@ void TcpConnection::writeReqSlot(lbidich::DataBuf data)
 
         if(written < (qint64)data.size())
         {
-            std::copy(std::cbegin(data)+written, std::cend(data), std::back_inserter(dataWr));
+            std::copy(std::begin(data)+written, std::end(data), std::back_inserter(dataWr));
         }
         return;
 }

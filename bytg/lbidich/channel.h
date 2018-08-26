@@ -73,13 +73,13 @@ public:
             
             if(req < buf.size())
             {
-                std::copy_n(std::cbegin(buf), size, data);
-                buf.erase(std::cbegin(buf), std::cbegin(buf)+size);
+                std::copy_n(std::begin(buf), size, data);
+                buf.erase(std::begin(buf), std::begin(buf)+size);
                 return size;
             }
             else
             {
-                std::copy(std::cbegin(buf), std::cend(buf), data);
+                std::copy(std::begin(buf), std::end(buf), data);
                 data += buf.size();
                 req -= buf.size();
                 msgs.pop();

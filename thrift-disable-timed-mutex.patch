@@ -1,0 +1,188 @@
+diff --git a/lib/cpp/src/thrift/TOutput.cpp b/lib/cpp/src/thrift/TOutput.cpp
+index bb46263b..f7f02f77 100644
+--- a/lib/cpp/src/thrift/TOutput.cpp
++++ b/lib/cpp/src/thrift/TOutput.cpp
+@@ -89,7 +89,6 @@ void TOutput::errorTimeWrapper(const char* msg) {
+   time(&now);
+   THRIFT_CTIME_R(&now, dbgtime);
+   dbgtime[24] = 0;
+-  fprintf(stderr, "Thrift: %s %s\n", dbgtime, msg);
+ #endif
+ }
+ 
+@@ -99,28 +98,9 @@ void TOutput::perror(const char* message, int errno_copy) {
+ }
+ 
+ std::string TOutput::strerror_s(int errno_copy) {
+-#ifndef HAVE_STRERROR_R
+-  return "errno = " + to_string(errno_copy);
+-#else // HAVE_STRERROR_R
+-
+-  char b_errbuf[1024] = {'\0'};
+-#ifdef STRERROR_R_CHAR_P
+-  char* b_error = strerror_r(errno_copy, b_errbuf, sizeof(b_errbuf));
+-#else
+-  char* b_error = b_errbuf;
+-  int rv = strerror_r(errno_copy, b_errbuf, sizeof(b_errbuf));
+-  if (rv == -1) {
+-    // strerror_r failed.  omgwtfbbq.
+-    return "XSI-compliant strerror_r() failed with errno = "
+-           + to_string(errno_copy);
+-  }
+-#endif
+-  // Can anyone prove that explicit cast is probably not necessary
+-  // to ensure that the string object is constructed before
+-  // b_error becomes invalid?
+-  return std::string(b_error);
+-
+-#endif // HAVE_STRERROR_R
++	std::stringstream ss;
++	ss << "errno: " << strerror_s(errno_copy) << " (" << errno_copy << ')';
++	return ss.str();
+ }
+ }
+ } // apache::thrift
+diff --git a/lib/cpp/src/thrift/concurrency/Mutex.h b/lib/cpp/src/thrift/concurrency/Mutex.h
+index 09b938e5..e99082eb 100644
+--- a/lib/cpp/src/thrift/concurrency/Mutex.h
++++ b/lib/cpp/src/thrift/concurrency/Mutex.h
+@@ -23,6 +23,7 @@
+ #include <thrift/stdcxx.h>
+ #include <boost/noncopyable.hpp>
+ #include <stdint.h>
++#include <mutex>
+ 
+ namespace apache {
+ namespace thrift {
+@@ -72,7 +73,6 @@ public:
+ 
+   virtual void lock() const;
+   virtual bool trylock() const;
+-  virtual bool timedlock(int64_t milliseconds) const;
+   virtual void unlock() const;
+ 
+   void* getUnderlyingImpl() const;
+@@ -85,8 +85,7 @@ public:
+   static void RECURSIVE_INITIALIZER(void*);
+ 
+ private:
+-  class impl;
+-  stdcxx::shared_ptr<impl> impl_;
++  stdcxx::shared_ptr<std::mutex> impl_;
+ };
+ 
+ class ReadWriteMutex {
+@@ -131,18 +130,8 @@ private:
+ 
+ class Guard : boost::noncopyable {
+ public:
+-  Guard(const Mutex& value, int64_t timeout = 0) : mutex_(&value) {
+-    if (timeout == 0) {
++  Guard(const Mutex& value) : mutex_(&value) {
+       value.lock();
+-    } else if (timeout < 0) {
+-      if (!value.trylock()) {
+-        mutex_ = NULL;
+-      }
+-    } else {
+-      if (!value.timedlock(timeout)) {
+-        mutex_ = NULL;
+-      }
+-    }
+   }
+   ~Guard() {
+     if (mutex_) {
+diff --git a/lib/cpp/src/thrift/concurrency/StdMonitor.cpp b/lib/cpp/src/thrift/concurrency/StdMonitor.cpp
+index 7b3b209a..91c047bf 100644
+--- a/lib/cpp/src/thrift/concurrency/StdMonitor.cpp
++++ b/lib/cpp/src/thrift/concurrency/StdMonitor.cpp
+@@ -82,10 +82,10 @@ public:
+     }
+ 
+     assert(mutex_);
+-    std::timed_mutex* mutexImpl = static_cast<std::timed_mutex*>(mutex_->getUnderlyingImpl());
++    std::mutex* mutexImpl = static_cast<std::mutex*>(mutex_->getUnderlyingImpl());
+     assert(mutexImpl);
+ 
+-    std::unique_lock<std::timed_mutex> lock(*mutexImpl, std::adopt_lock);
++    std::unique_lock<std::mutex> lock(*mutexImpl, std::adopt_lock);
+     bool timedout = (conditionVariable_.wait_for(lock, std::chrono::milliseconds(timeout_ms))
+                      == std::cv_status::timeout);
+     lock.release();
+@@ -109,7 +109,7 @@ public:
+    */
+   int waitForTime(const struct timeval* abstime) {
+     assert(mutex_);
+-    std::timed_mutex* mutexImpl = static_cast<std::timed_mutex*>(mutex_->getUnderlyingImpl());
++    std::mutex* mutexImpl = static_cast<std::mutex*>(mutex_->getUnderlyingImpl());
+     assert(mutexImpl);
+ 
+     struct timeval currenttime;
+@@ -122,7 +122,7 @@ public:
+     if (tv_usec < 0)
+       tv_usec = 0;
+ 
+-    std::unique_lock<std::timed_mutex> lock(*mutexImpl, std::adopt_lock);
++    std::unique_lock<std::mutex> lock(*mutexImpl, std::adopt_lock);
+     bool timedout = (conditionVariable_.wait_for(lock,
+                                                  std::chrono::seconds(tv_sec)
+                                                  + std::chrono::microseconds(tv_usec))
+@@ -137,10 +137,10 @@ public:
+    */
+   int waitForever() {
+     assert(mutex_);
+-    std::timed_mutex* mutexImpl = static_cast<std::timed_mutex*>(mutex_->getUnderlyingImpl());
++    std::mutex* mutexImpl = static_cast<std::mutex*>(mutex_->getUnderlyingImpl());
+     assert(mutexImpl);
+ 
+-    std::unique_lock<std::timed_mutex> lock(*mutexImpl, std::adopt_lock);
++    std::unique_lock<std::mutex> lock(*mutexImpl, std::adopt_lock);
+     conditionVariable_.wait(lock);
+     lock.release();
+     return 0;
+diff --git a/lib/cpp/src/thrift/concurrency/StdMutex.cpp b/lib/cpp/src/thrift/concurrency/StdMutex.cpp
+index e0f79fa3..fe55e3a2 100644
+--- a/lib/cpp/src/thrift/concurrency/StdMutex.cpp
++++ b/lib/cpp/src/thrift/concurrency/StdMutex.cpp
+@@ -30,16 +30,7 @@ namespace apache {
+ namespace thrift {
+ namespace concurrency {
+ 
+-/**
+- * Implementation of Mutex class using C++11 std::timed_mutex
+- *
+- * Methods throw std::system_error on error.
+- *
+- * @version $Id:$
+- */
+-class Mutex::impl : public std::timed_mutex {};
+-
+-Mutex::Mutex(Initializer init) : impl_(new Mutex::impl()) {
++Mutex::Mutex(Initializer init) : impl_(new std::mutex()) {
+   ((void)init);
+ }
+ 
+@@ -55,10 +46,6 @@ bool Mutex::trylock() const {
+   return impl_->try_lock();
+ }
+ 
+-bool Mutex::timedlock(int64_t ms) const {
+-  return impl_->try_lock_for(std::chrono::milliseconds(ms));
+-}
+-
+ void Mutex::unlock() const {
+   impl_->unlock();
+ }
+diff --git a/lib/cpp/src/thrift/concurrency/ThreadManager.cpp b/lib/cpp/src/thrift/concurrency/ThreadManager.cpp
+index 2e27b7f4..5b3a3ce3 100644
+--- a/lib/cpp/src/thrift/concurrency/ThreadManager.cpp
++++ b/lib/cpp/src/thrift/concurrency/ThreadManager.cpp
+@@ -449,7 +449,7 @@ bool ThreadManager::Impl::canSleep() const {
+ }
+ 
+ void ThreadManager::Impl::add(shared_ptr<Runnable> value, int64_t timeout, int64_t expiration) {
+-  Guard g(mutex_, timeout);
++  Guard g(mutex_);
+ 
+   if (!g) {
+     throw TimedOutException();

@@ -44,7 +44,7 @@ DataBuf packMsg(uint8_t id, const uint8_t* msg, unsigned size);
 template<typename T>
 DataBuf packMsg2(uint8_t id, const T& data)
 {
-    return packMsg(id, (uint8_t*)std::cbegin(data), sizeof(*std::cbegin(data))*(std::cend(data)-std::cbegin(data)));
+    return packMsg(id, (uint8_t*)std::begin(data), sizeof(*std::begin(data))*(std::end(data)-std::begin(data)));
 }
 
 }

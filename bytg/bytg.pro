@@ -27,9 +27,10 @@ HEADERS  += widget.h \
     lbidich/byttransport.h \
     lbidich/io.h
 
-#INCLUDEPATH += ../../thrift-0.10.0/lib/cpp/src
+android:INCLUDEPATH += /mnt/data/workspace/android/include
+android:INCLUDEPATH += /mnt/data/workspace/android/thrift/include
+android:LIBS += -L/mnt/data/workspace/android/thrift/lib
 
-#unix:LIBS += -L../../thrift-0.10.0-x86_64/lib/
 LIBS += -lthrift
 
 CONFIG += c++14
