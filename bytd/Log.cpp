@@ -13,8 +13,8 @@ Log::~Log() {
 	logger->debug("logger finished");
 }
 Log::Log() {
-	logger = spdlog::stdout_color_mt("console");
-
+	//logger = spdlog::stdout_color_mt("console");
+	logger = spdlog::stderr_logger_mt("bytdlog");
 }
 
 void Log::sysdie()
