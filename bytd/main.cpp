@@ -19,7 +19,7 @@ class SimpleGpio
 {
 public:
 	SimpleGpio(std::string name)
-	:dir(std::string("/run /gpio/") + name + '/')
+	:dir(std::string("/run/bytd/gpio/") + name + '/')
 	{
 		readdirection();
 		readvalue();
@@ -211,12 +211,12 @@ int main()
   }
   catch (std::exception& e)
   {
-      LogERR("crash {}", e.what());
+      LogERR("app crash: {}", e.what());
       return 1;
   }
   catch (...)
   {
-       LogERR("crash unknown");
+       LogERR("app crash: unknown");
        return 1;
   }
 
