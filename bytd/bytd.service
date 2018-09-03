@@ -1,0 +1,11 @@
+[Unit]
+Description=Bytd
+#ConditionPathExists=
+
+[Service]
+WorkingDirectory=/opt/bytd
+ExecStart=/opt/bytd/bytd
+SyslogIdentifier=bytd
+
+[Install]
+WantedBy=multi-user.target
