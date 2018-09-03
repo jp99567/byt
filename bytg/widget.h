@@ -19,7 +19,7 @@ public:
     ~Widget();
 
 signals:
-    void connectionReq();
+    void connectionReq(QString host);
 
 private:
     QPushButton* connection;

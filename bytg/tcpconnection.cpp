@@ -2,6 +2,7 @@
 
 #include <QTcpSocket>
 #include <QDebug>
+#include <QMetaEnum>
 
 using lbidich::ChannelId;
 
@@ -100,16 +101,18 @@ bool TcpConnection::put(lbidich::DataBuf msg)
     return true;
 }
 
-void TcpConnection::connectTo()
+void TcpConnection::connectTo(QString host)
 {
-    socket->connectToHost("bbb2", 1981);
+    qDebug() << "connect to" << host;
+    socket->connectToHost(host, 1981);
 }
 
 void TcpConnection::stateChanged(QAbstractSocket::SocketState state)
 {
     qDebug() << state;
+    QMetaEnum metaEnum = QMetaEnum::fromType<QAbstractSocket::SocketState>();
+    emit connectionChanged(metaEnum.valueToKey(state));
 }
-
 
 bool Io::put(lbidich::ChannelId chId, const uint8_t *msg, unsigned len)
 {

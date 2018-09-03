@@ -44,11 +44,12 @@ public:
     bool put(lbidich::DataBuf msg);
 
 public slots:
-    void connectTo();
+    void connectTo(QString host);
 
 signals:
     void resultReady(const QString &result);
     void writeReq(lbidich::DataBuf data);
+    void connectionChanged(QString state);
 
 private:
     QAbstractSocket* socket;

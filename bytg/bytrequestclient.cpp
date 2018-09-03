@@ -20,14 +20,14 @@ BytRequest::~BytRequest()
     qDebug() << "destroy" << "~BytRequest";
 }
 
-void BytRequest::c1()
+void BytRequest::c1(bool on)
 {
-    qDebug() << "c1";
+    qDebug() << "c1" << on;
     buildClient();
     if(client)
     {
         try{
-            client->audioSelectChannel(1);
+            client->audioSelectChannel(on ? 1 : 2);
         }
         catch(apache::thrift::TException e){
             qDebug() << "c1 catch" << e.what();
@@ -44,6 +44,7 @@ void BytRequest::c2()
         try{
             auto val = client->ampers();
             qDebug() << "c2 val" << val;
+            emit newVal(val);
         }
         catch(apache::thrift::TException e){
             qDebug() << "c2 catch" << e.what();
@@ -63,7 +64,10 @@ void BytRequest::buildClient()
     using apache::thrift::transport::TBufferedTransport;
     using apache::thrift::protocol::TBinaryProtocol;
 
-    std::shared_ptr<TTransport> transport(new TBufferedTransport(tcp.getClientChannel()));
+    auto ch = tcp.getClientChannel();
+    if(!ch) return;
+
+    std::shared_ptr<TTransport> transport(new TBufferedTransport(ch));
     std::shared_ptr<apache::thrift::protocol::TProtocol> protocol(new TBinaryProtocol(transport));
     client = std::make_unique<doma::BytRequestClient>(protocol);
 }
