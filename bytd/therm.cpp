@@ -1,4 +1,5 @@
 
+#include "therm.h"
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -15,7 +16,6 @@
 #include <fstream>
 #include "Log.h"
 #include "owtherm.h"
-#include "exporter.h"
 #include "thread_util.h"
 
 namespace ow {
@@ -42,7 +42,7 @@ class OwThermNet {
 	};
 
 public:
-	explicit OwThermNet(Exporter& e, const RomCode& mainSensor);
+	explicit OwThermNet(ExporterSptr e, const RomCode& mainSensor);
 	~OwThermNet();
 
 	struct Sensor {
@@ -87,7 +87,7 @@ private:
 
 	int mFd;
 	std::vector<Sensor> mMeas;
-	Exporter& mExporter;
+	ExporterSptr mExporter;
 	const RomCode mrc;
 };
 
@@ -161,7 +161,7 @@ bool OwThermNet::measure()
 
 	if(sample.empty())
 		return false;
-	mExporter.put(std::move(sample));
+	mExporter->put(std::move(sample));
 	return rv;
 }
 
@@ -309,7 +309,7 @@ bool OwThermNet::read_rom(RomCode& rc)
 	return true;
 }
 
-OwThermNet::OwThermNet(Exporter& e, const RomCode& mainSensor)
+OwThermNet::OwThermNet(ExporterSptr e, const RomCode& mainSensor)
 	:mExporter(e)
 	,mrc(mainSensor)
 {
@@ -347,16 +347,26 @@ static void load_read_predefined_romcodes(std::set<ow::RomCode>& s, ow::RomCode&
 	}
 }
 
-int main()
+MeranieTeploty::MeranieTeploty()
+{
+}
+
+MeranieTeploty::~MeranieTeploty()
+{
+}
+
+bool MeranieTeploty::init(ow::ExporterSptr exporter)
 {
 	std::set<ow::RomCode> predefined;
 	ow::RomCode mainSensor;
 	load_read_predefined_romcodes(predefined, mainSensor);
 
-	if(predefined.empty()) LogDIE("no predefined sensors");
+	if(predefined.empty()){
+		LogERR("no predefined sensors");
+		return false;
+	}
 
-	ow::Exporter exporter;
-	ow::OwThermNet therm(exporter, mainSensor);
+	auto therm = std::make_unique<ow::OwThermNet>(exporter, mainSensor);
 
 	bool search_success(false);
 	int try_nr(10);
@@ -365,9 +375,9 @@ int main()
 		using std::begin;
 		using std::end;
 
-		therm.search();
+		therm->search();
 		bool goto_break(false);
-		for(auto& i: therm.measurment()){
+		for(auto& i: therm->measurment()){
 			if(!found.insert(i.romcode).second){
 				LogERR("duplicate");
 				goto_break = true;
@@ -407,24 +417,12 @@ int main()
 	while(--try_nr > 0);
 
 	if(!search_success)
-		LogDIE("search failed");
+		LogERR("search failed");
 
-	thread_util::set_sig_handler();
-	thread_util::sigblock(false, true);
+	return search_success;
+}
 
-	LogINFO("measure start");
-	auto sample_time = std::chrono::system_clock::now();
-	while(!thread_util::shutdown_req){
-
-		therm.measure();
-
-		sample_time += std::chrono::seconds(5);
-		if(sample_time < std::chrono::system_clock::now()){
-			sample_time = std::chrono::system_clock::now();
-			continue;
-		}
-		std::this_thread::sleep_until(sample_time);
-	}
-
-	return 0;
+void MeranieTeploty::meas()
+{
+	therm->measure();
 }
