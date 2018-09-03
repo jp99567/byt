@@ -1,5 +1,6 @@
 #pragma once
 
+
 #include <thrift/transport/TServerTransport.h>
 #include <boost/asio.hpp>
 #include <condition_variable>
@@ -17,7 +18,7 @@ class ZweiKanalServer : public apache::thrift::transport::TServerTransport, publ
 public:
 
     ZweiKanalServer(boost::asio::io_service& io_service);
-
+    static boost::asio::ip::tcp::acceptor createAcceptor(boost::asio::io_service &io_service);
     ~ZweiKanalServer();
 
   /**

@@ -50,6 +50,8 @@ private:
 	unsigned mFileNameIndex;
 };
 
+using ExporterSptr = std::shared_ptr<Exporter>;
+
 }
 
 #endif /* EXPORTER_H_ */

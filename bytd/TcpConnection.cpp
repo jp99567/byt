@@ -3,6 +3,7 @@
 #include "IconnServer.h"
 #include "lbidich/channel.h"
 #include "lbidich/packet.h"
+#include <boost/exception/all.hpp>
 
 void tcp_connection::start()
 {
@@ -82,9 +83,17 @@ bool tcp_connection::onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf buf)
 
 std::string tcp_connection::connectionInfo() const
 {
-    if(socket_.is_open())
-	return socket_.remote_endpoint().address().to_string();
-    return "---";
+	  try
+	  {
+		  if(socket_.is_open())
+		  	return socket_.remote_endpoint().address().to_string();
+	  }
+	  catch (boost::exception &e)
+	  {
+	    LogERR("boost ex:{}", boost::diagnostic_information(e));
+	  }
+
+    return "invalid";
 }
 
 

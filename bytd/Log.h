@@ -28,11 +28,22 @@ private:
 	std::shared_ptr<spdlog::logger> logger;
 };
 
+class LogExit
+{
+	const std::string msg;
+public:
+	LogExit(std::string msg) : msg(std::move(msg)){}
+	~LogExit()
+	{
+		Log::instance().get()->debug("exit:{}", msg);
+	}
+};
+
 } /* namespace Util */
 
 #define LogINFO(...) Util::Log::instance().get()->info(__VA_ARGS__)
 #define LogERR(...) Util::Log::instance().get()->error(__VA_ARGS__)
 #define LogDBG(...) Util::Log::instance().get()->debug(__VA_ARGS__)
 #define LogSYSDIE Util::Log::instance().sysdie()
-#define LogDIE(...) {Util::Log::instance().get()->error(__VA_ARGS__); std::runtime_error("die");}
+#define LogDIE(...) {Util::Log::instance().get()->error(__VA_ARGS__); throw std::runtime_error("die");}
 

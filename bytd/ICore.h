@@ -6,5 +6,5 @@ class ICore
 	virtual ~ICore(){}
 	virtual bool sw(int id, bool on)=0;
 	virtual bool cmd(int id)=0;
-	virtual unsigned status() const = 0;
+	virtual unsigned status() = 0;
 };

@@ -27,6 +27,7 @@ public:
   }
 
   void start();
+  std::string connectionInfo() const;
   bool put(lbidich::ChannelId chId, const uint8_t* msg, unsigned len) override;
 
   std::shared_ptr<apache::thrift::transport::TTransport> getClientChannel();
@@ -47,7 +48,6 @@ private:
 
   void do_read();
   bool onNewPacket(lbidich::ChannelId ch, lbidich::DataBuf buf);
-  std::string connectionInfo() const;
 
   tcp::socket socket_;
   lbidich::PacketIn packetIn;

@@ -1,3 +1,4 @@
+#include <systemd/sd-daemon.h>
 #include "ZweiKanalServer.h"
 #include "lbidich/byttransport.h"
 
@@ -5,8 +6,29 @@
 
 ZweiKanalServer::ZweiKanalServer(boost::asio::io_service &io_service)
     :io_service(io_service)
-    ,acceptor(io_service, tcp::endpoint(tcp::v4(), 1981))
+    ,acceptor(createAcceptor(io_service))
 {
+}
+
+boost::asio::ip::tcp::acceptor ZweiKanalServer::createAcceptor(boost::asio::io_service &io_service)
+{
+	using TcpAcceptor = boost::asio::ip::tcp::acceptor;
+
+	auto nrsfd = sd_listen_fds(1);
+	if( 1 == nrsfd )
+	{
+		LogDBG("socket provided by systemd");
+		return TcpAcceptor(io_service, tcp::v4(), SD_LISTEN_FDS_START);
+	}
+	else if( 0 == nrsfd )
+	{
+		LogINFO("create socket :1981");
+		return TcpAcceptor(io_service, tcp::endpoint(tcp::v4(), 1981));
+	}
+	else
+	{
+		throw std::logic_error("sd_listen_fds error");
+	}
 }
 
 ZweiKanalServer::~ZweiKanalServer()
@@ -20,7 +42,19 @@ void ZweiKanalServer::listen()
 
     ioThread = std::thread([this]{
 	  start_accept();
-	  io_service.run();
+
+
+	    for (;;) {
+	        try {
+	        	io_service.run();
+	            break; // exited normally
+	        } catch (std::exception const &e) {
+	            LogERR("io_service.run: {}", e.what());
+	        } catch (...) {
+	        	LogERR("io_service.run unknown");
+	        }
+	    }
+
 	  LogINFO("io thread finished");
   });
 }
@@ -92,7 +126,7 @@ void ZweiKanalServer::start_accept()
 void ZweiKanalServer::handle_accept(tcp_connection::sPtr new_connection, const boost::system::error_code &error)
 {
     if (!error){
-        LogINFO("new connection");
+        LogINFO("new connection: {}", new_connection->connectionInfo());;
         new_connection->start();
     }
     else{
