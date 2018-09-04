@@ -4,6 +4,9 @@
 #include <QDebug>
 #include <QMetaEnum>
 
+#include <thrift/transport/TServerTransport.h>
+#include <thread>
+
 using lbidich::ChannelId;
 
 TcpConnection::TcpConnection()
@@ -17,6 +20,16 @@ TcpConnection::TcpConnection()
         writeReqSlot(lbidich::packMsg2((uint8_t)ChannelId::auth, "Na Straz!"));
     });
 }
+
+class IndicationListener : public apache::thrift::transport::TServerTransport
+{
+    void listen() override
+    {
+
+    }
+
+    std::thread thread;
+};
 
 void TcpConnection::writeReqSlot(lbidich::DataBuf data)
 {

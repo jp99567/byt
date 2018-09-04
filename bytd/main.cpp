@@ -190,6 +190,8 @@ public:
 			while(running);
 		});
 
+		sd_notify(0, "READY=1");
+
 		server.serve();
 
 		{
