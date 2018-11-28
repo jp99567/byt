@@ -5,6 +5,8 @@ CMakeCache.txt
 CMakeFiles
 CMakeScripts
 *.pro.user
+CMakeLists.txt.user*
+*.pro.user.*
 **/build
 **/build-*
 **/.kdev4
@@ -18,3 +20,5 @@ bytif/gen-*
 .metadata
 RemoteSystemsTempFiles
 core
+
+pru/gen/*
