@@ -58,7 +58,7 @@ static int sBitidx;
 
 #define US2TICK(us) ((us)*20)
 
-#define cDurFallingEdge US2TICK(1)
+#define cDurFallingEdge US2TICK(2)
 #define cDurResetPulse US2TICK(480)
 #define cDurWaitPresenceT (cDurResetPulse + US2TICK(60))
 #define cDurPresenceMinT US2TICK(15)
@@ -132,7 +132,7 @@ static void wait_presence_cleared(void)
 	}
 	else if(timeout(cDurPresenceMaxT))
 	{
-		send_status(eOwBusFailureTimeout);
+		send_status_with_param(eOwBusFailureTimeout);
 		sState = eOwIdle;
 	}
 }

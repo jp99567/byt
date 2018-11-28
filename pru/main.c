@@ -116,9 +116,9 @@ struct pru_rpmsg_transport transport;
 uint16_t src, dst;
 
 ///////////////////////////////////////// BEGIN OW /////////////////////////////////
-#define OW_OUTPIN 7
-#define OW_OUTPIN_POWER 7
-#define OW_INPIN 1
+#define OW_OUTPIN 0 // P9.31 pru0_r30_0 zeleny
+#define OW_OUTPIN_POWER 1 // P9.29 pru0_r30_1 hnedy
+#define OW_INPIN 2 // P9.30 pru0_r31_2 zeleno biely
 
 #include "rpm_iface.h"
 #include "common.h"
@@ -140,7 +140,8 @@ union OwData gOwData;
 
 void send_status(enum OwResponse code)
 {
-    pru_rpmsg_send(&transport, dst, src, &code, sizeof(uint32_t));
+    int32_t v = code;
+    pru_rpmsg_send(&transport, dst, src, &v, sizeof(v));
 }
 
 void send_status_with_data(enum OwResponse code)
@@ -160,7 +161,6 @@ void send_status_with_param(enum OwResponse code)
     pru_rpmsg_send(&transport, dst, src, &p, sizeof(p));
 }
 
-
 void bus_pull(void)
 {
     __R30 &= ~(1<<OW_OUTPIN_POWER);
@@ -179,7 +179,7 @@ void bus_release(void)
 
 int bus_active (void)
 {
-    return __R31 & (1<<OW_INPIN) ? 1 : 0;
+    return __R31 & (1<<OW_INPIN) ? 0 : 1;
 }
 
 extern void ow_init(void);
@@ -242,6 +242,7 @@ void process_message(void* data, uint16_t len)
         }
       break;
     default:
+        send_status(eRspError);
       break;
     }
 }
@@ -250,6 +251,8 @@ void main(void)
 {
 	uint16_t len;
 	volatile uint8_t *status;
+
+	bus_release();
 
 	/* Allow OCP master port access by the PRU so the PRU can read external memories */
 	CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;

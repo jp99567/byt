@@ -1,7 +1,12 @@
 
 #pragma once
 
+#ifdef __cplusplus
+namespace pru {
+#endif
+
 enum OwResponse {
+    eRspError,
     eOwPresenceOk,
     eOwBusFailure0,
     eOwBusFailure1,
@@ -13,7 +18,7 @@ enum OwResponse {
     eOwWriteBitsFailure,
 };
 
-enum eCommands
+enum Commands
 {
     eCmdHalt,
     eCmdOwInit,
@@ -22,3 +27,7 @@ enum eCommands
     eCmdOwRead,
     eCmdOwWritePower
 };
+
+#ifdef __cplusplus
+}
+#endif

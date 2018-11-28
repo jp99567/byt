@@ -21,85 +21,85 @@ public:
 	SimpleGpio(std::string name)
 	:dir(std::string("/run/bytd/gpio/") + name + '/')
 	{
-		readdirection();
-		readvalue();
+//		readdirection();
+//		readvalue();
 	}
 
 	void set(bool hi)
 	{
-		if(isOutout()){
-			writef("value", hi ? "1" : "0");
-		}
-		else{
-			writef("direction", hi ? "high" : "low");
-			direction = true;
-		}
-		val = hi;
+//		if(isOutout()){
+//			writef("value", hi ? "1" : "0");
+//		}
+//		else{
+//			writef("direction", hi ? "high" : "low");
+//			direction = true;
+//		}
+//		val = hi;
 	}
 
 	void setInput()
 	{
-		writef("direction", "in");
-		direction = false;
+//		writef("direction", "in");
+//		direction = false;
 	}
 
 	bool operator()()
 	{
-		if(isOutout())
-		{
-			return val;
-		}
-
-		return readvalue();
+//		if(isOutout())
+//		{
+//			return val;
+//		}
+//
+//		return readvalue();
 	}
 
 private:
 	std::string readf(std::string fname)
 	{
 		std::string v;
-		std::ifstream f(dir+fname);
-		f >> v;
+//		std::ifstream f(dir+fname);
+//		f >> v;
 		return v;
 	}
 
 	void writef(std::string fname, std::string v)
 	{
-		std::ofstream f(dir+fname);
-		f << v;
+//		std::ofstream f(dir+fname);
+//		f << v;
 	}
 
 	bool readdirection()
 	{
-		auto d = readf("direction");
-		if( d == "in" )
-		{
-			direction = false;
-		}
-		else if( d == "out" )
-		{
-			direction = true;
-		}
-		else{
-			throw std::runtime_error("gpio invalid direction");
-		}
-
+//		auto d = readf("direction");
+//		if( d == "in" )
+//		{
+//			direction = false;
+//		}
+//		else if( d == "out" )
+//		{
+//			direction = true;
+//		}
+//		else{
+//			throw std::runtime_error("gpio invalid direction");
+//		}
+//
 		return direction;
 	}
 
 	bool readvalue()
 	{
-		auto v = readf("value");
-		if( v == "0" )
-		{
-			val = false;
-		}
-		else if( v == "1" )
-		{
-			val = true;
-		}
-		else{
-			throw std::runtime_error("gpio invalid value");
-		}
+//		auto v = readf("value");
+//		if( v == "0" )
+//		{
+//			val = false;
+//		}
+//		else if( v == "1" )
+//		{
+//			val = true;
+//		}
+//		else{
+//			throw std::runtime_error("gpio invalid value");
+//		}
 
 		return val;
 	}

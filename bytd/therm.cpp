@@ -17,6 +17,92 @@
 #include "Log.h"
 #include "owtherm.h"
 #include "thread_util.h"
+#include "../pru/rpm_iface.h"
+
+namespace pru {
+
+class Response
+{
+	const uint8_t* data;
+	const std::size_t len;
+	OwResponse code = eRspError;
+
+public:
+	Response(const uint8_t* data, std::size_t len)
+	:data(data)
+	,len(len)
+{}
+
+bool check()
+{
+	if( len < sizeof(int32_t))
+	{
+		LogERR("pru invalid msg len:{}", len);
+		return false;
+	}
+
+	auto i = *reinterpret_cast<const int32_t*>(data);
+	code = (OwResponse)i;
+
+	switch(code)
+	{
+	  case eOwBusFailure0:
+	  case eOwBusFailure1:
+		  return len == sizeof(int32_t);
+	  case eOwPresenceOk:
+	  case eOwNoPresence:
+	  case eOwBusFailureTimeout:
+		  return len == 2*sizeof(int32_t);
+	  case eRspError:
+		  LogERR("pru error msg. len:{}", len);
+		  break;
+	  default:
+		  LogERR("pru unknown msg: {}({})", code, len);
+		  break;
+	}
+
+	return false;
+}
+
+int32_t getParam() const
+{
+	if(len < 2*sizeof(int32_t))
+		return -1;
+
+	return reinterpret_cast<const int32_t*>(data)[1];
+}
+
+OwResponse getCode() const
+{
+	return code;
+}
+
+std::string getCodeStr() const
+{
+	return getCodeStr(code);
+}
+
+static std::string getCodeStr(OwResponse code)
+{
+	switch(code){
+    case eRspError:  return "eRspError";
+    case eOwPresenceOk:  return "eOwPresenceOk";
+    case eOwBusFailure0:  return "eOwBusFailure0";
+    case eOwBusFailure1:  return "eOwBusFailure1";
+    case eOwNoPresence:  return "eOwNoPresence";
+    case eOwBusFailureTimeout:  return "eOwBusFailureTimeout";
+    case eOwReadBitsOk:  return "eOwReadBitsOk";
+    case eOwReadBitsFailure:  return "eOwReadBitsFailure";
+    case eOwWriteBitsOk:  return "eOwWriteBitsOk";
+    case eOwWriteBitsFailure:  return "eOwWriteBitsFailure";
+    default:
+    	return "???";
+	}
+}
+
+};
+
+}
 
 namespace ow {
 
@@ -94,14 +180,14 @@ private:
 int OwThermNet::search_triplet(bool branch_direction)
 {
 	int tmp(branch_direction);
-	int err = ioctl(mFd, OWTHERM_IOCTL_SERCH_TRIPLET, &tmp);
-	if(err)	LogSYSDIE;
+//	int err = ioctl(mFd, OWTHERM_IOCTL_SERCH_TRIPLET, &tmp);
+//	if(err)	LogSYSDIE;
 	return tmp;
 }
 
 void OwThermNet::write_simple_cmd(Cmd cmd)
 {
-	if( 1 != write(mFd, &cmd, 1)) LogSYSDIE;
+//	if( 1 != write(mFd, &cmd, 1)) LogSYSDIE;
 }
 
 bool OwThermNet::measure()
@@ -110,7 +196,7 @@ bool OwThermNet::measure()
 		LogERR("no presence");
 		return false;
 	}
-
+return false;
 	write_simple_cmd(Cmd::SKIP_ROM);
 
 	int tmp(1);
@@ -235,29 +321,56 @@ void OwThermNet::search()
 
 bool OwThermNet::presence()
 {
-	int tmp;
-	int err = ioctl(mFd, OWTHERM_IOCTL_PRESENCE, &tmp);
-	if(err)	LogSYSDIE;
+	int32_t buf[32];
+	buf[0] = pru::Commands::eCmdOwInit;
+	auto rv = ::write(mFd, buf, 4);
 
-	switch(tmp){
-	case 0:
-	case OWTHERM_ERR_NO_PRESENCE:
-		break;
-	case OWTHERM_ERR_BUS_INVALID:
-		std::cerr << "OWTHERM_ERR_BUS_INVALID" << '\n';
-		break;
-	case OWTHERM_ERR_BUS_SHORT:
-		std::cerr << "OWTHERM_ERR_BUS_SHORT" << '\n';
-		break;
-	case OWTHERM_ERR_TIMING:
-		std::cerr << "OWTHERM_ERR_TIMING" << '\n';
+	auto cleanup = [this](const char* msg)
+		{
+			LogSYSERR(msg);
+			auto tmpFd = mFd;
+			mFd = -1;
+			::close(tmpFd);
+			return false;
+		};
+
+	if(rv != 4)
+	{
+		return cleanup("pru write failure");
+	}
+
+	rv = ::read(mFd, buf, sizeof(buf));
+	if(rv <= 0)
+	{
+		return cleanup("pru read failure");
+	}
+
+	pru::Response rsp((uint8_t*)buf, rv);
+
+	if(not rsp.check())
+	{
+		return false;
+	}
+
+	bool retval(false);
+
+	switch(rsp.getCode())
+	{
+	case pru::eOwPresenceOk:
+		LogDBG("presence:{}", rsp.getCodeStr());
+		retval = true;
 		break;
 	default:
-		std::cerr << "UNKNOWN" << '\n';
+		LogERR("presence:{}", rsp.getCodeStr());
 		break;
 	}
 
-	return !tmp;
+	if(rsp.getParam() >= 0)
+	{
+		LogDBG("ow bus falling edge: {}us", 5e-3*rsp.getParam());
+	}
+
+	return retval;
 }
 
 bool OwThermNet::read_scratchpad(const RomCode& rc, ThermScratchpad& v)
@@ -313,7 +426,7 @@ OwThermNet::OwThermNet(ExporterSptr e, const RomCode& mainSensor)
 	:mExporter(e)
 	,mrc(mainSensor)
 {
-	mFd = open("/dev/owtherm",  O_RDWR);
+	mFd = ::open("/dev/rpmsg_pru30", O_RDWR);
 	if( mFd < 0 ) LogSYSDIE;
 }
 
@@ -363,7 +476,6 @@ bool MeranieTeploty::init(ow::ExporterSptr exporter)
 
 	if(predefined.empty()){
 		LogERR("no predefined sensors");
-		return false;
 	}
 
 	auto therm = std::make_unique<ow::OwThermNet>(exporter, mainSensor);
@@ -419,7 +531,7 @@ bool MeranieTeploty::init(ow::ExporterSptr exporter)
 	if(!search_success)
 		LogERR("search failed");
 
-	return search_success;
+	return search_success && not predefined.empty();
 }
 
 void MeranieTeploty::meas()

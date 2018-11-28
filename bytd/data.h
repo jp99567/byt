@@ -31,7 +31,7 @@ bool check_crc(const T& owdata)
 
 struct RomCode
 {
-	uint8_t family;
+	uint8_t family = 0;
 	uint8_t serial[6];
 	uint8_t crc;
 
