@@ -55,19 +55,28 @@ bool check()
 	  case eOwReadBitsFailure:
 	  case eOwWriteBitsOk:
 	  case eOwWriteBitsFailure:
-		  return len == sizeof(int32_t);
+		  if(len == sizeof(int32_t))
+			  return true;
+		  LogERR("pru msg unexpected size len:{} code:{}", len, code);
+	    break;
 	  case eOwPresenceOk:
 	  case eOwNoPresence:
 	  case eOwBusFailureTimeout:
-		  return len == 2*sizeof(int32_t);
+		  if( len == 2*sizeof(int32_t) )
+			  return true;
+		  LogERR("pru msg unexpected size len:{} code:{}", len, code);
+		break;
 	  case eRspError:
 		  LogERR("pru error msg. len:{}", len);
-		  break;
+		break;
 	  case eOwReadBitsOk:
-		  return len > sizeof(int32_t);
+		  if( len > sizeof(int32_t) )
+			  return true;
+		  LogERR("pru msg unexpected size len:{} code:{}", len, code);
+		break;
 	  default:
 		  LogERR("pru unknown msg: {}({})", code, len);
-		  break;
+		break;
 	}
 
 	return false;
