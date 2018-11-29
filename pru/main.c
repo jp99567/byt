@@ -72,10 +72,6 @@ volatile register uint32_t __R30;
 
 uint8_t payload[RPMSG_BUF_SIZE];
 
-// P9.29 pru0in r31.1 <- P8.45
-// P9.30 pru0out r30.2 -> P8.43
-// P9.31 pru0out r30.0
-
 void eip_timer_init(void)
 {
     /* Disable counter */
@@ -116,9 +112,9 @@ struct pru_rpmsg_transport transport;
 uint16_t src, dst;
 
 ///////////////////////////////////////// BEGIN OW /////////////////////////////////
-#define OW_OUTPIN 0 // P9.31 pru0_r30_0 zeleny
+#define OW_OUTPIN 0       // P9.31 pru0_r30_0 zeleny
 #define OW_OUTPIN_POWER 1 // P9.29 pru0_r30_1 hnedy
-#define OW_INPIN 2 // P9.30 pru0_r31_2 zeleno biely
+#define OW_INPIN 2        // P9.30 pru0_r31_2 zeleno biely
 
 #include "rpm_iface.h"
 #include "common.h"
@@ -169,6 +165,7 @@ void bus_pull(void)
 
 void bus_power_strong(void)
 {
+	__R30 &= ~(1<<OW_OUTPIN);
     __R30 |= 1<<OW_OUTPIN_POWER;
 }
 
@@ -179,7 +176,7 @@ void bus_release(void)
 
 int bus_active (void)
 {
-    return __R31 & (1<<OW_INPIN) ? 0 : 1;
+    return __R31 & (1<<OW_INPIN) ? 1 : 0;
 }
 
 extern void ow_init(void);

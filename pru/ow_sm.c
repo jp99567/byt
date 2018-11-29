@@ -56,9 +56,9 @@ static enum OwStrongPowerRequest sStrongPowerRequest;
 static enum OwBitIoState sBitIoState = eOwBitIoFinishedOk;
 static int sBitidx;
 
-#define US2TICK(us) ((us)*20)
+#define US2TICK(us) ((us)*200)
 
-#define cDurFallingEdge US2TICK(2)
+#define cDurFallingEdge US2TICK(20)
 #define cDurResetPulse US2TICK(480)
 #define cDurWaitPresenceT (cDurResetPulse + US2TICK(60))
 #define cDurPresenceMinT US2TICK(15)
@@ -401,12 +401,16 @@ void ow_search(void)
 void ow_init(void)
 {
 	if(sState != eOwIdle)
+	{
+		send_status(eRspError);
 		return;
+	}
 
 	if(bus_active())
 	{
 		send_status(eOwBusFailure0);
 		bus_release();
+		return;
 	}
 
 	gOwData.param = -1;
