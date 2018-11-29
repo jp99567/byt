@@ -28,7 +28,10 @@ enum OwState
 	eOwInitWaitPresenceCleared,
 	eOwInitWaitRecovery,
 	eOwReadBits,
-	eOwWriteBits
+	eOwWriteBits,
+	eOwSearchR0,
+	eOwSearchR1,
+	eOwSearchW,
 };
 
 enum OwBitIoState
@@ -342,7 +345,7 @@ static void write_bits(void)
             }
             else
             {
-                send_status_with_data(eOwWriteBitsOk);
+                send_status(eOwWriteBitsOk);
                 sState = eOwIdle;
             }
           break;
@@ -393,9 +396,105 @@ void ow_write_bits(int strong_power_req)
     sState = eOwWriteBits;
 }
 
-void ow_search(void)
+static inline void storeDirection(int direction)
 {
+	gOwData.b[1] = direction;
+}
 
+static inline int getDirection()
+{
+	return gOwData.b[1];
+}
+
+static inline void setBit2(int v)
+{
+	uint8_t mask = 1<<2;
+	gOwData.b[0] = v ? ( gOwData.b[0] | mask ) : (gOwData.b[0] & ~mask);
+}
+
+static void search()
+{
+	switch(sBitidx)
+	{
+		case 0:
+		case 1:
+		{
+		    enum OwBitIoState status = read_bit();
+
+		    switch(status)
+		    {
+		        case eOwBitIoFinishedError:
+		            send_status(eOwReadBitsFailure);
+		            sState = eOwIdle;
+		          break;
+		        case eOwBitIoFinishedOk:
+		        	sBitidx++;
+		        	if(sBitidx == 2)
+		        	{
+		        		unsigned v = gOwData.b[0] & 0x3;
+		        		if( v == 3 )
+		        		{
+		        			send_status(eOwSearchResult11);
+		        			sState = eOwIdle;
+		        		}
+		        		else if(v)
+		        		{
+		        			setBit2(v==1);
+		        		}
+		        		else
+		        		{
+		        			setBit2(getDirection());
+		        		}
+		        	}
+		          break;
+		        default:
+		          break;
+		    }
+		    break;
+		}
+		case 2:
+		{
+		    enum OwBitIoState status = write_bit();
+
+		    switch(status)
+		    {
+		        case eOwBitIoFinishedError:
+		            send_status(eOwWriteBitsFailure);
+		            sState = eOwIdle;
+		          break;
+		        case eOwBitIoFinishedOk:
+		        	{
+		        		unsigned v = gOwData.b[0] & 0x3;
+		        		switch(v){
+		        		case 0:
+		        			send_status(eOwSearchResult00);
+		        			break;
+		        		case 1:
+		        			send_status(eOwSearchResult0);
+		        			break;
+		        		case 2:
+		        			send_status(eOwSearchResult1);
+		        			break;
+		        		default:
+		        			send_status(eOwSearchResult11);
+		        			break;
+		        		}
+		                sState = eOwIdle;
+		        	}
+		          break;
+		        default:
+		          break;
+		    }
+		}
+		break;
+	}
+}
+
+void ow_search(int direction)
+{
+	storeDirection(direction);
+	sBitidx = 0;
+	sState = eOwSearchR0;
 }
 
 void ow_init(void)
@@ -446,6 +545,11 @@ void ow_sm_do(void)
 	case eOwWriteBits:
 	    write_bits();
 	    break;
+	case eOwSearchR0:
+	case eOwSearchR1:
+	case eOwSearchW:
+		search();
+		break;
 	default:
 		break;
 	}

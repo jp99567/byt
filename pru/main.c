@@ -144,7 +144,7 @@ void send_status_with_data(enum OwResponse code)
 {
     struct OwResponseWithData* p = (struct OwResponseWithData*)payload;
     p->code = code;
-    uint16_t len = gOwBitsCount/8 + 1;
+    uint16_t len = 1+(gOwBitsCount-1)/8;
     memcpy(p->data, gOwData.b, len);
     pru_rpmsg_send(&transport, dst, src, payload, sizeof(*p) + len);
 }
@@ -199,10 +199,11 @@ void process_message(void* data, uint16_t len)
             return;
         }
       break;
-    case eCmdOwSearch:
+    case eCmdOwSearchDir0:
+    case eCmdOwSearchDir1:
         if(len==sizeof(req->cmd))
          {
-            ow_search();
+            ow_search(req->cmd == eCmdOwSearchDir1);
             return;
          }
       break;
@@ -213,7 +214,7 @@ void process_message(void* data, uint16_t len)
             if(gOwBitsCount > 0)
             {
                 int32_t bytelen = (gOwBitsCount-1)/8 + 1;
-                if(bytelen < 12)
+                if(bytelen <= sizeof(gOwData.b))
                 {
                     ow_read_bits();
                     return;
@@ -229,7 +230,8 @@ void process_message(void* data, uint16_t len)
             if(gOwBitsCount > 0)
             {
                 int32_t bytelen = (gOwBitsCount-1)/8 + 1;
-                if(bytelen < 12)
+                if(bytelen <= sizeof(gOwData.b) &&
+                   len >= sizeof(req->cmd) + sizeof(req->data[0]) + bytelen)
                 {
                     memcpy(gOwData.b, &req->data[1], bytelen);
                     ow_write_bits(req->cmd == eCmdOwWritePower);
@@ -239,9 +241,9 @@ void process_message(void* data, uint16_t len)
         }
       break;
     default:
-        send_status(eRspError);
       break;
     }
+    send_status(eRspError);
 }
 
 void main(void)

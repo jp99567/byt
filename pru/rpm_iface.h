@@ -16,13 +16,18 @@ enum OwResponse {
     eOwReadBitsFailure,
     eOwWriteBitsOk,
     eOwWriteBitsFailure,
+	eOwSearchResult0,
+	eOwSearchResult1,
+	eOwSearchResult11,
+	eOwSearchResult00,
 };
 
 enum Commands
 {
     eCmdHalt,
     eCmdOwInit,
-    eCmdOwSearch,
+    eCmdOwSearchDir0,
+	eCmdOwSearchDir1,
     eCmdOwWrite,
     eCmdOwRead,
     eCmdOwWritePower

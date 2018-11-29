@@ -48,6 +48,13 @@ bool check()
 	{
 	  case eOwBusFailure0:
 	  case eOwBusFailure1:
+	  case eOwSearchResult00:
+	  case eOwSearchResult0:
+	  case eOwSearchResult1:
+	  case eOwSearchResult11:
+	  case eOwReadBitsFailure:
+	  case eOwWriteBitsOk:
+	  case eOwWriteBitsFailure:
 		  return len == sizeof(int32_t);
 	  case eOwPresenceOk:
 	  case eOwNoPresence:
@@ -56,6 +63,8 @@ bool check()
 	  case eRspError:
 		  LogERR("pru error msg. len:{}", len);
 		  break;
+	  case eOwReadBitsOk:
+		  return len > sizeof(int32_t);
 	  default:
 		  LogERR("pru unknown msg: {}({})", code, len);
 		  break;
@@ -168,26 +177,196 @@ public:
 
 private:
 	bool presence();
-	void write_simple_cmd(Cmd cmd);
+	void write_bits(const void* data, std::size_t bitlen, bool strong_pwr=false);
+	void read_bits(std::size_t bitlen);
+	void write_simple_cmd(Cmd cmd, bool strongpower=false);
 	int search_triplet(bool branch_direction);
 
 	int mFd;
 	std::vector<Sensor> mMeas;
 	ExporterSptr mExporter;
 	const RomCode mrc;
+
+	struct PruWriteMsg
+	{
+		struct {
+		  uint32_t code;
+		  uint32_t bitlen;
+		} h;
+		uint8_t data[24];
+	};
+
+	struct PruReadMsg
+	{
+		struct {
+		  uint32_t code;
+		} h;
+		uint8_t data[28];
+	};
+
+	union {
+		PruWriteMsg wr;
+		PruReadMsg rd; } msg;
 };
+
+void OwThermNet::write_bits(const void* data, std::size_t bitlen, bool strong_pwr)
+{
+	msg.wr.h.code = strong_pwr ? pru::Commands::eCmdOwWritePower : pru::Commands::eCmdOwWrite;
+	msg.wr.h.bitlen = bitlen;
+
+	auto bytes = 1+(bitlen-1)/8;
+	memcpy(msg.wr.data, data, bytes);
+	auto rv = ::write(mFd, &msg, sizeof(msg.wr.h)+bytes);
+
+	auto cleanup = [this](const char* msg)
+		{
+			LogSYSERR(msg);
+			auto tmpFd = mFd;
+			mFd = -1;
+			::close(tmpFd);
+			return;
+		};
+
+	if((std::size_t)rv != sizeof(msg.wr.h)+bytes)
+	{
+		cleanup("pru write failure");
+		return;
+	}
+
+	rv = ::read(mFd, &msg, sizeof(msg));
+	if(rv <= 0)
+	{
+		cleanup("pru read failure");
+		return;
+	}
+
+	pru::Response rsp((uint8_t*)&msg, rv);
+
+	if(not rsp.check())
+	{
+		return;
+	}
+
+	switch(rsp.getCode())
+	{
+	case pru::OwResponse::eOwWriteBitsOk:
+		return;
+	case pru::OwResponse::eOwWriteBitsFailure:
+		LogERR("OwThermNet::write_bits failure");
+		break;
+	default:
+		LogERR("OwThermNet::write_bits unknown failure");
+		break;
+	}
+}
+
+void OwThermNet::read_bits(std::size_t bitlen)
+{
+	msg.wr.h.code = pru::Commands::eCmdOwRead;
+	msg.wr.h.bitlen = bitlen;
+
+	auto rv = ::write(mFd, &msg, sizeof(msg.wr.h));
+
+	auto cleanup = [this](const char* msg)
+		{
+			LogSYSERR(msg);
+			auto tmpFd = mFd;
+			mFd = -1;
+			::close(tmpFd);
+			return;
+		};
+
+	if(rv != sizeof(msg.wr.h))
+	{
+		cleanup("pru write failure");
+		return;
+	}
+
+	rv = ::read(mFd, &msg.rd, sizeof(msg.rd));
+	if(rv <= 0)
+	{
+		cleanup("pru read failure");
+		return;
+	}
+
+	pru::Response rsp((uint8_t*)&msg, rv);
+
+	if(not rsp.check())
+	{
+		return;
+	}
+
+	switch(rsp.getCode())
+	{
+	case pru::OwResponse::eOwReadBitsOk:
+		return;
+	case pru::OwResponse::eOwReadBitsFailure:
+		LogERR("OwThermNet::read_bits failure");
+		break;
+	default:
+		LogERR("OwThermNet::read_bits unknown failure");
+		break;
+	}
+}
 
 int OwThermNet::search_triplet(bool branch_direction)
 {
-	int tmp(branch_direction);
-//	int err = ioctl(mFd, OWTHERM_IOCTL_SERCH_TRIPLET, &tmp);
-//	if(err)	LogSYSDIE;
-	return tmp;
+	int32_t buf[32];
+	buf[0] = branch_direction ? pru::Commands::eCmdOwSearchDir0 : pru::Commands::eCmdOwSearchDir1;
+	auto rv = ::write(mFd, buf, 4);
+
+	auto cleanup = [this](const char* msg)
+		{
+			LogSYSERR(msg);
+			auto tmpFd = mFd;
+			mFd = -1;
+			::close(tmpFd);
+			return 3;
+		};
+
+	if(rv != 4)
+	{
+		return cleanup("pru write failure");
+	}
+
+	rv = ::read(mFd, buf, sizeof(buf));
+	if(rv <= 0)
+	{
+		return cleanup("pru read failure");
+	}
+
+	pru::Response rsp((uint8_t*)buf, rv);
+
+	if(not rsp.check())
+	{
+		return 3;
+	}
+
+	int retval(3);
+
+	switch(rsp.getCode())
+	{
+	case pru::OwResponse::eOwSearchResult00:
+		retval = 0;
+		break;
+	case pru::OwResponse::eOwSearchResult0:
+		retval = 1;
+		break;
+	case pru::OwResponse::eOwSearchResult1:
+		retval = 2;
+		break;
+	case pru::OwResponse::eOwSearchResult11:
+	default:
+		retval = 3;
+		break;
+	}
+
+	return retval;
 }
 
-void OwThermNet::write_simple_cmd(Cmd cmd)
+void OwThermNet::write_simple_cmd(Cmd cmd, bool strongpower)
 {
-//	if( 1 != write(mFd, &cmd, 1)) LogSYSDIE;
+	write_bits(&cmd, 8, strongpower);
 }
 
 bool OwThermNet::measure()
@@ -198,11 +377,7 @@ bool OwThermNet::measure()
 	}
 return false;
 	write_simple_cmd(Cmd::SKIP_ROM);
-
-	int tmp(1);
-	if(ioctl(mFd, OWTHERM_IOCTL_STRONG_PWR, &tmp)) LogSYSDIE;
-
-	write_simple_cmd(Cmd::CONVERT);
+	write_simple_cmd(Cmd::CONVERT, true);
 	std::this_thread::sleep_for(std::chrono::milliseconds(750));
 
 	bool rv(true);
@@ -381,13 +556,10 @@ bool OwThermNet::read_scratchpad(const RomCode& rc, ThermScratchpad& v)
 	}
 
 	write_simple_cmd(Cmd::MATCH_ROM);
-
-	int n = write(mFd, &rc, sizeof(rc));
-	if(n!=sizeof(rc)) LogSYSDIE;
-
+	write_bits(&rc, 8*sizeof(rc) );
 	write_simple_cmd(Cmd::READ_SCRATCHPAD);
-
-	if(sizeof(v) != read(mFd, &v, sizeof(v))) LogSYSDIE;
+	read_bits(8*sizeof(v));
+	memcpy(&v, msg.rd.data, sizeof(v));
 
 	if( (v.conf != 0x7F ) ||
 		(v.reserved[0]!=0xFF) ||
