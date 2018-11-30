@@ -271,8 +271,6 @@ static void write_bits(void)
     switch(status)
     {
         case eOwBitIoFinishedError:
-        	gOwData.param  = -1;
-            send_status_with_param(eOwWriteBitsFailure);
             sState = eOwIdle;
           break;
         case eOwBitIoFinishedOk:
