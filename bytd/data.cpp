@@ -93,7 +93,7 @@ RomCode& RomCode::operator=(const std::string& str)
 	}
 
 	if(!check_crc(*this))
-		LogDIE("mismatch crc {}", str);
+		LogERR("mismatch crc {}", str);
 
 	return *this;
 }

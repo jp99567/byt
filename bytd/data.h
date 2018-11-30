@@ -29,17 +29,19 @@ bool check_crc(const T& owdata)
 	return check_crc(ptr, sizeof(owdata)-1, owdata.crc);
 }
 
+#pragma pack(push, 1)
 struct RomCode
 {
 	uint8_t family = 0;
-	uint8_t serial[6];
-	uint8_t crc;
+	uint8_t serial[6] = {0};
+	uint8_t crc = 0;
 
 	bool operator<(const RomCode& other) const;
 	bool operator==(const RomCode& other) const;
 	operator std::string() const;
 	RomCode& operator=(const std::string& str);
-}__attribute__ ((__packed__));
+};
+#pragma pack(pop)
 
 class Sample
 {

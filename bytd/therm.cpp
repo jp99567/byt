@@ -321,7 +321,7 @@ void OwThermNet::read_bits(std::size_t bitlen)
 int OwThermNet::search_triplet(bool branch_direction)
 {
 	int32_t buf[32];
-	buf[0] = branch_direction ? pru::Commands::eCmdOwSearchDir0 : pru::Commands::eCmdOwSearchDir1;
+	buf[0] = branch_direction ? pru::Commands::eCmdOwSearchDir1 : pru::Commands::eCmdOwSearchDir0;
 	auto rv = ::write(mFd, buf, 4);
 
 	auto cleanup = [this](const char* msg)
@@ -352,7 +352,6 @@ int OwThermNet::search_triplet(bool branch_direction)
 	}
 
 	int retval(3);
-
 	switch(rsp.getCode())
 	{
 	case pru::OwResponse::eOwSearchResult00:
@@ -493,9 +492,10 @@ void OwThermNet::search()
 
 		if(check_crc(rc)){
 			tmp.push_back(Sensor(rc));
+			LogDBG("search: found {}", (std::string)rc);
 		}
 		else{
-			LogERR("search: crc error");
+			LogERR("search: crc error {}", (std::string)rc);
 		}
 	}
 	while(last_branch >= 0);
