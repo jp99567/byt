@@ -14,7 +14,7 @@ extern int gOwBitsCount;
 extern union OwData gOwData;
 
 void ow_init(void);
-void ow_search(void);
+void ow_search(int direction);
 void ow_read_bits(void);
 void ow_write_bits(int strong_power_req);
 void ow_sm_do(void);
@@ -38,10 +38,8 @@ enum OwBitIoState
 {
     eOwBitIoFinishedOk,
     eOwBitIoFinishedError,
-	eOwBitIoInitPulseFallingEdge,
 	eOwBitReadPulse,
 	eOwBitIoWaitSampleEvent,
-	eOwBitIoWaitBusRelaxed,
 	eOwBitIoWaitSlotEnd,
 };
 
@@ -54,34 +52,27 @@ enum OwStrongPowerRequest
 
 static enum OwState sState = eOwIdle;
 static unsigned sT0;
-static unsigned sT1;
 static enum OwStrongPowerRequest sStrongPowerRequest;
 static enum OwBitIoState sBitIoState = eOwBitIoFinishedOk;
 static int sBitidx;
 
 #define US2TICK(us) ((us)*200)
 
-#define cDurFallingEdge US2TICK(20)
+#define cDurFallingEdge US2TICK(5)
 #define cDurResetPulse US2TICK(480)
 #define cDurWaitPresenceT (cDurResetPulse + US2TICK(60))
 #define cDurPresenceMinT US2TICK(15)
 #define cDurPresenceMaxT US2TICK(240)
 #define cDurInitMasterRx US2TICK(480)
-#define cDurReadInitT US2TICK(2)
-#define cDurReadSample US2TICK(12)
-#define cDurSlot US2TICK(60)
-#define cDurRecoveryT US2TICK(1)
-#define cDurWrite0Pulse US2TICK(60)
-#define cDurWrite1Pulse US2TICK(1)
+#define cDurReadInitT US2TICK(6)
+#define cDurReadSample US2TICK(15)
+#define cDurWrite0Pulse US2TICK(64)
+#define cDurWrite1Pulse US2TICK(6)
+#define cDurSlot US2TICK(80)
 
 static int timeout(unsigned delay)
 {
 	return (timer() - sT0) > delay;
-}
-
-static int timeout1(unsigned delay)
-{
-	return (timer() - sT1) > delay;
 }
 
 static void wait_reset_pulse_check1(void)
@@ -171,6 +162,8 @@ static int bitval(void)
     return gOwData.b[byte] & bitmask;
 }
 
+int checkbw = 0;
+
 static enum OwBitIoState write_bit(void)
 {
     switch(sBitIoState)
@@ -180,34 +173,25 @@ static enum OwBitIoState write_bit(void)
        {
          if(bus_active())
          {
+        	 checkbw = 1;
             sBitIoState = eOwBitIoFinishedError;
          }
          else
          {
+        	 checkbw = 2;
             bus_pull();
             sT0 = timer();
-            sBitIoState = eOwBitIoInitPulseFallingEdge;
+            sBitIoState = eOwBitIoWaitSampleEvent;
          }
        }
-       break;
-      case eOwBitIoInitPulseFallingEdge:
-          if(bus_active())
-          {
-              sT0 = timer();
-              sBitIoState = eOwBitIoWaitSampleEvent;
-          }
-          else if(timeout(cDurFallingEdge))
-          {
-              sBitIoState = eOwBitIoFinishedError;
-              bus_release();
-          }
        break;
       case eOwBitIoWaitSampleEvent:
        {
           if( timeout( bitval()
-             ? cDurReadInitT
-             : cDurReadInitT ) )
+             ? cDurWrite1Pulse
+             : cDurWrite0Pulse ) )
           {
+        	  checkbw = 3;
               if(sStrongPowerRequest == eOwStrongPowerKeepAfterWrite)
               {
                   bus_power_strong();
@@ -217,31 +201,20 @@ static enum OwBitIoState write_bit(void)
               {
                   bus_release();
               }
-              sBitIoState = eOwBitIoWaitBusRelaxed;
+              sBitIoState = eOwBitIoWaitSlotEnd;
           }
-       }
-       break;
-      case eOwBitIoWaitBusRelaxed:
-       {
-           if(bus_active())
-           {
-               if(timeout(cDurSlot))
-                   sBitIoState = eOwBitIoFinishedError;
-           }
-           else
-           {
-               sBitIoState = eOwBitIoWaitSlotEnd;
-               sT1 = timer();
-           }
        }
        break;
       case eOwBitIoWaitSlotEnd:
        {
-           if(timeout(cDurSlot) && timeout1(cDurRecoveryT))
+           if(timeout(cDurSlot)){
+        	   checkbw = 6;
                sBitIoState = eOwBitIoFinishedOk;
+           }
        }
        break;
       default:
+    	  checkbw = 7;
          sBitIoState = eOwBitIoFinishedError;
        break;
     }
@@ -264,22 +237,8 @@ static enum OwBitIoState read_bit(void)
 		 {
 			bus_pull();
 			sT0 = timer();
-			sBitIoState = eOwBitIoInitPulseFallingEdge;
+			sBitIoState = eOwBitReadPulse;
 		 }
-	   }
-	   break;
-	  case eOwBitIoInitPulseFallingEdge:
-	   {
-	       if(bus_active())
-	       {
-	           sT0 = timer();
-	           sBitIoState = eOwBitReadPulse;
-	       }
-	       else if(timeout(cDurFallingEdge))
-	       {
-	           bus_release();
-	           sBitIoState = eOwBitIoFinishedError;
-	       }
 	   }
 	   break;
       case eOwBitReadPulse:
@@ -296,27 +255,13 @@ static enum OwBitIoState read_bit(void)
 		   if(timeout(cDurReadSample))
 		   {
 			   sample();
-			   sBitIoState = eOwBitIoWaitBusRelaxed;
-		   }
-	   }
-	   break;
-	  case eOwBitIoWaitBusRelaxed:
-	   {
-		   if(bus_active())
-		   {
-			   if(timeout(cDurSlot))
-				   sBitIoState = eOwBitIoFinishedError;
-		   }
-		   else
-		   {
 			   sBitIoState = eOwBitIoWaitSlotEnd;
-			   sT1 = timer();
 		   }
 	   }
 	   break;
 	  case eOwBitIoWaitSlotEnd:
 	   {
-		   if(timeout(cDurSlot) && timeout1(cDurRecoveryT))
+		   if(timeout(cDurSlot))
 			   sBitIoState = eOwBitIoFinishedOk;
 	   }
 	   break;
@@ -335,7 +280,8 @@ static void write_bits(void)
     switch(status)
     {
         case eOwBitIoFinishedError:
-            send_status(eOwWriteBitsFailure);
+        	gOwData.param  = checkbw;
+            send_status_with_param(eOwWriteBitsFailure);
             sState = eOwIdle;
           break;
         case eOwBitIoFinishedOk:
@@ -408,7 +354,7 @@ static inline int getDirection()
 
 static inline void setBit2(int v)
 {
-	uint8_t mask = 1<<2;
+	unsigned char mask = 1<<2;
 	gOwData.b[0] = v ? ( gOwData.b[0] | mask ) : (gOwData.b[0] & ~mask);
 }
 

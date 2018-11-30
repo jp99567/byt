@@ -182,7 +182,7 @@ int bus_active (void)
 extern void ow_init(void);
 extern void ow_read_bits(void);
 extern void ow_write_bits(int strong_power_req);
-extern void ow_search(void);
+extern void ow_search(int direction);
 extern void ow_sm_do(void);
 ///////////////////////////////// END OW ////////////////////////////////////////////
 

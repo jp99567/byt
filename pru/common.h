@@ -3,5 +3,5 @@
 union OwData
 {
     int param;
-    uint8_t b[12];
+    unsigned char b[12];
 };
