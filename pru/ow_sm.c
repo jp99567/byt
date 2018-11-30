@@ -29,9 +29,7 @@ enum OwState
 	eOwInitWaitRecovery,
 	eOwReadBits,
 	eOwWriteBits,
-	eOwSearchR0,
-	eOwSearchR1,
-	eOwSearchW,
+	eOwSearch,
 };
 
 enum OwBitIoState
@@ -68,7 +66,7 @@ static int sBitidx;
 #define cDurReadSample US2TICK(15)
 #define cDurWrite0Pulse US2TICK(64)
 #define cDurWrite1Pulse US2TICK(6)
-#define cDurSlot US2TICK(80)
+#define cDurSlot US2TICK(70)
 
 static int timeout(unsigned delay)
 {
@@ -162,8 +160,6 @@ static int bitval(void)
     return gOwData.b[byte] & bitmask;
 }
 
-int checkbw = 0;
-
 static enum OwBitIoState write_bit(void)
 {
     switch(sBitIoState)
@@ -173,12 +169,10 @@ static enum OwBitIoState write_bit(void)
        {
          if(bus_active())
          {
-        	 checkbw = 1;
             sBitIoState = eOwBitIoFinishedError;
          }
          else
          {
-        	 checkbw = 2;
             bus_pull();
             sT0 = timer();
             sBitIoState = eOwBitIoWaitSampleEvent;
@@ -191,7 +185,6 @@ static enum OwBitIoState write_bit(void)
              ? cDurWrite1Pulse
              : cDurWrite0Pulse ) )
           {
-        	  checkbw = 3;
               if(sStrongPowerRequest == eOwStrongPowerKeepAfterWrite)
               {
                   bus_power_strong();
@@ -208,13 +201,11 @@ static enum OwBitIoState write_bit(void)
       case eOwBitIoWaitSlotEnd:
        {
            if(timeout(cDurSlot)){
-        	   checkbw = 6;
                sBitIoState = eOwBitIoFinishedOk;
            }
        }
        break;
       default:
-    	  checkbw = 7;
          sBitIoState = eOwBitIoFinishedError;
        break;
     }
@@ -280,16 +271,13 @@ static void write_bits(void)
     switch(status)
     {
         case eOwBitIoFinishedError:
-        	gOwData.param  = checkbw;
+        	gOwData.param  = -1;
             send_status_with_param(eOwWriteBitsFailure);
             sState = eOwIdle;
           break;
         case eOwBitIoFinishedOk:
-            if(sBitidx < gOwBitsCount)
-            {
-                ++sBitidx;
-            }
-            else
+            ++sBitidx;
+            if(sBitidx >= gOwBitsCount)
             {
                 send_status(eOwWriteBitsOk);
                 sState = eOwIdle;
@@ -314,11 +302,8 @@ static void read_bits(void)
             sState = eOwIdle;
           break;
         case eOwBitIoFinishedOk:
-            if(sBitidx < gOwBitsCount)
-            {
-                ++sBitidx;
-            }
-            else
+            ++sBitidx;
+            if(sBitidx >= gOwBitsCount)
             {
                 send_status_with_data(eOwReadBitsOk);
                 sState = eOwIdle;
@@ -440,7 +425,7 @@ void ow_search(int direction)
 {
 	storeDirection(direction);
 	sBitidx = 0;
-	sState = eOwSearchR0;
+	sState = eOwSearch;
 }
 
 void ow_init(void)
@@ -491,9 +476,7 @@ void ow_sm_do(void)
 	case eOwWriteBits:
 	    write_bits();
 	    break;
-	case eOwSearchR0:
-	case eOwSearchR1:
-	case eOwSearchW:
+	case eOwSearch:
 		search();
 		break;
 	default:
