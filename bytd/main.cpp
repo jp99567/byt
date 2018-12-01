@@ -183,7 +183,7 @@ public:
 			do{
 				meranie->meas();
 				std::unique_lock<std::mutex> ulck(cvlock);
-				cv_running.wait_for(ulck, std::chrono::seconds(10), [running]{
+				cv_running.wait_for(ulck, std::chrono::seconds(10), [&running]{
 					return !running;
 				});
 			}
@@ -193,10 +193,11 @@ public:
 		sd_notify(0, "READY=1");
 
 		server.serve();
+		LogINFO("thrift server exited");
 
 		{
 			std::unique_lock<std::mutex> guard(cvlock);
-			running = true;
+			running = false;
 			cv_running.notify_all();
 		}
 		meastempthread.join();

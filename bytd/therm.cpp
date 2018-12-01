@@ -383,7 +383,7 @@ bool OwThermNet::measure()
 		LogERR("no presence");
 		return false;
 	}
-return false;
+
 	write_simple_cmd(Cmd::SKIP_ROM);
 	write_simple_cmd(Cmd::CONVERT, true);
 	std::this_thread::sleep_for(std::chrono::milliseconds(750));
@@ -560,7 +560,7 @@ bool OwThermNet::presence()
 bool OwThermNet::read_scratchpad(const RomCode& rc, ThermScratchpad& v)
 {
 	if(!presence()){
-		LogERR("no presence");
+		LogERR("no presence {}", (std::string)rc);
 		return false;
 	}
 
@@ -579,7 +579,7 @@ bool OwThermNet::read_scratchpad(const RomCode& rc, ThermScratchpad& v)
 	}
 
 	if(!check_crc(v)){
-		LogERR("scratchpad crc error");
+		LogERR("scratchpad read rc={} crc error", (std::string)rc);
 		return false;
 	}
 
@@ -659,7 +659,7 @@ bool MeranieTeploty::init(ow::ExporterSptr exporter)
 		LogERR("no predefined sensors");
 	}
 
-	auto therm = std::make_unique<ow::OwThermNet>(exporter, mainSensor);
+	therm = std::make_unique<ow::OwThermNet>(exporter, mainSensor);
 
 	bool search_success(false);
 	int try_nr(10);

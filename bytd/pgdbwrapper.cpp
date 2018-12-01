@@ -40,7 +40,7 @@ bool PgDbWrapper::connect()
 		PQreset(mConn);
 	}
 	auto t2 = std::chrono::system_clock::now();
-	LogINFO("DB connection attempt {}usec", std::chrono::duration_cast<std::chrono::seconds>(t2-t1).count());
+	LogINFO("DB connection attempt {} seconds", std::chrono::duration_cast<std::chrono::seconds>(t2-t1).count());
 
     /* Check to see that the backend connection was successfully made */
     if (PQstatus(mConn) != CONNECTION_OK)

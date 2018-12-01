@@ -56,7 +56,7 @@ static int sBitidx;
 
 #define US2TICK(us) ((us)*200)
 
-#define cDurFallingEdge US2TICK(5)
+#define cDurFallingEdge US2TICK(10)
 #define cDurResetPulse US2TICK(480)
 #define cDurWaitPresenceT (cDurResetPulse + US2TICK(60))
 #define cDurPresenceMinT US2TICK(15)
