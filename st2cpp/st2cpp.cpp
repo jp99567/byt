@@ -155,7 +155,18 @@ class Parser
 	std::string line;
 	std::size_t lineNr = 0;
 
+	const QRegularExpression wordRe;
+	const QRegularExpression wspaceRe;
+	const QRegularExpression literRe;
+
 public:
+
+	explicit Parser()
+	:wordRe("^(\\w[\\w\\d#]*)(.*)")
+	,wspaceRe("^(\\s+)(.*)")
+	,literRe("^([^\\w\\s]+)(.*)")
+	{}
+
 	struct Chunk
 	{
 		enum class Type { EF, BLANK, WORD , NonW };
@@ -177,22 +188,19 @@ public:
 			left = line;
 		}
 
-		QRegularExpression word("^(\\w[\\w\\d#]*)(.*)");
-		auto match = word.match(QString::fromStdString(left));
+		auto match = wordRe.match(QString::fromStdString(left));
 		if(match.hasMatch()){
 			left = match.captured(2).toStdString();
 			return Chunk({Chunk::Type::WORD, match.captured(1).toStdString()});
 		}
 
-		word.setPattern("^(\\s+)(.*)");
-		match = word.match(QString::fromStdString(left));
+		match = wspaceRe.match(QString::fromStdString(left));
 		if(match.hasMatch()){
 			left = match.captured(2).toStdString();
 			return Chunk({Chunk::Type::BLANK, match.captured(1).toStdString()});
 		}
 
-		word.setPattern("^([^\\w\\s]+)(.*)");
-		match = word.match(QString::fromStdString(left));
+		match = literRe.match(QString::fromStdString(left));
 		if(match.hasMatch()){
 			left = match.captured(2).toStdString();
 			return Chunk({Chunk::Type::NonW, match.captured(1).toStdString()});
@@ -223,6 +231,7 @@ std::vector<Token> parse(Parser& p)
 {
 	Parser::Chunk chunk;
 	std::vector<Token> tv;
+	const QRegularExpression reIdentif("^\\w[\\w\\d]*$");
 
 	while(1){
 		chunk = p.chunk();
@@ -239,9 +248,8 @@ std::vector<Token> parse(Parser& p)
 				tv.emplace_back(Token({Token::Type::kw, std::move(chunk.s), p.getfLineNr()}));
 			}
 			else{
-				QRegularExpression re("^\\w[\\w\\d]*$");
 				auto qstr = QString::fromStdString(chunk.s);
-				auto identif = re.match(qstr);
+				auto identif = reIdentif.match(qstr);
 				if(identif.hasMatch()){
 					tv.emplace_back(Token({Token::Type::ident, qstr.toLower().toStdString(), p.getfLineNr()}));
 				}
