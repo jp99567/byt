@@ -198,7 +198,7 @@ KwMap keywordsMap()
     rv.emplace(std::make_pair( "SHR", kw::SHR ));
     rv.emplace(std::make_pair( "RIGHT", kw::RIGHT ));
     rv.emplace(std::make_pair( "MID", kw::MID ));
-    rv.emplace(std::make_pair( "VAR_TEMP", kw::END_VAR ));
+    rv.emplace(std::make_pair( "VAR_TEMP", kw::VAR_TEMP ));
 	return rv;
 }
 
