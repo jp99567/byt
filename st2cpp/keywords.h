@@ -94,6 +94,7 @@ enum class kw {
   SHR,
   RIGHT,
   MID,
+  VAR_TEMP,
  _Last };
 
 template<typename _Tp>
@@ -197,6 +198,7 @@ KwMap keywordsMap()
     rv.emplace(std::make_pair( "SHR", kw::SHR ));
     rv.emplace(std::make_pair( "RIGHT", kw::RIGHT ));
     rv.emplace(std::make_pair( "MID", kw::MID ));
+    rv.emplace(std::make_pair( "VAR_TEMP", kw::END_VAR ));
 	return rv;
 }
 
@@ -211,6 +213,7 @@ BlockMap blockMap()
 	rv.emplace(std::make_pair( kw::VAR_INPUT, kw::END_VAR ));
 	rv.emplace(std::make_pair( kw::VAR_OUTPUT, kw::END_VAR ));
 	rv.emplace(std::make_pair( kw::VAR_IN_OUT, kw::END_VAR ));
+	rv.emplace(std::make_pair( kw::VAR_TEMP, kw::END_VAR ));
 	rv.emplace(std::make_pair( kw::TYPE, kw::END_TYPE ));
 	rv.emplace(std::make_pair( kw::STRUCT, kw::END_STRUCT ));
 	rv.emplace(std::make_pair( kw::FUNCTION_BLOCK, kw::END_FUNCTION_BLOCK ));
@@ -218,5 +221,17 @@ BlockMap blockMap()
 	rv.emplace(std::make_pair( kw::PROGRAM, kw::END_PROGRAM ));
 	return rv;
 }
+
+constexpr auto varDeclBlockList =
+{
+	kw::VAR,
+	kw::VAR_GLOBAL,
+	kw::VAR_INPUT,
+	kw::VAR_OUTPUT,
+	kw::VAR_IN_OUT,
+	kw::VAR_TEMP,
+	kw::TYPE,
+	kw::STRUCT
+};
 
 }

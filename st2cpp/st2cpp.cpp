@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <functional>
 #include <QtCore/QRegularExpression>
 #include <spdlog/spdlog.h>
 #include "grammar.h"
@@ -37,6 +38,12 @@ public:
 	{
 		return blockmap.at(block);
 	}
+
+	static bool isVarDeclBlock(grammar::kw kw)
+	{
+		auto res = std::find(std::cbegin(grammar::varDeclBlockList), std::cend(grammar::varDeclBlockList), kw);
+		return res != std::cend(grammar::varDeclBlockList);
+	}
 };
 
 struct Token
@@ -51,7 +58,63 @@ struct Token
 	std::size_t srcline;
 	grammar::kw kw() const
 	{
+		if(type != Type::kw)
+			return grammar::kw::_Last;
+
 		return Grammar::inst().kwmap.at(s);
+	}
+
+	void transformLit()
+	{
+		if(s[0] == '\''){
+			s[0] = '"';
+			s.back() = '"';
+			auto pos = s.find("$n");
+			if(pos != std::string::npos)
+				s.replace(pos, 2, "\\n");
+		}
+	}
+	void gencpp()
+	{
+		switch(type)
+		{
+		case Type::ws:
+			break;
+		case Type::comment_line:
+			s = std::string("//").append(s).append("\n");
+			break;
+		case Type::comment_block:
+			s = std::string("/*").append(s).append("*/");
+			break;
+		case Type::kw:
+		  {
+			auto k = kw();
+			switch(k)
+			{
+			case grammar::kw::EXIT:
+				s = "break";
+				break;
+			default:
+				break;
+			}
+		  }
+		  break;
+		case Type::oper:
+		{
+			if(s == ":=")
+				s = "=";
+			else if(s == "=")
+				s = "==";
+			else if(s == "<>")
+				s = "!=";
+		}
+			break;
+		case Type::ident:
+			break;
+		case Type::liter:
+			transformLit();
+			break;
+		}
 	}
 
 	void dump() const
@@ -107,11 +170,11 @@ public:
 			if( not std::getline(std::cin, line)){
 				return Chunk();
 			}
+			++lineNr;
 			if(line.empty()){
 				return Chunk({Chunk::Type::BLANK, "\n"});
 			}
 			left = line;
-			++lineNr;
 		}
 
 		QRegularExpression word("^(\\w[\\w\\d#]*)(.*)");
@@ -299,6 +362,7 @@ struct Entit
 	std::vector<Token> noncode;
 	Type type;
 	virtual void parseTokens(Tokens& t) = 0;
+	virtual std::vector<std::string> gencpp() = 0;
 	virtual ~Entit(){}
 
 	virtual void dump() = 0;
@@ -314,31 +378,31 @@ struct NonCode : Entit
 		for(auto& t : tv)
 			t.dump();
 	}
+
+	std::vector<std::string> gencpp() override
+	{
+		std::vector<std::string> rv;
+		for(auto& t : tv)
+		{
+			t.gencpp();
+			rv.emplace_back(std::move(t.s));
+		}
+		return rv;
+	}
 };
+
+static bool isNonCodeType(Token::Type type)
+{
+	return type == Token::Type::comment_block ||
+		   type == Token::Type::comment_line||
+		   type == Token::Type::ws;
+}
 
 struct Unit : Entit
 {
 	Unit():Entit(Type::UNIT){}
 	Unit(Type type):Entit(type){}
-	bool checkNonCode(Token& tok)
-	{
-		if(tok.type == Token::Type::comment_block ||
-		   tok.type == Token::Type::comment_line||
-		   tok.type == Token::Type::ws )
-		{
-			noncode.emplace_back(tok);
-			return true;
-		}
-
-		if(not noncode.empty())
-		{
-			auto pp = new NonCode();
-			pp->tv = std::move(noncode);
-			subent.emplace_back(pp);
-		}
-
-		return false;
-	}
+	bool checkNonCode(const Token& tok);
 
 	void parseTokens(Tokens& t) override;
 
@@ -347,7 +411,43 @@ struct Unit : Entit
 		for(auto& e : subent)
 			e->dump();
 	}
+
+	void appendNonCode()
+	{
+		if(not noncode.empty())
+		{
+			auto pp = new NonCode;
+			pp->tv = std::move(noncode);
+			subent.emplace_back(pp);
+		}
+	}
+
+	std::vector<std::string> gencpp() override
+	{
+		appendNonCode();
+		std::vector<std::string> rv;
+		for(auto& e : subent)
+		{
+			auto l = e->gencpp();
+			std::move(std::begin(l), std::end(l), std::back_inserter(rv));
+		}
+		subent.clear();
+		return rv;
+	}
 };
+
+bool Unit::checkNonCode(const Token& tok)
+{
+	if(isNonCodeType(tok.type))
+	{
+		noncode.emplace_back(tok);
+		return true;
+	}
+
+	appendNonCode();
+
+	return false;
+}
 
 struct Command : Unit
 {
@@ -363,82 +463,129 @@ struct Command : Unit
 			if(tok.type == Token::Type::oper &&
 			   tok.s == ";")
 			{
-					break;
+					return;
 			}
 			else
 			{
 				tv.emplace_back(tok);
 			}
 		}
+
+		throw std::logic_error("Command reached the end");
 	}
-};
 
-struct ForBlock : Command
-{
+	std::vector<std::string> gencpp() override
+	{
+			std::vector<std::string> rv;
+			auto nonBlank = std::find_if(std::crbegin(tv), std::crend(tv), [](auto t){
+				return not isNonCodeType(t.type);
+			});
 
+			std::for_each(std::cbegin(tv), std::cend(tv), [nonBlank,&rv](auto t){
+				auto& ct = *nonBlank;
+				if( &t == &ct )
+				{
+					rv.emplace_back(std::string(std::move(t.s).append(";")));
+				}
+				else
+				{
+					rv.emplace_back(std::string(std::move(t.s)));
+				}
+			});
+			rv.back().append("\n");
+			return rv;
+	}
 };
 
 struct Statement : Unit
 {
-	Statement() : Unit(Type::STATEMENT){}
+	using EndCond = std::function<bool(Tokens& t)>;
 
-	void parseTokens(Tokens& t) override
-	{
-		while(t.cur < t.tok.size())
-		{
-			auto& tok = t.tok[t.cur++];
-			if(! checkNonCode(tok) ){
-				if(tok.type == Token::Type::kw)
-				{
-					if(tok.kw() == grammar::kw::FOR )
-					{
-						auto p = new ForBlock();
-						p->parseTokens(t);
-						subent.emplace_back(p);
-					}
-					else if(tok.kw() == grammar::kw::IF )
-					{
-						//ToDo
-					}
-					else if(tok.kw() == grammar::kw::CASE )
-					{
-						//ToDo
-					}
-					else
-					{
-						LogERR("invalid statement keyword: {}", tok.s );
-						throw std::invalid_argument("invalid statement");
-					}
-				}
-				else
-				{
-					auto p = new Command();
-					p->parseTokens(t);
-					subent.emplace_back(p);
-				}
-			}
-		}
-	}
+	EndCond isFinished;
+
+	Statement(EndCond f)
+	:Unit(Type::STATEMENT)
+	,isFinished(f){}
+
+	void parseTokens(Tokens& t) override;
 
 	void dump() override
 	{
 	}
 };
 
+using StatementPtr = std::unique_ptr<Statement>;
+
+struct ForBlock : Unit
+{
+	std::vector<Token> initcond;
+	StatementPtr statement;
+	bool isInitCond = true;
+
+	ForBlock() : Unit(Type::COMMAND){}
+
+	void parseTokens(Tokens& t) override;
+	std::vector<std::string> gencpp() override
+	{
+			std::vector<std::string> rv;
+			//ToDo
+			return rv;
+	}
+};
+
+struct IfBlock : Unit
+{
+	std::vector<std::vector<Token>> cond;
+	std::vector<StatementPtr> statement;
+	StatementPtr elsestatement;
+	bool isAfterEndIf = false;
+
+	IfBlock() : Unit(Type::COMMAND)
+	{
+		cond.emplace_back(std::vector<Token>());
+	}
+
+	void parseTokens(Tokens& t) override;
+	std::vector<std::string> gencpp() override
+		{
+				std::vector<std::string> rv;
+				//ToDo
+				return rv;
+		}
+};
+
 struct Block : Unit
 {
 	grammar::kw block;
+	std::vector<Token> ident;
+	const std::size_t identSize;
+
+	constexpr std::size_t calcIdentSize(grammar::kw block)
+	{
+		if(block == grammar::kw::PROGRAM ||
+		   block == grammar::kw::FUNCTION_BLOCK)
+			return 1;
+		else if(block == grammar::kw::FUNCTION)
+			return 3;
+		return 0;
+	}
 
 	Block(grammar::kw kw)
 	:Unit(Type::BLOCK)
-	,block(kw) {}
+	,block(kw)
+	,identSize(calcIdentSize(block))
+	{}
 
 	void parseTokens(Tokens& t) override
 	{
+		if(!isNonCodeType(t.tok[t.cur].type)){
+			LogDBG("in block: {} {}", t.tok[t.cur].s, t.tok[t.cur].srcline);
+		}
 		while(t.cur < t.tok.size())
 		{
 			auto& tok = t.tok[t.cur++];
 			if(! checkNonCode(tok) ){
+				LogDBG("Block token: {} {}", tok.s, tok.srcline);
 				if(tok.type == Token::Type::kw)
 				{
 					if(Grammar::inst().blockEnd(block) == tok.kw() )
@@ -454,11 +601,28 @@ struct Block : Unit
 					}
 				}
 
-				auto p = new Statement();
-				p->parseTokens(t);
-				subent.emplace_back(p);
+				if(ident.size() < identSize)
+				{
+					ident.emplace_back(tok);
+				}
+				else if(Grammar::isVarDeclBlock(block))
+				{
+					//ToDo
+				}
+				else
+				{
+					--t.cur;
+					auto p = new Statement([end_kw = Grammar::inst().blockEnd(block)](Tokens& t){
+						auto& tok = t.tok[t.cur];
+						LogDBG("check end {} {} {}", tok.s, (int)tok.kw(), (int)end_kw);
+						return tok.type == Token::Type::kw && tok.kw() == end_kw;
+					});
+					p->parseTokens(t);
+					subent.emplace_back(p);
+				}
 			}
 		}
+		LogDBG("left block: {} {}", t.tok[t.cur].s, t.tok[t.cur].srcline);
 	}
 
 	void dump() override
@@ -474,6 +638,14 @@ struct Block : Unit
 
 		LogDBG("block:{} subent count:{}", bname, subent.size());
 	}
+	/*
+	std::vector<std::string> gencpp() override
+		{
+				std::vector<std::string> rv;
+				//ToDo
+				return rv;
+		}
+	*/
 };
 
 void Unit::parseTokens(Tokens& t)
@@ -498,6 +670,174 @@ void Unit::parseTokens(Tokens& t)
 	}
 }
 
+void Statement::parseTokens(Tokens& t)
+{
+	while(t.cur < t.tok.size())
+	{
+		if(isFinished(t))
+			return;
+
+		auto& tok = t.tok[t.cur++];
+		if(! checkNonCode(tok) ){
+			LogDBG("check6 {} {}", tok.srcline, tok.s);
+			if(tok.type == Token::Type::kw)
+			{
+				if(tok.kw() == grammar::kw::FOR )
+				{
+					auto p = new ForBlock;
+					p->parseTokens(t);
+					subent.emplace_back(p);
+				}
+				else if(tok.kw() == grammar::kw::IF )
+				{
+					auto p = new IfBlock;
+					p->parseTokens(t);
+					subent.emplace_back(p);
+				}
+				else if(tok.kw() == grammar::kw::CASE )
+				{
+					//ToDo
+					do{
+						if(t.tok[++t.cur].type != Token::Type::kw)
+							continue;
+						if(t.tok[t.cur].kw() == grammar::kw::END_CASE)
+							break;
+					}
+					while(1);
+					do{
+						if(t.tok[++t.cur].type != Token::Type::oper)
+							continue;
+						if(t.tok[t.cur].s == ";")
+							break;
+					}
+					while(1);
+					++t.cur;
+				}
+				else if(tok.kw() == grammar::kw::EXIT ){
+					goto process_commands;
+				}
+				else
+				{
+					LogERR("invalid statement keyword: {} {}", tok.s, tok.srcline );
+					throw std::logic_error("invalid statement");
+				}
+			}
+			else
+			{
+process_commands:
+				--t.cur;
+				auto p = new Command();
+				p->parseTokens(t);
+				subent.emplace_back(p);
+			}
+		}
+	}
+
+	throw std::logic_error("Statement reached the end");
+}
+
+void ForBlock::parseTokens(Tokens& t)
+{
+	while(t.cur < t.tok.size())
+	{
+		auto& tok = t.tok[t.cur++];
+		if(isInitCond)
+		{
+			if(tok.type == Token::Type::kw &&
+			   tok.kw() == grammar::kw::DO)
+			{
+				statement.reset(new Statement([](Tokens& t){
+					auto& tok = t.tok[t.cur];
+					return tok.type == Token::Type::kw && tok.kw() == grammar::kw::END_FOR;
+				}));
+				statement->parseTokens(t);
+				isInitCond = false;
+				++t.cur;
+			}
+			else
+			{
+				initcond.emplace_back(tok);
+			}
+		}
+		else
+		{
+			if(tok.type == Token::Type::oper &&
+			   tok.s == ";")
+			{
+				return;
+			}
+			else if(!checkNonCode(tok))
+			{
+				throw std::invalid_argument("fuckup unexpected after for_end");
+			}
+		}
+	}
+
+	throw std::invalid_argument("ForBlock reached the end");
+}
+
+void IfBlock::parseTokens(Tokens& t)
+{
+	while(t.cur < t.tok.size())
+	{
+		auto& tok = t.tok[t.cur++];
+		LogDBG("IfBlock {} {}", tok.srcline, tok.s);
+		if( not isAfterEndIf)
+		{
+			if(tok.type == Token::Type::kw &&
+			   tok.kw() == grammar::kw::THEN)
+			{
+				statement.emplace_back(new Statement([](Tokens& t){
+					auto& tok = t.tok[t.cur];
+					LogDBG("check end if else {} {}", tok.s, (int)tok.kw());
+					return tok.type == Token::Type::kw &&
+							(tok.kw() == grammar::kw::ELSE || tok.kw() == grammar::kw::END_IF || tok.kw() == grammar::kw::ELSIF);
+				}));
+				statement.back()->parseTokens(t);
+
+				if(t.tok[t.cur].kw() == grammar::kw::ELSIF)
+				{
+					++t.cur;
+					cond.emplace_back(std::vector<Token>());
+					continue;
+				}
+
+				if(t.tok[t.cur].kw() == grammar::kw::ELSE)
+				{
+					++t.cur;
+					elsestatement.reset(new Statement([](Tokens& t){
+						auto& tok = t.tok[t.cur];
+						LogDBG("check end else {} {}", tok.s, (int)tok.kw());
+						return tok.type == Token::Type::kw && tok.kw() == grammar::kw::END_IF;
+					}));
+					elsestatement->parseTokens(t);
+				}
+				++t.cur;
+				isAfterEndIf = true;
+			}
+			else
+			{
+				cond.back().emplace_back(tok);
+			}
+		}
+		else
+		{
+			if(tok.type == Token::Type::oper &&
+			   tok.s == ";")
+			{
+				return;
+			}
+			else if(!checkNonCode(tok))
+			{
+				LogERR("fuckup end of IfBlock at {} {}", tok.s, tok.srcline);
+				throw std::logic_error("fuckup unexpected after if_end");
+			}
+		}
+	}
+
+	throw std::logic_error("IfBlock reached the end");
+}
+
 int main(int argc, char **argv) {
 	auto logger = spdlog::stderr_logger_st("ST2CPP");
 	logger->set_level(spdlog::level::debug);
@@ -517,10 +857,16 @@ int main(int argc, char **argv) {
 		Unit u;
 		Tokens t({0,std::move(tokens)});
 		u.parseTokens(t);
-		u.dump();
+		auto cpp = u.gencpp();
+		for(auto& a : cpp)
+			std::cout << a;
 	}
 	catch(std::invalid_argument e){
 		LogERR("parse fuckup {} at {}: {}", e.what(), p.getfLineNr(), p.getfLine());
+		return 1;
+	}
+	catch(std::logic_error e){
+		LogERR("gen fuckup {}", e.what());
 		return 1;
 	}
 
