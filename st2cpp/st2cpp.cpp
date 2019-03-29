@@ -399,7 +399,7 @@ struct NonCode : Entit
 	}
 };
 
-static bool isNonCodeType(Token::Type type)
+static bool isNonCodeType(const Token::Type type)
 {
 	return type == Token::Type::comment_block ||
 		   type == Token::Type::comment_line||
@@ -411,6 +411,21 @@ struct Unit : Entit
 	Unit():Entit(Type::UNIT){}
 	Unit(Type type):Entit(type){}
 	bool checkNonCode(const Token& tok);
+	bool nonCodeSimpleCheck(const Token& tok)
+	{
+		if( isNonCodeType(tok.type) )
+		{
+			return true;
+		}
+		return false;
+	}
+
+	void addCommentOnly(const Token& tok)
+	{
+		if(tok.type == Token::Type::comment_block
+		 ||tok.type == Token::Type::comment_line )
+			noncode.emplace_back(tok);
+	}
 
 	void parseTokens(Tokens& t) override;
 
@@ -448,7 +463,7 @@ bool Unit::checkNonCode(const Token& tok)
 {
 	if(isNonCodeType(tok.type))
 	{
-		noncode.emplace_back(tok);
+		addCommentOnly();
 		return true;
 	}
 
@@ -473,7 +488,7 @@ struct Command : Unit
 			{
 					return;
 			}
-			else
+			else if(not nonCodeSimpleCheck(tok))
 			{
 				tv.emplace_back(tok);
 			}
