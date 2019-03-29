@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include <functional>
+#include <fstream>
 #include <QtCore/QRegularExpression>
 #include <spdlog/spdlog.h>
 #include "grammar.h"
@@ -159,12 +160,14 @@ class Parser
 	const QRegularExpression wspaceRe;
 	const QRegularExpression literRe;
 
+	std::istream& input;
 public:
 
-	explicit Parser()
+	explicit Parser(std::istream& input)
 	:wordRe("^(\\w[\\w\\d#]*)(.*)")
 	,wspaceRe("^(\\s+)(.*)")
 	,literRe("^([^\\w\\s]+)(.*)")
+	,input(input)
 	{}
 
 	struct Chunk
@@ -178,7 +181,7 @@ public:
 	{
 		if(left.empty())
 		{
-			if( not std::getline(std::cin, line)){
+			if( not std::getline(input, line)){
 				return Chunk();
 			}
 			++lineNr;
@@ -556,6 +559,27 @@ struct ForBlock : Unit
 	}
 };
 
+struct CaseBlock : Unit
+{
+	std::vector<Token> swexpr;
+	std::vector<Token> casecond;
+	std::vector<Command> casecommand;
+	Command elsecommand;
+	bool isAfterEndCase = false;
+
+	CaseBlock() : Unit(Type::COMMAND)
+	{
+	}
+
+	void parseTokens(Tokens& t) override;
+	std::vector<std::string> gencpp() override
+		{
+				std::vector<std::string> rv;
+				//ToDo
+				return rv;
+		}
+};
+
 struct IfBlock : Unit
 {
 	std::vector<std::vector<Token>> cond;
@@ -601,9 +625,6 @@ struct Block : Unit
 
 	void parseTokens(Tokens& t) override
 	{
-		if(!isNonCodeType(t.tok[t.cur].type)){
-			LogDBG("in block: {} {}", t.tok[t.cur].s, t.tok[t.cur].srcline);
-		}
 		while(t.cur < t.tok.size())
 		{
 			auto& tok = t.tok[t.cur++];
@@ -613,7 +634,7 @@ struct Block : Unit
 				{
 					if(Grammar::inst().blockEnd(block) == tok.kw() )
 					{
-						break;
+						return;
 					}
 					else if(Grammar::inst().isBlock(tok.kw()) )
 					{
@@ -640,12 +661,13 @@ struct Block : Unit
 						LogDBG("check end {} {} {}", tok.s, (int)tok.kw(), (int)end_kw);
 						return tok.type == Token::Type::kw && tok.kw() == end_kw;
 					});
+
 					p->parseTokens(t);
 					subent.emplace_back(p);
 				}
 			}
 		}
-		LogDBG("left block: {} {}", t.tok[t.cur].s, t.tok[t.cur].srcline);
+		throw std::logic_error("Block reached the end");
 	}
 
 	void dump() override
@@ -719,22 +741,9 @@ void Statement::parseTokens(Tokens& t)
 				}
 				else if(tok.kw() == grammar::kw::CASE )
 				{
-					//ToDo
-					do{
-						if(t.tok[++t.cur].type != Token::Type::kw)
-							continue;
-						if(t.tok[t.cur].kw() == grammar::kw::END_CASE)
-							break;
-					}
-					while(1);
-					do{
-						if(t.tok[++t.cur].type != Token::Type::oper)
-							continue;
-						if(t.tok[t.cur].s == ";")
-							break;
-					}
-					while(1);
-					++t.cur;
+					auto p = new CaseBlock;
+					p->parseTokens(t);
+					subent.emplace_back(p);
 				}
 				else if(tok.kw() == grammar::kw::EXIT ){
 					goto process_commands;
@@ -799,12 +808,64 @@ void ForBlock::parseTokens(Tokens& t)
 	throw std::invalid_argument("ForBlock reached the end");
 }
 
+void CaseBlock::parseTokens(Tokens& t)
+{
+	while(t.cur < t.tok.size())
+	{
+		auto& tok = t.tok[t.cur++];
+		if(tok.type == Token::Type::kw &&
+		   tok.kw() == grammar::kw::OF)
+		{
+			break;
+		}
+		casecond.emplace_back(t);
+	}
+
+	while(t.cur < t.tok.size())
+	{
+		auto& tok = t.tok[t.cur++];
+		if( not isAfterEndCase)
+		{
+			if(tok.type == Token::Type::oper &&
+			   tok.s == ":")
+			{
+			}
+			else if(tok.type == Token::Type::kw &&
+					tok.kw() == grammar::kw::ELSE)
+			{
+			}
+			else if(tok.type == Token::Type::kw &&
+					tok.kw() == grammar::kw::END_CASE)
+			{
+				isAfterEndCase = true;
+			}
+			else
+			{
+
+			}
+		}
+		else
+		{
+			if(tok.type == Token::Type::oper &&
+			   tok.s == ";")
+			{
+				return;
+			}
+			else if(!checkNonCode(tok))
+			{
+				LogERR("fuckup end of CaseBlock at {} {}", tok.s, tok.srcline);
+				throw std::logic_error("fuckup unexpected after case_end");
+			}
+		}
+	}
+	throw std::logic_error("CaseBlock reached the end");
+}
+
 void IfBlock::parseTokens(Tokens& t)
 {
 	while(t.cur < t.tok.size())
 	{
 		auto& tok = t.tok[t.cur++];
-		LogDBG("IfBlock {} {}", tok.srcline, tok.s);
 		if( not isAfterEndIf)
 		{
 			if(tok.type == Token::Type::kw &&
@@ -867,30 +928,50 @@ int main(int argc, char **argv) {
 	logr = logger;
 	logger->set_pattern("[%L] %v");
 
-	Parser p;
+	auto doit = [](std::istream& srcin)
+	{
+		Parser p(srcin);
 
-	try{
-		auto tokens = parse(p);
-		LogDBG("tokens nr:{}", tokens.size());
-		for( auto& t : tokens)
-		{
-			t.dump();
+		try{
+			auto tokens = parse(p);
+			LogDBG("tokens nr:{}", tokens.size());
+			for( auto& t : tokens)
+			{
+				t.dump();
+			}
+
+			Unit u;
+			Tokens t({0,std::move(tokens)});
+			u.parseTokens(t);
+			auto cpp = u.gencpp();
+			for(auto& a : cpp)
+				std::cout << a;
+		}
+		catch(std::invalid_argument e){
+			LogERR("parse fuckup {} at {}: {}", e.what(), p.getfLineNr(), p.getfLine());
+			return 1;
+		}
+		catch(std::logic_error e){
+			LogERR("gen fuckup {}", e.what());
+			return 1;
 		}
 
-		Unit u;
-		Tokens t({0,std::move(tokens)});
-		u.parseTokens(t);
-		auto cpp = u.gencpp();
-		for(auto& a : cpp)
-			std::cout << a;
+		return 0;
+	};
+
+	if( argc > 1)
+	{
+		int i = 0;
+		while( ++i < argc ){
+			std::ifstream srcfile(argv[i]);
+			auto rv = doit(srcfile);
+			if(rv)
+				return rv;
+		};
 	}
-	catch(std::invalid_argument e){
-		LogERR("parse fuckup {} at {}: {}", e.what(), p.getfLineNr(), p.getfLine());
-		return 1;
-	}
-	catch(std::logic_error e){
-		LogERR("gen fuckup {}", e.what());
-		return 1;
+	else
+	{
+		return doit(std::cin);
 	}
 
 	return 0;
