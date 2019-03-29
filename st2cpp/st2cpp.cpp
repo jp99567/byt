@@ -4,6 +4,7 @@
 #include <memory>
 #include <functional>
 #include <fstream>
+#include <sstream>
 #include <QtCore/QRegularExpression>
 #include <spdlog/spdlog.h>
 #include "grammar.h"
@@ -118,33 +119,61 @@ struct Token
 		}
 	}
 
-	void dump() const
+	std::string dump() const
+	{
+		std::ostringstream ss;
+
+		ss << "line:" << srcline << " (" << (int)type << ")";
+		switch(type)
+		{
+		case Type::ws:
+			ss << "blank";
+			break;
+		case Type::comment_line:
+		case Type::kw:
+		case Type::oper:
+		case Type::ident:
+		case Type::liter:
+			ss << s;
+			break;
+		case Type::comment_block:
+			ss << "comment block";
+			break;
+		default:
+			LogERR("token dump fuckup");
+			break;
+		}
+
+		return ss.str();
+	}
+
+	void logDump() const
 	{
 		switch(type)
 		{
 		case Type::ws:
-			LogDBG("blank line: '{}'", s);
+			LogDBG("{}\tblank: '{}'", srcline, s);
 			break;
 		case Type::comment_line:
-			LogDBG("comment line: --{}", s);
+			LogDBG("{}\tcomment line: --{}", srcline, s);
 			break;
 		case Type::comment_block:
-			LogDBG("comment block: /*{}*/", s);
+			LogDBG("{}\tcomment block: /*{}*/", srcline, s);
 			break;
 		case Type::kw:
-			LogDBG("kw: ={}='", s);
+			LogDBG("{}\tkw: ={}='", srcline, s);
 			break;
 		case Type::oper:
-			LogDBG("oper: x {} x", s);
+			LogDBG("{}\toper: x {} x", srcline, s);
 			break;
 		case Type::ident:
-			LogDBG("ident: = {} =", s);
+			LogDBG("{}\tident: = {} =", srcline, s);
 			break;
 		case Type::liter:
-			LogDBG("liter: = {} =", s);
+			LogDBG("{}\tliter: = {} =", srcline, s);
 			break;
 		default:
-			LogERR("token dunp fuckup");
+			LogERR("token log dump fuckup");
 			break;
 		}
 	}
@@ -234,7 +263,7 @@ std::vector<Token> parse(Parser& p)
 {
 	Parser::Chunk chunk;
 	std::vector<Token> tv;
-	const QRegularExpression reIdentif("^\\w[\\w\\d]*$");
+	const QRegularExpression reIdentif("^[A-Za-z][\\w\\d]*$");
 
 	while(1){
 		chunk = p.chunk();
@@ -418,6 +447,7 @@ struct Unit : Entit
 	{
 		if( isNonCodeType(tok.type) )
 		{
+			addCommentOnly(tok);
 			return true;
 		}
 		return false;
@@ -466,7 +496,7 @@ bool Unit::checkNonCode(const Token& tok)
 {
 	if(isNonCodeType(tok.type))
 	{
-		addCommentOnly();
+		addCommentOnly(tok);
 		return true;
 	}
 
@@ -479,7 +509,7 @@ struct Command : Unit
 {
 	std::vector<Token> tv;
 
-	Command() : Unit(Type::COMMAND){}
+	explicit Command() : Unit(Type::COMMAND){}
 
 	void parseTokens(Tokens& t) override
 	{
@@ -523,6 +553,8 @@ struct Command : Unit
 	}
 };
 
+using CommandPtr = std::unique_ptr<Command>;
+
 struct Statement : Unit
 {
 	using EndCond = std::function<bool(Tokens& t)>;
@@ -562,9 +594,9 @@ struct ForBlock : Unit
 struct CaseBlock : Unit
 {
 	std::vector<Token> swexpr;
-	std::vector<Token> casecond;
-	std::vector<Command> casecommand;
-	Command elsecommand;
+	std::vector<std::vector<Token>> casecond;
+	std::vector<CommandPtr> casecommand;
+	CommandPtr elsecommand;
 	bool isAfterEndCase = false;
 
 	CaseBlock() : Unit(Type::COMMAND)
@@ -818,10 +850,15 @@ void CaseBlock::parseTokens(Tokens& t)
 		{
 			break;
 		}
-		casecond.emplace_back(t);
+		else if(not nonCodeSimpleCheck(tok))
+		{
+			swexpr.emplace_back(tok);
+		}
 	}
 
-	while(t.cur < t.tok.size())
+	LogDBG("case check1:{}", t.tok[t.cur].dump());
+	std::vector<Token> tmpcond;
+	while( t.cur < t.tok.size() )
 	{
 		auto& tok = t.tok[t.cur++];
 		if( not isAfterEndCase)
@@ -829,19 +866,80 @@ void CaseBlock::parseTokens(Tokens& t)
 			if(tok.type == Token::Type::oper &&
 			   tok.s == ":")
 			{
+				if(tmpcond.size() == 0)
+				{
+					LogERR("case condition err0", tok.dump() );
+					throw std::logic_error("invalid statement");
+				}
+				if(tmpcond[0].type != Token::Type::liter)
+				{
+					LogERR("case condition err1", tok.dump() );
+					throw std::logic_error("invalid statement");
+				}
+				if(tmpcond.size() > 1 &&
+				   tmpcond.size() %2 !=	1)
+				{
+					LogERR("case condition err3", tok.dump() );
+					throw std::logic_error("invalid statement");
+				}
+				for(std::size_t i=0; i< tmpcond.size(); ++i)
+				{
+					casecond.emplace_back(std::vector<Token>());
+					if( (i+1) % 2 )
+					{
+						if(tmpcond[0].type == Token::Type::liter)
+						{
+							casecond.back().emplace_back(std::move(tmpcond[i]));
+						}
+						else
+						{
+							LogERR("case condition err3", tok.dump() );
+							throw std::logic_error("invalid statement");
+						}
+						tmpcond.clear();
+					}
+					else
+					{
+						if(tmpcond[i].type != Token::Type::oper
+					     ||tmpcond[i].s != ",")
+						{
+							LogERR("case condition err4", tok.dump() );
+							throw std::logic_error("invalid statement");
+						}
+					}
+				}
+
+				auto p = new Command;
+				p->parseTokens(t);
+				casecommand.emplace_back(p);
 			}
 			else if(tok.type == Token::Type::kw &&
 					tok.kw() == grammar::kw::ELSE)
 			{
+				auto p = new Command;
+				p->parseTokens(t);
+				elsecommand.reset(p);
 			}
 			else if(tok.type == Token::Type::kw &&
 					tok.kw() == grammar::kw::END_CASE)
 			{
+				if(casecond.size() != casecommand.size())
+				{
+					LogERR("case mismatch {}<>{} {}", casecond.size(), casecommand.size(), tok.dump() );
+					throw std::logic_error("invalid statement");
+				}
 				isAfterEndCase = true;
 			}
-			else
+			else if( not nonCodeSimpleCheck(tok) )
 			{
+				if(tok.type != Token::Type::liter &&
+				   (tok.type != Token::Type::oper || tok.s != ","))
+				{
+					LogERR("invalid case expr: {}", tok.dump() );
+					throw std::logic_error("invalid statement");
+				}
 
+				tmpcond.emplace_back(tok);
 			}
 		}
 		else
@@ -858,6 +956,7 @@ void CaseBlock::parseTokens(Tokens& t)
 			}
 		}
 	}
+
 	throw std::logic_error("CaseBlock reached the end");
 }
 
@@ -937,7 +1036,7 @@ int main(int argc, char **argv) {
 			LogDBG("tokens nr:{}", tokens.size());
 			for( auto& t : tokens)
 			{
-				t.dump();
+				t.logDump();
 			}
 
 			Unit u;
