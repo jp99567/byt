@@ -15,7 +15,6 @@
 #include <set>
 #include <fstream>
 #include "Log.h"
-#include "owtherm.h"
 #include "thread_util.h"
 #include "../pru/rpm_iface.h"
 

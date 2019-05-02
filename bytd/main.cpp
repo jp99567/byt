@@ -15,111 +15,14 @@
 #include "exporter.h"
 #include "therm.h"
 
-class SimpleGpio
-{
-public:
-	SimpleGpio(std::string name)
-	:dir(std::string("/run/bytd/gpio/") + name + '/')
-	{
-//		readdirection();
-//		readvalue();
-	}
-
-	void set(bool hi)
-	{
-//		if(isOutout()){
-//			writef("value", hi ? "1" : "0");
-//		}
-//		else{
-//			writef("direction", hi ? "high" : "low");
-//			direction = true;
-//		}
-//		val = hi;
-	}
-
-	void setInput()
-	{
-//		writef("direction", "in");
-//		direction = false;
-	}
-
-	bool operator()()
-	{
-//		if(isOutout())
-//		{
-//			return val;
-//		}
-//
-//		return readvalue();
-	}
-
-private:
-	std::string readf(std::string fname)
-	{
-		std::string v;
-//		std::ifstream f(dir+fname);
-//		f >> v;
-		return v;
-	}
-
-	void writef(std::string fname, std::string v)
-	{
-//		std::ofstream f(dir+fname);
-//		f << v;
-	}
-
-	bool readdirection()
-	{
-//		auto d = readf("direction");
-//		if( d == "in" )
-//		{
-//			direction = false;
-//		}
-//		else if( d == "out" )
-//		{
-//			direction = true;
-//		}
-//		else{
-//			throw std::runtime_error("gpio invalid direction");
-//		}
-//
-		return direction;
-	}
-
-	bool readvalue()
-	{
-//		auto v = readf("value");
-//		if( v == "0" )
-//		{
-//			val = false;
-//		}
-//		else if( v == "1" )
-//		{
-//			val = true;
-//		}
-//		else{
-//			throw std::runtime_error("gpio invalid value");
-//		}
-
-		return val;
-	}
-
-	bool isOutout() const { return direction; }
-
-	const std::string dir;
-	bool direction = false; // false IN, true OUT
-	bool val = false;
-};
-
 class Facade : public ICore
 {
 public:
 	explicit Facade()
-	:ring("ring"){}
+	{}
 
 	bool sw(int id, bool on) final
 	{
-		ring.set(id==1);
 		++stat;
 		return true;
 	}
@@ -131,18 +34,12 @@ public:
 
 	unsigned status()  final
 	{
-		ring.set(false);
 		return stat;
 	}
 
 private:
 	unsigned stat = 0;
-	SimpleGpio ring;
 };
-
-// alza.cz: Vazeny zakaznik,
-//objednavku 178330005 sme pre Vas pripravili na centrale Alza.sk.
-//Do Payboxu zadajte cislo objednavky a PIN 3992.
 
 class AppContainer
 {
