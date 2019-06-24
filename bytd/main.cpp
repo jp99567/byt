@@ -14,6 +14,7 @@
 #include "ZweiKanalServer.h"
 #include "exporter.h"
 #include "therm.h"
+#include "Elektromer.h"
 
 class Facade : public ICore
 {
@@ -77,6 +78,7 @@ public:
 		std::condition_variable cv_running;
 
 		std::thread meastempthread([this,&running,&cv_running,&cvlock]{
+			Elektromer em;
 			do{
 				meranie->meas();
 				std::unique_lock<std::mutex> ulck(cvlock);
