@@ -187,36 +187,32 @@ void Exporter::store_rejected_data(const PgDbWrapper::SqlCmd& cmd)
 
 void Exporter::restore_backup()
 {
-	DIR* dirp;
-	struct dirent *dp = (struct dirent*)_direntry_buffer.get();
-
-	dirp = opendir(".");
+	auto dirp = ::opendir(".");
 	if(!dirp){
 		LogSYSDIE;
 	}
 
 	std::vector<std::string> v;
-	struct dirent *res;
 	do
 	{
-		int err = readdir_r(dirp, dp, &res);
-		if(err){
-			LogSYSDIE;
-		}
-		else if(res){
-			if(DT_REG==res->d_type||DT_LNK==res->d_type){
-				// backup-DDD-HHMMSS-II-%d.sql
-				const std::string ptr("backup-");
-				auto len=ptr.size();
-				std::string file(res->d_name);
-				if(0 == ptr.compare(0, len, file, 0, len)){
-					v.push_back(std::move(file));
-				}
+		errno = 0;
+		auto res = readdir(dirp);
+
+		if(not res)
+			break;
+
+		if(DT_REG==res->d_type||DT_LNK==res->d_type){
+			// backup-DDD-HHMMSS-II-%d.sql
+			const std::string ptr("backup-");
+			auto len=ptr.size();
+			std::string file(res->d_name);
+			if(0 == ptr.compare(0, len, file, 0, len)){
+				v.push_back(std::move(file));
 			}
 	    }
 	}
-	while(res);
-	closedir(dirp);
+	while(1);
+	::closedir(dirp);
 
 	for(auto& f: v){
 		// backup-DDD-HHMMSS-II-%d.sql
