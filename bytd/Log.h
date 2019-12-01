@@ -21,6 +21,7 @@ public:
 	}
 
 	void syserr(const char* msg = nullptr);
+	void die(const char* msg = nullptr);
 	void sysdie();
 
 private:
@@ -47,5 +48,5 @@ public:
 #define LogDBG(...) Util::Log::instance().get()->debug(__VA_ARGS__)
 #define LogSYSDIE Util::Log::instance().sysdie()
 #define LogSYSERR(msg) Util::Log::instance().syserr(msg)
-#define LogDIE(...) {Util::Log::instance().get()->error(__VA_ARGS__); throw std::runtime_error("die");}
+#define LogDIE(...) { Util::Log::instance().get()->error(__VA_ARGS__); Util::Log::instance().die(); }
 
