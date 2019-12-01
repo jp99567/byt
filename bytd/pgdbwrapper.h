@@ -12,7 +12,7 @@
 #include <map>
 #include <string>
 #include <utility>
-#include <postgresql/libpq-fe.h>
+#include <libpq-fe.h>
 #include "data.h"
 
 class PgDbWrapper
