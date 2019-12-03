@@ -134,13 +134,13 @@ struct OwResponseWithParam
 int gOwBitsCount;
 union OwData gOwData;
 
-void send_status(enum OwResponse code)
+void send_status(enum ResponseCode code)
 {
     int32_t v = code;
     pru_rpmsg_send(&transport, dst, src, &v, sizeof(v));
 }
 
-void send_status_with_data(enum OwResponse code)
+void send_status_with_data(enum ResponseCode code)
 {
     struct OwResponseWithData* p = (struct OwResponseWithData*)payload;
     p->code = code;
@@ -149,7 +149,7 @@ void send_status_with_data(enum OwResponse code)
     pru_rpmsg_send(&transport, dst, src, payload, sizeof(*p) + len);
 }
 
-void send_status_with_param(enum OwResponse code)
+void send_status_with_param(enum ResponseCode code)
 {
     struct OwResponseWithParam p;
     p.code = code;

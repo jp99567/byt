@@ -24,7 +24,7 @@ class Response
 {
 	const uint8_t* data;
 	const std::size_t len;
-	OwResponse code = eRspError;
+	ResponseCode code = eRspError;
 
 public:
 	Response(const uint8_t* data, std::size_t len)
@@ -41,7 +41,7 @@ bool check()
 	}
 
 	auto i = *reinterpret_cast<const int32_t*>(data);
-	code = (OwResponse)i;
+	code = (ResponseCode)i;
 
 	switch(code)
 	{
@@ -89,7 +89,7 @@ int32_t getParam() const
 	return reinterpret_cast<const int32_t*>(data)[1];
 }
 
-OwResponse getCode() const
+ResponseCode getCode() const
 {
 	return code;
 }
@@ -99,7 +99,7 @@ std::string getCodeStr() const
 	return getCodeStr(code);
 }
 
-static std::string getCodeStr(OwResponse code)
+static std::string getCodeStr(ResponseCode code)
 {
 	switch(code){
     case eRspError:  return "eRspError";
@@ -257,9 +257,9 @@ void OwThermNet::write_bits(const void* data, std::size_t bitlen, bool strong_pw
 
 	switch(rsp.getCode())
 	{
-	case pru::OwResponse::eOwWriteBitsOk:
+	case pru::ResponseCode::eOwWriteBitsOk:
 		return;
-	case pru::OwResponse::eOwWriteBitsFailure:
+	case pru::ResponseCode::eOwWriteBitsFailure:
 		LogERR("OwThermNet::write_bits failure");
 		break;
 	default:
@@ -306,9 +306,9 @@ void OwThermNet::read_bits(std::size_t bitlen)
 
 	switch(rsp.getCode())
 	{
-	case pru::OwResponse::eOwReadBitsOk:
+	case pru::ResponseCode::eOwReadBitsOk:
 		return;
-	case pru::OwResponse::eOwReadBitsFailure:
+	case pru::ResponseCode::eOwReadBitsFailure:
 		LogERR("OwThermNet::read_bits failure");
 		break;
 	default:
@@ -353,16 +353,16 @@ int OwThermNet::search_triplet(bool branch_direction)
 	int retval(3);
 	switch(rsp.getCode())
 	{
-	case pru::OwResponse::eOwSearchResult00:
+	case pru::ResponseCode::eOwSearchResult00:
 		retval = 0;
 		break;
-	case pru::OwResponse::eOwSearchResult0:
+	case pru::ResponseCode::eOwSearchResult0:
 		retval = 1;
 		break;
-	case pru::OwResponse::eOwSearchResult1:
+	case pru::ResponseCode::eOwSearchResult1:
 		retval = 2;
 		break;
-	case pru::OwResponse::eOwSearchResult11:
+	case pru::ResponseCode::eOwSearchResult11:
 	default:
 		retval = 3;
 		break;

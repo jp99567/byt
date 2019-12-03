@@ -7,9 +7,9 @@ extern void bus_release(void);
 extern void bus_power_strong(void);
 extern int bus_active(void);
 extern unsigned timer(void);
-extern void send_status(enum OwResponse code);
-extern void send_status_with_data(enum OwResponse code);
-extern void send_status_with_param(enum OwResponse code);
+extern void send_status(enum ResponseCode code);
+extern void send_status_with_data(enum ResponseCode code);
+extern void send_status_with_param(enum ResponseCode code);
 extern int gOwBitsCount;
 extern union OwData gOwData;
 

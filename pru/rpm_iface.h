@@ -5,7 +5,7 @@
 namespace pru {
 #endif
 
-enum OwResponse {
+enum ResponseCode {
     eRspError,
     eOwPresenceOk,
     eOwBusFailure0,
@@ -30,7 +30,8 @@ enum Commands
 	eCmdOwSearchDir1,
     eCmdOwWrite,
     eCmdOwRead,
-    eCmdOwWritePower
+    eCmdOwWritePower,
+    eCmdOtTransmit
 };
 
 #ifdef __cplusplus
