@@ -187,34 +187,28 @@ extern void ow_sm_do(void);
 ///////////////////////////////// END OW ////////////////////////////////////////////
 
 ////////////////////////////////// OT ///////////////////////////////////////////////
-#define OT_INPIN 15        // P8.15
-
-int ot_bus(void)
+int ot_bus15(void)
 {
-    return __R31 & (1<<OT_INPIN) ? 1 : 0;
+    return __R31 & (1<<15) ? 1 : 0;
 }
 
-void ot_send_error_frame(uint32_t duration, uint32_t transitions, uint32_t bitread)
+int ot_bus14(void)
+{
+    return __R31 & (1<<14) ? 1 : 0;
+}
+
+void ot_send_frame(uint32_t mark, uint32_t duration, uint32_t transitions, uint32_t bitread)
 {
 	uint32_t* u32Array = (uint32_t*)payload;
-	u32Array[0] = 0xEBAD0000;
+	u32Array[0] = mark;
 	u32Array[1] = duration;
 	u32Array[2] = transitions;
 	u32Array[3] = bitread;
 	pru_rpmsg_send(&transport, dst, src, payload, sizeof(uint32_t)*4);
 }
 
-void ot_send_frame(uint32_t duration, uint32_t transitions, uint32_t value)
-{
-	uint32_t* u32Array = (uint32_t*)payload;
-	u32Array[0] = 0x1234ABCD;
-	u32Array[1] = duration;
-	u32Array[2] = transitions;
-	u32Array[3] = value;
-    pru_rpmsg_send(&transport, dst, src, payload, sizeof(uint32_t)*4);
-}
-
 extern void ot_sm_do(void);
+extern void ot_enable(void);
 ///////////////////////////////// END OT ////////////////////////////////////////////
 
 
@@ -229,6 +223,7 @@ void process_message(void* data, uint16_t len)
         if(len==sizeof(req->cmd))
         {
             ow_init();
+	    ot_enable();
             return;
         }
       break;
