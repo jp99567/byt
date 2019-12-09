@@ -20,6 +20,9 @@ enum ResponseCode {
 	eOwSearchResult1,
 	eOwSearchResult11,
 	eOwSearchResult00,
+	eOtFrameError,
+	eOtBusError,
+	eOtOk
 };
 
 enum Commands

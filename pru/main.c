@@ -64,6 +64,7 @@ volatile register uint32_t __R30;
 #define CHAN_DESC			"Channel 30"
 #define CHAN_PORT			30
 
+
 /*
  * Used to make sure the Linux drivers are ready for RPMsg communication
  * Found at linux-x.y.z/include/uapi/linux/virtio_config.h
@@ -186,6 +187,31 @@ extern void ow_search(int direction);
 extern void ow_sm_do(void);
 ///////////////////////////////// END OW ////////////////////////////////////////////
 
+////////////////////////////////// OT ///////////////////////////////////////////////
+int ot_bus(void)
+{
+    return __R31 & (1<<15) ? 1 : 0;
+}
+
+void ot_set_bus(int v)
+{
+
+}
+
+void ot_send_frame(enum ResponseCode code, uint32_t data)
+{
+	uint32_t* u32Array = (uint32_t*)payload;
+	u32Array[0] = code;
+	u32Array[1] = data;
+	pru_rpmsg_send(&transport, dst, src, payload, sizeof(uint32_t)*2);
+}
+
+extern void ot_sm_do(void);
+extern void ot_transmit(uint32_t data);
+///////////////////////////////// END OT ////////////////////////////////////////////
+
+
+
 void process_message(void* data, uint16_t len)
 {
     struct Request* req = data;
@@ -240,6 +266,12 @@ void process_message(void* data, uint16_t len)
             }
         }
       break;
+    case eCmdOtTransmit:
+    	if(len == sizeof(req->cmd) + sizeof(req->data[0])){
+    		ot_transmit(req->data[0]);
+    		return;
+    	}
+    	break;
     default:
       break;
     }
@@ -284,5 +316,6 @@ void main(void)
 		}
 
 		ow_sm_do();
+		ot_sm_do();
 	}
 }
