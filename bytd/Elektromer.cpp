@@ -9,6 +9,7 @@
 #include <gpiod.hpp>
 #include "Log.h"
 #include <fstream>
+#include "thread_util.h"
 
 namespace
 {
@@ -47,6 +48,7 @@ double Elektromer::getKWh() const
 Elektromer::Elektromer()
 {
 	t = std::thread([this]{
+		thread_util::set_thread_name("bytd-elektromer");
 
 		gpiod::chip gpiochip("1");
 		auto impin = gpiochip.get_line(17);

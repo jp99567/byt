@@ -14,6 +14,7 @@
 
 #include "Log.h"
 #include "../pru/rpm_iface.h"
+#include "thread_util.h"
 
 void PruRxMsg::rx(Buf buf)
 {
@@ -43,6 +44,7 @@ Pru::Pru() {
 	if( fd < 0 ) LogSYSDIE;
 
 	thrd = std::thread([this]{
+		thread_util::set_thread_name("bytd-pru");
 			while( not (fd<0) ){
 				auto buf = PruRxMsg::Buf(32);
 				auto len = ::read(fd, buf.data(), buf.size());

@@ -10,6 +10,7 @@
 #include <condition_variable>
 
 #include "Log.h"
+#include "thread_util.h"
 #include "BytRequest.h"
 #include "ZweiKanalServer.h"
 #include "exporter.h"
@@ -75,6 +76,8 @@ public:
 		std::condition_variable cv_running;
 
 		std::thread meastempthread([this,&running,&cv_running,&cvlock]{
+			thread_util::set_thread_name("bytd-meranie");
+
 			Elektromer em;
 			do{
 				meranie->meas();

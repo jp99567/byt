@@ -55,7 +55,7 @@ bool Exporter::put(Sample&& v)
 void Exporter::svc()
 {
 	thread_util::sigblock(true, false);
-	thread_util::set_thread_name("export");
+	thread_util::set_thread_name("bytd-export");
 
 	while(!mFini){
 		std::unique_lock<std::mutex> lk(mLock);

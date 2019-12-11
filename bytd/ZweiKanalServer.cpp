@@ -3,6 +3,7 @@
 #include "lbidich/byttransport.h"
 
 #include "Log.h"
+#include "thread_util.h"
 
 ZweiKanalServer::ZweiKanalServer(boost::asio::io_service &io_service)
     :io_service(io_service)
@@ -41,9 +42,9 @@ void ZweiKanalServer::listen()
     LogINFO("listen");
 
     ioThread = std::thread([this]{
-	  start_accept();
+    	thread_util::set_thread_name("bytd-listen");
 
-
+    	start_accept();
 	    for (;;) {
 	        try {
 	        	io_service.run();
