@@ -5,8 +5,8 @@ SET(CMAKE_SYSTEM_PROCESSOR arm)
 SET(CMAKE_SYSTEM_VERSION 1)
 
 # specify the cross compiler
-SET(CMAKE_C_COMPILER   arm-linux-gnueabihf-gcc-6)
-SET(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++-6)
+SET(CMAKE_C_COMPILER   arm-linux-gnueabihf-gcc)
+SET(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++)
 
 IF($ENV{CROSS_ENV_ROOT} STREQUAL "")
 	MESSAGE(FATAL_ERROR "not defined env CROSS_ENV_ROOT" $ENV{CROSS_ENV_ROOT})
