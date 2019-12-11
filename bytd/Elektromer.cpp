@@ -27,6 +27,9 @@ constexpr double calcPwr(std::chrono::milliseconds ms)
 
 double Elektromer::getPowerCur() const
 {
+	if(lastPeriod == std::chrono::milliseconds::max())
+		return 0.0;
+
 	auto nt = Clock::now();
 
 	auto d = nt - lastImp;
@@ -73,9 +76,12 @@ Elektromer::Elektromer()
 				}
 			}
 			auto pwr = getPowerCur();
-			LogINFO("Elekromer: {}W {}s", pwr, lastPeriod.count()/1000.0);
-			std::ofstream f("/run/cur_power_watts");
-			f << pwr << '\n';
+			if( pwr != curPwr){
+				LogINFO("Elekromer: {}W {}s", pwr, lastPeriod.count()/1000.0);
+				std::ofstream f("/run/cur_power_watts");
+				f << pwr << '\n';
+				curPwr = pwr;
+			}
 		}
 	});
 }

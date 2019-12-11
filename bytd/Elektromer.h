@@ -24,5 +24,6 @@ private:
 	Clock::time_point lastImp = Clock::time_point::min();
 	std::chrono::milliseconds lastPeriod = std::chrono::milliseconds::max();
 	unsigned impCount = 0;
+	double curPwr = std::numeric_limits<double>::quiet_NaN();
 };
 
