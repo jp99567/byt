@@ -7,7 +7,6 @@
 #include <sys/ioctl.h>
 #include <cstdint>
 #include <system_error>
-#include <iostream>
 #include <vector>
 #include <limits>
 #include <algorithm>
@@ -17,6 +16,7 @@
 #include "Log.h"
 #include "thread_util.h"
 #include "../pru/rpm_iface.h"
+#include "Pru.h"
 
 namespace pru {
 
@@ -145,7 +145,7 @@ class OwThermNet {
 	};
 
 public:
-	explicit OwThermNet(ExporterSptr e, const RomCode& mainSensor);
+	explicit OwThermNet(std::shared_ptr<Pru> pru, ExporterSptr e, const RomCode& mainSensor);
 	~OwThermNet();
 
 	struct Sensor {
@@ -190,7 +190,8 @@ private:
 	void write_simple_cmd(Cmd cmd, bool strongpower=false);
 	int search_triplet(bool branch_direction);
 
-	int mFd;
+	std::shared_ptr<Pru> pru;
+	std::shared_ptr<PruRxMsg> rxMsg;
 	std::vector<Sensor> mMeas;
 	ExporterSptr mExporter;
 	const RomCode mrc;
@@ -224,31 +225,16 @@ void OwThermNet::write_bits(const void* data, std::size_t bitlen, bool strong_pw
 
 	auto bytes = 1+(bitlen-1)/8;
 	memcpy(msg.wr.data, data, bytes);
-	auto rv = ::write(mFd, &msg, sizeof(msg.wr.h)+bytes);
+	pru->send((uint8_t*)&msg, sizeof(msg.wr.h)+bytes);
 
-	auto cleanup = [this](const char* msg)
-		{
-			LogSYSERR(msg);
-			auto tmpFd = mFd;
-			mFd = -1;
-			::close(tmpFd);
-			return;
-		};
-
-	if((std::size_t)rv != sizeof(msg.wr.h)+bytes)
+	auto buf = rxMsg->wait(std::chrono::milliseconds(100));
+	if(buf.size() <= 0)
 	{
-		cleanup("pru write failure");
+		LogERR("pru ow read failure");
 		return;
 	}
 
-	rv = ::read(mFd, &msg, sizeof(msg));
-	if(rv <= 0)
-	{
-		cleanup("pru read failure");
-		return;
-	}
-
-	pru::Response rsp((uint8_t*)&msg, rv);
+	pru::Response rsp(buf.data(), buf.size());
 
 	if(not rsp.check())
 	{
@@ -273,31 +259,16 @@ void OwThermNet::read_bits(std::size_t bitlen)
 	msg.wr.h.code = pru::Commands::eCmdOwRead;
 	msg.wr.h.bitlen = bitlen;
 
-	auto rv = ::write(mFd, &msg, sizeof(msg.wr.h));
+	pru->send((uint8_t*)&msg, sizeof(msg.wr.h));
 
-	auto cleanup = [this](const char* msg)
-		{
-			LogSYSERR(msg);
-			auto tmpFd = mFd;
-			mFd = -1;
-			::close(tmpFd);
-			return;
-		};
-
-	if(rv != sizeof(msg.wr.h))
+	auto buf = rxMsg->wait(std::chrono::milliseconds(100));
+	if(buf.size() <= 0)
 	{
-		cleanup("pru write failure");
+		LogERR("ow read_bits failure");
 		return;
 	}
 
-	rv = ::read(mFd, &msg.rd, sizeof(msg.rd));
-	if(rv <= 0)
-	{
-		cleanup("pru read failure");
-		return;
-	}
-
-	pru::Response rsp((uint8_t*)&msg, rv);
+	pru::Response rsp(buf.data(), buf.size());
 
 	if(not rsp.check())
 	{
@@ -319,34 +290,21 @@ void OwThermNet::read_bits(std::size_t bitlen)
 
 int OwThermNet::search_triplet(bool branch_direction)
 {
-	int32_t buf[32];
-	buf[0] = branch_direction ? pru::Commands::eCmdOwSearchDir1 : pru::Commands::eCmdOwSearchDir0;
-	auto rv = ::write(mFd, buf, 4);
+	int32_t cmd = branch_direction ? pru::Commands::eCmdOwSearchDir1 : pru::Commands::eCmdOwSearchDir0;
+	pru->send((uint8_t*)&cmd, sizeof(cmd));
 
-	auto cleanup = [this](const char* msg)
-		{
-			LogSYSERR(msg);
-			auto tmpFd = mFd;
-			mFd = -1;
-			::close(tmpFd);
-			return 3;
-		};
-
-	if(rv != 4)
+	auto buf = rxMsg->wait(std::chrono::milliseconds(100));
+	if(buf.size() <= 0)
 	{
-		return cleanup("pru write failure");
+		LogERR("ow read search_triplet failure");
+		return 3;
 	}
 
-	rv = ::read(mFd, buf, sizeof(buf));
-	if(rv <= 0)
-	{
-		return cleanup("pru read failure");
-	}
-
-	pru::Response rsp((uint8_t*)buf, rv);
+	pru::Response rsp(buf.data(), buf.size());
 
 	if(not rsp.check())
 	{
+		LogERR("ow search_triplet failure invalid response");
 		return 3;
 	}
 
@@ -504,31 +462,18 @@ void OwThermNet::search()
 
 bool OwThermNet::presence()
 {
-	int32_t buf[32];
-	buf[0] = pru::Commands::eCmdOwInit;
-	auto rv = ::write(mFd, buf, 4);
+	int32_t cmd = pru::Commands::eCmdOwInit;
+	pru->send((uint8_t*)&cmd, sizeof(cmd));
 
-	auto cleanup = [this](const char* msg)
-		{
-			LogSYSERR(msg);
-			auto tmpFd = mFd;
-			mFd = -1;
-			::close(tmpFd);
-			return false;
-		};
+	auto buf = rxMsg->wait(std::chrono::milliseconds(100));
 
-	if(rv != 4)
+	if(buf.size() <= 0)
 	{
-		return cleanup("pru write failure");
+		LogERR("ow read presence failure");
+		return false;
 	}
 
-	rv = ::read(mFd, buf, sizeof(buf));
-	if(rv <= 0)
-	{
-		return cleanup("pru read failure");
-	}
-
-	pru::Response rsp((uint8_t*)buf, rv);
+	pru::Response rsp(buf.data(), buf.size());
 
 	if(not rsp.check())
 	{
@@ -592,27 +537,29 @@ bool OwThermNet::read_rom(RomCode& rc)
 
 	write_simple_cmd(Cmd::READ_ROM);
 
-	int n = read(mFd, &rc, sizeof(rc));
-	if(n!=sizeof(rc)) LogSYSDIE;
+	auto buf = rxMsg->wait(std::chrono::milliseconds(100));
+	if( buf.size() != sizeof(rc)) LogSYSDIE;
 
+	std::copy(std::cbegin(buf), std::cend(buf), (uint8_t*)&rc);
 	if(!check_crc(rc)){
-		std::cerr << "error crc\n";
+		LogERR("ow read_rom error crc");
 		return false;
 	}
 	return true;
 }
 
-OwThermNet::OwThermNet(ExporterSptr e, const RomCode& mainSensor)
-	:mExporter(e)
+OwThermNet::OwThermNet(std::shared_ptr<Pru> pru, ExporterSptr e, const RomCode& mainSensor)
+	:pru(pru)
+	,rxMsg(std::make_shared<PruRxMsg>())
+	,mExporter(e)
 	,mrc(mainSensor)
 {
-	mFd = ::open("/dev/rpmsg_pru30", O_RDWR);
-	if( mFd < 0 ) LogSYSDIE;
+	pru->setOwCbk(rxMsg);
 }
 
 OwThermNet::~OwThermNet()
 {
-	if(close(mFd)) LogSYSDIE;
+	LogDBG("~OwThermNet");
 }
 
 } //namespace ow
@@ -640,78 +587,72 @@ static void load_read_predefined_romcodes(std::set<ow::RomCode>& s, ow::RomCode&
 	}
 }
 
-MeranieTeploty::MeranieTeploty()
-{
-}
-
 MeranieTeploty::~MeranieTeploty()
 {
 }
 
-bool MeranieTeploty::init(ow::ExporterSptr exporter)
+MeranieTeploty::MeranieTeploty(std::shared_ptr<Pru> pru, ow::ExporterSptr exporter)
 {
-	std::set<ow::RomCode> predefined;
-	ow::RomCode mainSensor;
-	load_read_predefined_romcodes(predefined, mainSensor);
+		std::set<ow::RomCode> predefined;
+		ow::RomCode mainSensor;
+		load_read_predefined_romcodes(predefined, mainSensor);
 
-	if(predefined.empty()){
-		LogERR("no predefined sensors");
-	}
-
-	therm = std::make_unique<ow::OwThermNet>(exporter, mainSensor);
-
-	bool search_success(false);
-	int try_nr(10);
-	do{
-		std::set<ow::RomCode> found;
-		using std::begin;
-		using std::end;
-
-		therm->search();
-		bool goto_break(false);
-		for(auto& i: therm->measurment()){
-			if(!found.insert(i.romcode).second){
-				LogERR("duplicate");
-				goto_break = true;
-			}
+		if(predefined.empty()){
+			throw std::runtime_error("no predefined sensors");
 		}
-		if(goto_break)break;
 
-		std::vector<ow::RomCode> tmpv(found.size()+predefined.size());
+		therm = std::make_unique<ow::OwThermNet>(pru, exporter, mainSensor);
 
-		if(found == predefined){
-			search_success = true;
-			break;
-		}
-		else{
-			auto it = std::set_difference(begin(predefined), end(predefined),
-							       	   	  begin(found), end(found),
-										  begin(tmpv));
+		bool search_success(false);
+		int try_nr(10);
+		do{
+			std::set<ow::RomCode> found;
+			using std::begin;
+			using std::end;
 
-			if(it!=begin(tmpv)){
-				for(auto i=begin(tmpv); i!=it; ++i){
-					LogERR("missing sensor: {}", (std::string)*i);
+			therm->search();
+			bool goto_break(false);
+			for(auto& i: therm->measurment()){
+				if(!found.insert(i.romcode).second){
+					LogERR("duplicate");
+					goto_break = true;
 				}
 			}
+			if(goto_break)break;
 
-			it = std::set_difference(begin(found), end(found),
-									 begin(predefined), end(predefined),
-									 begin(tmpv));
+			std::vector<ow::RomCode> tmpv(found.size()+predefined.size());
 
-			if(it!=begin(tmpv)){
-				for(auto i=begin(tmpv); i!=it; ++i){
-					LogERR("new sensors: {}", (std::string)*i);
+			if(found == predefined){
+				search_success = true;
+				break;
+			}
+			else{
+				auto it = std::set_difference(begin(predefined), end(predefined),
+								       	   	  begin(found), end(found),
+											  begin(tmpv));
+
+				if(it!=begin(tmpv)){
+					for(auto i=begin(tmpv); i!=it; ++i){
+						LogERR("missing sensor: {}", (std::string)*i);
+					}
+				}
+
+				it = std::set_difference(begin(found), end(found),
+										 begin(predefined), end(predefined),
+										 begin(tmpv));
+
+				if(it!=begin(tmpv)){
+					for(auto i=begin(tmpv); i!=it; ++i){
+						LogERR("new sensors: {}", (std::string)*i);
+					}
 				}
 			}
+			sleep(1);
 		}
-		sleep(1);
-	}
-	while(--try_nr > 0);
+		while(--try_nr > 0);
 
 	if(!search_success)
-		LogERR("search failed");
-
-	return search_success && not predefined.empty();
+		throw std::runtime_error("search failed");
 }
 
 void MeranieTeploty::meas()

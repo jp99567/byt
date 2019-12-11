@@ -6,12 +6,13 @@ namespace ow {
 	class OwThermNet;
 }
 
+class Pru;
+
 class MeranieTeploty
 {
 public:
-	explicit MeranieTeploty();
+	explicit MeranieTeploty(std::shared_ptr<Pru> pru, ow::ExporterSptr exporter);
 	~MeranieTeploty();
-	bool init(ow::ExporterSptr exporter);
 	void meas();
 
 private:

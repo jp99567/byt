@@ -15,6 +15,7 @@
 #include "exporter.h"
 #include "therm.h"
 #include "Elektromer.h"
+#include "Pru.h"
 
 class Facade : public ICore
 {
@@ -63,12 +64,8 @@ public:
 			server.stop();
 		});
 		exporter = std::make_shared<ow::Exporter>();
-		meranie = std::make_shared<MeranieTeploty>();
-
-		if( ! meranie->init(exporter) )
-		{
-			throw std::runtime_error("meranie teploty init failed");
-		}
+		auto pru = std::make_shared<Pru>();
+		meranie = std::make_shared<MeranieTeploty>(pru, exporter);
     }
 
 	void run()
