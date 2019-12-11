@@ -11,16 +11,18 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <memory>
+#include <csignal>
 
 #include "Log.h"
 #include "../pru/rpm_iface.h"
 #include "thread_util.h"
 
+
 void PruRxMsg::rx(Buf buf)
 {
   	{
   		std::lock_guard<std::mutex> guard(lck);
-   		if(not buf.empty()){
+   		if(not this->buf.empty()){
    			LogERR("PruRxMsg drop buf");
    		}
    		this->buf = std::move(buf);
@@ -33,7 +35,7 @@ void Pru::send(const uint8_t* data, std::size_t len)
 {
 	auto rv = ::write(fd, data, len);
 
-	if(rv != sizeof(len)){
+	if((rv < 0) || ((unsigned)rv != len)){
 		LogSYSERR("pru write");
 	}
 }
@@ -108,6 +110,6 @@ Pru::~Pru() {
 	if(tmpfd >= 0)
 		::close(tmpfd);
 
+	::pthread_kill(thrd.native_handle(), SIGINT);
 	thrd.join();
 }
-
