@@ -187,14 +187,19 @@ extern void ow_sm_do(void);
 ///////////////////////////////// END OW ////////////////////////////////////////////
 
 ////////////////////////////////// OT ///////////////////////////////////////////////
+#define OT_INPIN 14 // pru0_in14 P8_16 sivy
+#define OT_OUTPIN 14 // pru0_out14 P8_12 biely
 int ot_bus(void)
 {
-    return __R31 & (1<<15) ? 1 : 0;
+    return __R31 & (1<<OT_INPIN) ? 0 : 1;
 }
 
 void ot_set_bus(int v)
 {
-
+	if(v)
+	    __R30 &= ~(1<<OT_OUTPIN);
+	else
+	    __R30 |= 1<<OT_OUTPIN;
 }
 
 void ot_send_frame(enum ResponseCode code, uint32_t data)
@@ -283,6 +288,7 @@ void main(void)
 	volatile uint8_t *status;
 
 	bus_release();
+	ot_set_bus(0);
 
 	/* Allow OCP master port access by the PRU so the PRU can read external memories */
 	CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
