@@ -186,7 +186,7 @@ public:
 private:
 	bool presence();
 	void write_bits(const void* data, std::size_t bitlen, bool strong_pwr=false);
-	void read_bits(std::size_t bitlen);
+	bool read_bits(std::size_t bitlen);
 	void write_simple_cmd(Cmd cmd, bool strongpower=false);
 	int search_triplet(bool branch_direction);
 
@@ -254,7 +254,7 @@ void OwThermNet::write_bits(const void* data, std::size_t bitlen, bool strong_pw
 	}
 }
 
-void OwThermNet::read_bits(std::size_t bitlen)
+bool OwThermNet::read_bits(std::size_t bitlen)
 {
 	msg.wr.h.code = pru::Commands::eCmdOwRead;
 	msg.wr.h.bitlen = bitlen;
@@ -265,20 +265,21 @@ void OwThermNet::read_bits(std::size_t bitlen)
 	if(buf.size() <= 0)
 	{
 		LogERR("ow read_bits failure");
-		return;
+		return false;
 	}
 
 	pru::Response rsp(buf.data(), buf.size());
 
 	if(not rsp.check())
 	{
-		return;
+		return false;
 	}
 
 	switch(rsp.getCode())
 	{
 	case pru::ResponseCode::eOwReadBitsOk:
-		return;
+		std::copy(std::cbegin(buf), std::cend(buf), (uint8_t*)&msg.rd);
+		return true;
 	case pru::ResponseCode::eOwReadBitsFailure:
 		LogERR("OwThermNet::read_bits failure");
 		break;
@@ -286,6 +287,7 @@ void OwThermNet::read_bits(std::size_t bitlen)
 		LogERR("OwThermNet::read_bits unknown failure");
 		break;
 	}
+	return false;
 }
 
 int OwThermNet::search_triplet(bool branch_direction)
@@ -375,6 +377,7 @@ bool OwThermNet::measure()
 		if(i.update(t)){
 			sample.add(i.romcode, t);
 
+			LogDBG("teplota.{}: {}", (std::string)i.romcode, t);
 			////////////////
 			if(t!=badval && i.romcode == mrc){
 				FILE *f = fopen("/run/cur_temp", "w");
@@ -511,19 +514,21 @@ bool OwThermNet::read_scratchpad(const RomCode& rc, ThermScratchpad& v)
 	write_simple_cmd(Cmd::MATCH_ROM);
 	write_bits(&rc, 8*sizeof(rc) );
 	write_simple_cmd(Cmd::READ_SCRATCHPAD);
-	read_bits(8*sizeof(v));
+	if( not read_bits(8*sizeof(v)) )
+		return false;
+
 	memcpy(&v, msg.rd.data, sizeof(v));
 
 	if( (v.conf != 0x7F ) ||
 		(v.reserved[0]!=0xFF) ||
 		(v.reserved[2]!=0x10) ){
-		LogERR("scrratchpad: {:02X} {:02X} {:02X} {:02X} {:02X}",
+		LogERR("ow scratchpad unexpected: {:02X} {:02X} {:02X} {:02X} {:02X}",
 				(uint8_t)v.alarmH, (uint8_t)v.alarmL, v.conf, v.reserved[0], v.reserved[2] );
 		return false;
 	}
 
 	if(!check_crc(v)){
-		LogERR("scratchpad read rc={} crc error", (std::string)rc);
+		LogERR("ow scratchpad read rc={} crc error", (std::string)rc);
 		return false;
 	}
 
