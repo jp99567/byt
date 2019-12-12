@@ -115,7 +115,7 @@ uint16_t src, dst;
 ///////////////////////////////////////// BEGIN OW /////////////////////////////////
 #define OW_OUTPIN 0       // P9.31 pru0_r30_0 zeleny
 #define OW_OUTPIN_POWER 1 // P9.29 pru0_r30_1 hnedy
-#define OW_INPIN 2        // P9.30 pru0_r31_2 zeleno biely
+#define OW_INPIN 5        // P9.27 pru0_r31_in5 zeleno biely
 
 #include "rpm_iface.h"
 #include "common.h"
@@ -160,19 +160,18 @@ void send_status_with_param(enum ResponseCode code)
 
 void bus_pull(void)
 {
-    __R30 &= ~(1<<OW_OUTPIN_POWER);
-    __R30 |= 1<<OW_OUTPIN;
+    __R30 |= ( (1<<OW_OUTPIN_POWER) | (1<<OW_OUTPIN) );
 }
 
 void bus_power_strong(void)
 {
-	__R30 &= ~(1<<OW_OUTPIN);
-    __R30 |= 1<<OW_OUTPIN_POWER;
+	__R30 &= ~( (1<<OW_OUTPIN) | (1<<OW_OUTPIN_POWER) );
 }
 
 void bus_release(void)
 {
-    __R30 &= ~( (1<<OW_OUTPIN) | (1<<OW_OUTPIN_POWER) );
+    __R30 |= 1<<OW_OUTPIN_POWER;
+    __R30 &= ~(1<<OW_OUTPIN);
 }
 
 int bus_active (void)
