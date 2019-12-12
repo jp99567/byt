@@ -61,7 +61,7 @@ const std::string& PgDbWrapper::encodeRomCode(const ow::RomCode& rc) const
 		return v->second;
 	}
 
-	return mRomCodeCache[irc] = "\'x" + (std::string)rc + '\'';
+	return mRomCodeCache[irc] = "\'\\x" + (std::string)rc + '\'';
 }
 
 PgDbWrapper::SqlCmd PgDbWrapper::createSqlCmd(const std::vector<ow::Sample>& v) const
