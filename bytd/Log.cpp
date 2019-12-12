@@ -14,9 +14,10 @@ Log::~Log() {
 	logger->debug("logger finished");
 }
 Log::Log() {
-	//logger = spdlog::stdout_color_mt("console");
-	logger = spdlog::stderr_color_mt("bytdlog");
+	logger = spdlog::stderr_color_mt("bytd");
 	logger->set_level(spdlog::level::debug);
+	auto owLogger = spdlog::stderr_color_mt("ow");
+	owLogger->set_level(spdlog::level::info);
 }
 
 void Log::syserr(const char* msg)

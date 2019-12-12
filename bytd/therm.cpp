@@ -488,7 +488,6 @@ bool OwThermNet::presence()
 	switch(rsp.getCode())
 	{
 	case pru::eOwPresenceOk:
-		LogDBG("presence:{}", rsp.getCodeStr());
 		retval = true;
 		break;
 	default:
@@ -498,7 +497,7 @@ bool OwThermNet::presence()
 
 	if(rsp.getParam() >= 0)
 	{
-		LogDBG("ow bus falling edge: {}us", 5e-3*rsp.getParam());
+		spdlog::get("ow")->trace("ow bus falling edge: {}us", 5e-3*rsp.getParam());
 	}
 
 	return retval;
