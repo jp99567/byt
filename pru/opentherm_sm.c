@@ -8,7 +8,7 @@ extern int ot_bus(void);
 extern void ot_set_bus(int v);
 extern unsigned timer(void);
 extern void ot_send_frame(enum ResponseCode code, uint32_t data);
-
+extern void send_status(enum ResponseCode code);
 
 enum OtState
 {
@@ -49,6 +49,11 @@ static int timeout_since(unsigned delay, unsigned t0)
 
 void ot_transmit(uint32_t data)
 {
+	if(sState != eOtIdle)
+	{
+		send_status(eRspError);
+		return;
+	}
 	sState = eOtWriteFrame;
 	sValue = data;
 	ot_set_bus(1);
@@ -68,15 +73,15 @@ void ot_sm_do(void)
 				? (sValue & (1<<sBitidx) ? 1 : 0)
 				: 1;
 
-		if(timeout(cDurHalfBit)){
-			ot_set_bus(cur);
-		}
-		else if(timeout(cDurBit)){
+		if(timeout(cDurBit)){
 			ot_set_bus(!cur);
 			sT0 = timer();
 			if( ++sBitidx > 32 ){
 				sState = eOtFrameWaitGap;
 			}
+		}
+		else if(timeout(cDurHalfBit)){
+			ot_set_bus(cur);
 		}
 	}
 		break;
