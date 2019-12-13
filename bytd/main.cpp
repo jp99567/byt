@@ -17,6 +17,7 @@
 #include "therm.h"
 #include "Elektromer.h"
 #include "Pru.h"
+#include "OpenTherm.h"
 
 class Facade : public ICore
 {
@@ -51,6 +52,7 @@ class AppContainer
 	apache::thrift::server::TThreadedServer server;
 	ow::ExporterSptr exporter;
 	std::shared_ptr<MeranieTeploty> meranie;
+	std::shared_ptr<OpenTherm> openTherm;
 
 public:
 	AppContainer()
@@ -67,6 +69,7 @@ public:
 		exporter = std::make_shared<ow::Exporter>();
 		auto pru = std::make_shared<Pru>();
 		meranie = std::make_shared<MeranieTeploty>(pru, exporter);
+		openTherm = std::make_shared<OpenTherm>(pru);
     }
 
 	void run()
