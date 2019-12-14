@@ -32,6 +32,7 @@ static uint32_t sValue;
 #define cDurErrorGap US2TICK(50000)
 #define cDurErrorFrameTimeout US2TICK(150000)
 #define cDurGap US2TICK(10000)
+#define cDurResponseTimeout US2TICK(800*1000)
 #define cDurBit US2TICK(1000)
 #define cDurHalfBit (cDurBit/2)
 #define cDurBitCaptureMin ( cDurBit - US2TICK(100) )
@@ -58,7 +59,7 @@ void ot_transmit(uint32_t data)
 	sValue = data;
 	ot_set_bus(1);
 	sT0 = timer();
-	sBitidx = -1;
+	sBitidx = 32;
 }
 
 void ot_sm_do(void)
@@ -76,7 +77,7 @@ void ot_sm_do(void)
 		if(timeout(cDurBit)){
 			ot_set_bus(!cur);
 			sT0 = timer();
-			if( ++sBitidx > 32 ){
+			if( --sBitidx < -1 ){
 				sState = eOtFrameWaitGap;
 			}
 		}
@@ -94,6 +95,10 @@ void ot_sm_do(void)
 	        sPrevV = 1;
 	        sValue = 0;
 	        sState = eOtReadBits;
+	    }
+	    else if(timeout(cDurResponseTimeout)){
+	    	send_status(eOtNoResponse);
+	    	sState = eOtIdle;
 	    }
 		break;
 	case eOtReadBits:
@@ -131,7 +136,7 @@ void ot_sm_do(void)
 			sState = eOtIdle;
 		}
 		else if(timeout_since(cDurErrorFrameTimeout, sT0Frame)){
-			ot_send_frame(eOtBusError, 0);
+			send_status(eOtBusError);
 			sState = eOtIdle;
 		}
 		break;

@@ -49,13 +49,11 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru)
 		    int id=0;
 			while(not shutdown){
 				auto lastTransmit = std::chrono::steady_clock::now();
-				bool error = false;
 				if(id==0){
 					//Mrd-Srdack id=0 M: v16=03CA (00000011.11001010) f88=3.78906 S: v16=0320 (00000011.00100000) f88=3.125
 					uint32_t txv = 0x03CA;
 					auto rsp = transmit(parity(txv));
-					LogINFO("ow transfer {:08X} id0 {:b}", parity(txv), rsp);
-					if(rsp==0) error |= 1;
+					LogINFO("ot transfer {:08X} id0 {:b}", parity(txv), rsp);
 				}
 				else if(id==1){
 					// Mwr-Swrack id=1 M: v16=3900 (00111001.00000000) f88=57.0 S: v16=3900 (00111001.00000000) f88=57.0
@@ -63,14 +61,13 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru)
 					txv |= 1 << 16;
 					txv |= 0b00010000 << 24;
 					auto rsp = transmit(parity(txv));
-					LogINFO("ow transfer {:08X} {:08X} {:04X} id1 {:X}", txv, parity(txv), float2f88(60), rsp);
-					if(rsp==0) error |= 1;
+					LogINFO("ot transfer {:08X} {:08X} {:04X} id1 {:X}", txv, parity(txv), float2f88(60), rsp);
 				}
 
 				if(++id > 1)
 					id=0;
 
-				std::this_thread::sleep_until(lastTransmit + std::chrono::seconds( error ? 60 : 1));
+				std::this_thread::sleep_until(lastTransmit + std::chrono::seconds(1));
 			}
 	});
 }
@@ -86,14 +83,15 @@ uint32_t OpenTherm::transmit(uint32_t frame)
 {
 	uint32_t data[2] = { pru::eCmdOtTransmit, parity(frame) };
 	pru->send((uint8_t*)&data, sizeof(data));
-	auto buf = rxMsg->wait(std::chrono::seconds(5));
+	auto buf = rxMsg->wait(std::chrono::milliseconds(500));
 
 	if(buf.empty()){
 		LogERR("OpenTherm buf empty");
 		return 0;
 	}
 
-	if(buf.size() != 2*sizeof(uint32_t)){
+	if( buf.size() != sizeof(uint32_t)
+	 && buf.size() != 2*sizeof(uint32_t)){
 		LogERR("OpenTherm buf invalid size {}", buf.size());
 		return 0;
 	}
@@ -104,9 +102,14 @@ uint32_t OpenTherm::transmit(uint32_t frame)
 	{
 	case pru::ResponseCode::eOtBusError:
 	case pru::ResponseCode::eOtFrameError:
+	case pru::ResponseCode::eOtNoResponse:
 		break;
 	case pru::ResponseCode::eOtOk:
 	{
+		if(buf.size() != 2*sizeof(uint32_t)){
+			LogERR("OpenTherm buf invalid size {}", buf.size());
+			return 0;
+		}
 		auto frame = pmsg[1];
 		if(frame != parity(frame)){
 			LogERR("ot rx error parity");

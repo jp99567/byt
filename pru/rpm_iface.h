@@ -20,6 +20,7 @@ enum ResponseCode {
 	eOwSearchResult1,
 	eOwSearchResult11,
 	eOwSearchResult00,
+	eOtNoResponse,
 	eOtFrameError,
 	eOtBusError,
 	eOtOk

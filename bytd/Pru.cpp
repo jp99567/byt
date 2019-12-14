@@ -90,6 +90,7 @@ Pru::Pru() {
 					case pru::ResponseCode::eOwSearchResult00:
 						send(owRxMsg);
 						break;
+					case pru::ResponseCode::eOtNoResponse:
 					case pru::ResponseCode::eOtFrameError:
 					case pru::ResponseCode::eOtBusError:
 					case pru::ResponseCode::eOtOk:
