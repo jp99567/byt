@@ -130,7 +130,7 @@ void ot_sm_do(void)
 			sT0 = timer();
 			sPrevV = !sPrevV;
 		}
-		else if( ot_bus() && timeout(cDurErrorGap)){
+		else if( !ot_bus() && timeout(cDurErrorGap)){
 			ot_send_frame(eOtFrameError, sT0-sT0Frame);
 			sState = eOtIdle;
 		}
