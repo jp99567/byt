@@ -19,6 +19,9 @@ public:
 	explicit OpenTherm(std::shared_ptr<Pru> pru);
 	~OpenTherm();
 
+	float dhwSetpoint = 38;
+	float chSetpoint = 0;
+
 private:
 	uint32_t transmit(uint32_t frame);
 	std::thread thrd;

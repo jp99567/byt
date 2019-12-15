@@ -88,6 +88,16 @@ public:
 				cv_running.wait_for(ulck, std::chrono::seconds(10), [&running]{
 					return !running;
 				});
+
+				{
+					std::ifstream fdhw("/run/bytd/setpoint_dhw");
+					fdhw >> openTherm->dhwSetpoint;
+				}
+				{
+					std::ifstream fch("/run/bytd/setpoint_ch");
+					fch >> openTherm->chSetpoint;
+				}
+
 			}
 			while(running);
 		});
