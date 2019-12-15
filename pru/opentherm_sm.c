@@ -57,7 +57,6 @@ void ot_transmit(uint32_t data)
 	}
 	sState = eOtWriteFrame;
 	sValue = data;
-	ot_set_bus(1);
 	sT0 = timer();
 	sBitidx = 32;
 }
