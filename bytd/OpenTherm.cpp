@@ -97,7 +97,7 @@ uint32_t OpenTherm::transmit(uint32_t frame)
 {
 	uint32_t data[2] = { pru::eCmdOtTransmit, parity(frame) };
 	pru->send((uint8_t*)&data, sizeof(data));
-	auto buf = rxMsg->wait(std::chrono::milliseconds(500));
+	auto buf = rxMsg->wait(std::chrono::seconds(4));
 
 	if(buf.empty()){
 		LogERR("OpenTherm buf empty");
