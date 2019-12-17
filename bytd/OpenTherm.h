@@ -9,9 +9,22 @@
 
 #include <memory>
 #include <thread>
+#include <vector>
 
 class Pru;
 class PruRxMsg;
+
+struct OtParam
+{
+    int id;
+    uint16_t val;
+    bool updated=false;
+};
+
+struct OtWrParam : OtParam
+{
+    uint16_t val_mirrored;
+};
 
 class OpenTherm
 {
@@ -28,4 +41,6 @@ private:
 	bool shutdown = false;
 	std::shared_ptr<Pru> pru;
 	std::shared_ptr<PruRxMsg> rxMsg;
+	std::vector<OtParam> rdParams;
+	std::vector<OtWrParam> wrParams;
 };
