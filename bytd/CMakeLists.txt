@@ -1,5 +1,5 @@
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 project (Bytd)
 
 if( DEFINED ENV{BYTD_STAGING} )
@@ -22,7 +22,7 @@ ELSE()
  include(FindPkgConfig)
  pkg_check_modules(SYSTEMDDAEMON REQUIRED libsystemd)
  pkg_check_modules(GPIOD REQUIRED libgpiod)
- include_directories(${Boost_INCLUDE_DIRS} ../owtherm ${Thrift_INCLUDE_DIRS} ${GPIOD_INCLUDE_DIRS} ../../../spdlog/include /usr/include/postgresql)
+ include_directories(${Boost_INCLUDE_DIRS} ../owtherm ${Thrift_INCLUDE_DIRS} ${GPIOD_INCLUDE_DIRS} ../../spdlog/include /usr/include/postgresql)
  link_directories(${CMAKE_SYSROOT}/usr/local/pgsql/lib ${Thrift_LIBRARY_DIRS} ${Boost_LIBRARY_DIRS} ${GPIOD_LIBRARY_DIRS})
 ENDIF()
 
