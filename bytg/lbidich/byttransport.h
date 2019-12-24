@@ -13,7 +13,7 @@ public:
         :connection(std::move(conn))
     {}
 
-    bool isOpen() override
+    bool isOpen() const override
     {   auto rv = connection->isOpen();
         //qDebug() << "BytTransport::isOpen()" << rv;
         return rv;
