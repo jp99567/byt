@@ -36,15 +36,9 @@ constexpr uint32_t calc_parity(unsigned v, unsigned pos)
 
 constexpr uint32_t parity(uint32_t v)
 {
-        int par=0;
-        for(int i=0; i<31; ++i){
-                if(v & (1<<i)) ++par;
-        }
-
-        if(par&1)
-                return v | (1<<31);
-        else
-                return v & ~(1<<31);
+    auto bitsnr = calc_parity(v, 30);
+    constexpr uint32_t parity_bit_mask = (1<<31);
+    return ( v & ~parity_bit_mask) | (( bitsnr & 1) ? parity_bit_mask : 0);
 }
 
 constexpr uint16_t float2f88(float v)
