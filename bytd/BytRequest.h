@@ -12,13 +12,11 @@ public:
 
 	void audioSelectChannel(const int8_t chnum) override
 	{
-		LogINFO("audioSelectChannel {}", (int)chnum);
 		core->sw(chnum,true);
 	}
 
 	double ampers() override
 	{
-		LogINFO("ampers");
 		return core->status();
 	}
 
@@ -29,17 +27,10 @@ private:
 class BytRequestFactory : public doma::BytRequestIfFactory
 {
 public:
-	explicit BytRequestFactory(std::shared_ptr<ICore> core)
-	:core(core){}
-	doma::BytRequestIf* getHandler(const ::apache::thrift::TConnectionInfo& connInfo) override
-	{
-		  return new BytRequest(core);
-	}
+    explicit BytRequestFactory(std::shared_ptr<ICore> core);
+    doma::BytRequestIf* getHandler(const ::apache::thrift::TConnectionInfo& connInfo) override;
 
-	void releaseHandler(doma::BytRequestIf* p) override
-	{
-		  delete p;
-	}
+    void releaseHandler(doma::BytRequestIf* p) override;
 
 private:
 	std::shared_ptr<ICore> core;
