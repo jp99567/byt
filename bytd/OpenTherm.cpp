@@ -5,6 +5,7 @@
 #include "Pru.h"
 #include "../pru/rpm_iface.h"
 #include "opentherm_protocol.h"
+#include "thread_util.h"
 
 // Mrd-Srdack id=0 M: v16=03CA (00000011.11001010) f88=3.78906 S: v16=0320 (00000011.00100000) f88=3.125
 // Mwr2-Swrack id=56 M: v16=2700 (00100111.00000000) f88=39.0 S: v16=2700 (00100111.00000000) f88=39.0
@@ -16,7 +17,7 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru)
 	pru->setOtCbk(rxMsg);
 
 	thrd = std::thread([this]{
-		    int id=0;
+            thread_util::set_thread_name("bytd-opentherm");
 			while(not shutdown){
 				auto lastTransmit = std::chrono::steady_clock::now();
 
