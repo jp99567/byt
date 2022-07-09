@@ -1,0 +1,7 @@
+gf1 pe0(pdi)
+gf2 pe1(pdo)
+gf3 reset
+gf4 pb1(sck)
+gf5
+gf6
+gf7 gnd
