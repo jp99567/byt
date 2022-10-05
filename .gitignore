@@ -1,6 +1,13 @@
 
 *.o
 *.so
+*.d
+*.srec
+*.hex
+*.bin
+*.lst
+*.elf
+*.map
 CMakeCache.txt
 CMakeFiles
 CMakeScripts
