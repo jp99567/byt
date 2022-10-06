@@ -5,7 +5,7 @@ OPTIMIZE       = -Os
 
 DEFS           = -DSLAVE_SERVICE_ID=$(ID)
 LIBS           =
-BOOTSTART = 0x3E00
+BOOTSTART = 0x7C00
 # You should not have to change anything below here.
 
 CC             = avr-gcc

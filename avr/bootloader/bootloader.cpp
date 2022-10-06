@@ -85,10 +85,10 @@ void boot_program_page (uint32_t pageidx, uint8_t *buf)
 void can_init(void){
 
 	CANGCON = ( 1 << SWRES );   // Software reset
-	CANTCON = 255;         // CAN timing prescaler set to 0;
-    CANBT1 = 0x08 ;   // set baud rate to 100kb
-    CANBT2 = 0x0C ;
-	CANBT3 = 0x37 ;
+	CANTCON = 255;
+	CANBT1 = 0x08;   // set baud rate to 100kb
+	CANBT2 = 0x0C;
+	CANBT3 = 0x37;
 	for ( int8_t mob=0; mob<15; mob++ ) {
 		CANPAGE = ( mob << MOBNB0 );
 		CANCDMOB = 0x00;       		// Disable mob
@@ -96,13 +96,12 @@ void can_init(void){
 	}
 
 	CANPAGE = ( 13 << MOBNB0 );
-	CANIDM = 0xFFFFFFFF << 3|1;
+	CANIDM = (0xFFFFFFFF << 3)|1;
 	CANIDT = base_can_id;
 	CANCDMOB = ( 1 << CONMOB1) | ( 1 << IDE );
 
 	CANPAGE = ( 14 << MOBNB0 );
-	//CANIDM = 0xFFFFFFFF << 3|1;
-	CANIDM = 0;
+	CANIDM = (0xFFFFFFFF << 3)|1;
 	CANIDT = base_can_bcast;
 	CANCDMOB = ( 1 << CONMOB1) | ( 1 << IDE );
 
@@ -180,7 +179,8 @@ int main() {
 		}
 
 		if(not timeout_disabled){
-			if(CANGSTA & _BV(OVRTIM)){
+			if(CANGIT & _BV(OVRTIM)){
+				CANGIT |= _BV(OVRTIM);
 				bootloader_finished = true;
 			}
 		}
