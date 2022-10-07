@@ -27,7 +27,7 @@ struct PageAddr
 	uint32_t addr;
 }__attribute__((__packed__));
 
-bool can_rx()
+uint8_t can_rx()
 {
 	for(uint8_t id=13; id<=14; ++id){
 		CANPAGE = ( id << MOBNB0 );
@@ -39,10 +39,10 @@ bool can_rx()
 			CANSTMOB = 0;
 			CANCDMOB = ( 1 << CONMOB1) | ( 1 << IDE );
 			if(msglen > 0)
-				return true;
+				return  id;
 		}
 	}
-	return false;
+	return 0;
 }
 
 void can_tx(void) {
@@ -124,16 +124,18 @@ int main() {
 	init();
 
 	while(!bootloader_finished){
-		if(can_rx()){
+		auto id = can_rx();
+		if(id){
+			bool reply = true;
 			if(downloading){
 				for(uint8_t i=0; i<8; ++i){
-					page[8*page_in8b++ + i] = msg[i];
+					page[8*page_in8b+i] = msg[i];
 					xorsum ^= msg[i];
 				}
-				if(page_in8b == SPM_PAGESIZE/8){
+				if(++page_in8b == SPM_PAGESIZE/8){
 					downloading = false;
 					msglen = 2;
-					msg[0] = 'D';
+					msg[0] = 'd';
 					msg[1] = xorsum;
 				}
 			}
@@ -146,12 +148,10 @@ int main() {
 					break;
 				case 'c':
 					msglen = 1;
-					msg[0] = 'C';
 					bootloader_finished = true;
 					break;
 				case 's':
 					msglen = 4;
-					msg[0] = 'S';
 					msg[1] = CANTEC;
 					msg[2] = CANREC;
 					msg[3] = MCUSR;
@@ -161,7 +161,6 @@ int main() {
 					PageAddr* p = (PageAddr*)msg;
 					boot_program_page(p->addr, page);
 					msglen = 1;
-					msg[0] = 'F';
 				}
 					break;
 				case 'd':
@@ -170,12 +169,17 @@ int main() {
 					xorsum = 0xA5;
 					break;
 				default:
+					msglen = 1;
+					msg[0] = 'X';
+					if(id == 14){ //broadcast
+						reply = false;
+					}
 					break;
 				}
-				timeout_disabled = true;
-				if(not downloading)
-					can_tx();
 			}
+			timeout_disabled = true;
+			if(reply && not downloading)
+				can_tx();
 		}
 
 		if(not timeout_disabled){
