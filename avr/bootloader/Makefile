@@ -3,11 +3,6 @@ OBJ            = bootloader.o
 MCU_TARGET     = at90can32
 OPTIMIZE       = -Os
 
-
-ifeq ($(strip $(ID)),)
-    $(error ID is not set)
-endif
-
 DEFS           = -DSLAVE_SERVICE_ID=$(ID)
 LIBS           =
 BOOTSTART = 0x7C00
