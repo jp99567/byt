@@ -13,6 +13,8 @@
 #include "Elektromer.h"
 #include "Pru.h"
 #include "OpenTherm.h"
+#include "ICore.h"
+#include <boost/asio.hpp>
 
 class Facade : public ICore
 {
