@@ -22,7 +22,7 @@ public:
 
 	void syserr(const char* msg = nullptr);
 	void die(const char* msg = nullptr);
-	void sysdie();
+    void sysdie(const char* msg = nullptr);
 
 private:
 	Log();
@@ -46,7 +46,7 @@ public:
 #define LogINFO(...) Util::Log::instance().get()->info(__VA_ARGS__)
 #define LogERR(...) Util::Log::instance().get()->error(__VA_ARGS__)
 #define LogDBG(...) Util::Log::instance().get()->debug(__VA_ARGS__)
-#define LogSYSDIE Util::Log::instance().sysdie()
+#define LogSYSDIE(msg) Util::Log::instance().sysdie(msg)
 #define LogSYSERR(msg) Util::Log::instance().syserr(msg)
 #define LogDIE(...) { Util::Log::instance().get()->error(__VA_ARGS__); Util::Log::instance().die(); }
 

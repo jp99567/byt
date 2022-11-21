@@ -38,10 +38,10 @@ void Log::die(const char* msg)
 		throw std::runtime_error("die");
 }
 
-void Log::sysdie()
+void Log::sysdie(const char* msg)
 {
 	auto tmperno = errno;
-	logger->error("syserr: {}", strerror(tmperno));
+    syserr(msg);
 	die(strerror(tmperno));
 }
 
