@@ -15,6 +15,7 @@
 #include "OpenTherm.h"
 #include "ICore.h"
 #include <boost/asio.hpp>
+#include "mqtt.h"
 
 class Facade : public ICore
 {
@@ -27,6 +28,7 @@ class AppContainer
 	ow::ExporterSptr exporter;
 	std::shared_ptr<MeranieTeploty> meranie;
 	std::shared_ptr<OpenTherm> openTherm;
+    MqttClient mqtt;
 
 public:
 	AppContainer()
@@ -89,6 +91,7 @@ public:
 int main()
 {
   Util::LogExit scopedLog("GRACEFUL");
+  MqttWrapper libmMosquitto;
 
   try
   {
