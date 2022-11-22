@@ -542,7 +542,7 @@ bool OwThermNet::read_rom(RomCode& rc)
 	write_simple_cmd(Cmd::READ_ROM);
 
 	auto buf = rxMsg->wait(std::chrono::milliseconds(100));
-	if( buf.size() != sizeof(rc)) LogSYSDIE;
+	if( buf.size() != sizeof(rc)) LogSYSDIE();
 
 	std::copy(std::cbegin(buf), std::cend(buf), (uint8_t*)&rc);
 	if(!check_crc(rc)){
@@ -571,7 +571,7 @@ OwThermNet::~OwThermNet()
 static void load_read_predefined_romcodes(std::set<ow::RomCode>& s, ow::RomCode& main)
 {
 	std::ifstream config("predefined_romcodes.txt");
-	if(!config.good()) LogSYSDIE;
+	if(!config.good()) LogSYSDIE();
 	config.exceptions(std::ifstream::badbit);
 	std::string tmp;
 

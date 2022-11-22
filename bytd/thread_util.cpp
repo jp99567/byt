@@ -17,11 +17,11 @@ void sigblock(bool block, bool block_alarm)
 	sigaddset(&set, SIGINT);
 	sigaddset(&set, SIGTERM);
 	int err = pthread_sigmask(block ? SIG_BLOCK : SIG_UNBLOCK, &set, nullptr);
-	if(err) LogSYSDIE;
+	if(err) LogSYSDIE();
 	sigemptyset(&set);
 	sigaddset(&set, SIGALRM);
 	err = pthread_sigmask(block_alarm ? SIG_BLOCK : SIG_UNBLOCK, &set, nullptr);
-	if(err) LogSYSDIE;
+	if(err) LogSYSDIE();
 }
 
 void set_thread_name(const char *name)

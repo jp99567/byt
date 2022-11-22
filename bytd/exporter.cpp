@@ -189,7 +189,7 @@ void Exporter::restore_backup()
 {
 	auto dirp = ::opendir(".");
 	if(!dirp){
-		LogSYSDIE;
+		LogSYSDIE();
 	}
 
 	std::vector<std::string> v;
@@ -219,10 +219,10 @@ void Exporter::restore_backup()
 		unsigned count = std::stoi(f.substr(21));
 		auto cmd = load_file(f);
 		if(mDB.insertSamples(PgDbWrapper::SqlCmd(cmd, count))){
-			if(unlink(f.c_str())) LogSYSDIE;
+			if(unlink(f.c_str())) LogSYSDIE();
 		}
 		else if(mDB.connectionOK()){
-			if(rename(f.c_str(), filename("rejected").c_str())) LogSYSDIE;
+			if(rename(f.c_str(), filename("rejected").c_str())) LogSYSDIE();
 		}
 	}
 }
