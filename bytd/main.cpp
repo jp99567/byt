@@ -17,6 +17,8 @@
 #include <boost/asio.hpp>
 #include "mqtt.h"
 
+#include "yaml-cpp/yaml.h"
+
 class Facade : public ICore
 {
 };
@@ -38,6 +40,7 @@ public:
 			LogINFO("signal {}",signum);
             io_service.stop();
 		});
+
 		exporter = std::make_shared<ow::Exporter>();
 		auto pru = std::make_shared<Pru>();
 		meranie = std::make_shared<MeranieTeploty>(pru, exporter);
@@ -88,10 +91,45 @@ public:
 	}
 };
 
+void dumpYaml(YAML::Node& node);
+
+void dumpYaml(YAML::Node& node)
+{
+    switch (node.Type()) {
+    case YAML::NodeType::value::Scalar:
+        LogINFO("YANL Scalar: {}", node.as<std::string>());
+        break;
+    case YAML::NodeType::value::Sequence:
+        LogINFO("YAML seq{}:", node.size());
+        for(auto it = node.begin(); it != node.end(); ++it) {
+          auto element = *it;
+          dumpYaml(element);
+        }
+        break;
+    case YAML::NodeType::value::Map:
+        LogINFO("YAML map:");
+        for(auto it = node.begin(); it != node.end(); ++it) {
+          LogINFO("YAML map iterate {} {}:", (int)(it->first.Type()), (int)(it->second.Type()) );
+          dumpYaml(it->first);
+          dumpYaml(it->second);
+        }
+        break;
+    default:
+        LogINFO("YANL null or undefined");
+        break;
+    }
+}
+
 int main()
 {
   Util::LogExit scopedLog("GRACEFUL");
   MqttWrapper libmMosquitto;
+
+  YAML::Node config = YAML::LoadFile("config.yaml");
+
+  if(config["NodeCAN"]){
+      dumpYaml(config);
+  }
 
   try
   {
