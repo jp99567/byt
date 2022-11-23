@@ -1,0 +1,69 @@
+NodeCAN:
+  - Zadverie:
+      id: 1
+      DigIN:
+        - zvoncek: [ addr: [ 0x111, 0, 0 ], pin: PA1 ]
+        - buttonZadverieLU: [ addr: [ 0x111, 0, 1 ], pin: PA7 ]
+        - buttonZadverieLD: [ addr: [ 0x111, 0, 2 ], pin: PA6 ]
+        - buttonZadverieRU: [ addr: [ 0x111, 0, 3 ], pin: PG2 ]
+        - buttonZadverieRD: [ addr: [ 0x111, 0, 4 ], pin: PC7 ]
+        - buttonKuchyna1U: [ addr: [ 0x111, 0, 5 ], pin: PC3 ]
+        - buttonKuchyna1D: [ addr: [ 0x111, 0, 6 ], pin: PC1 ]
+      DigOUT:
+        - brana:  [ addr: [ 0x112, 0, 0 ], pin: PE0 ]
+      OwT:
+        - zadverie: [ addr: [0x111, 1]]
+  - Izba:
+      id: 2
+      DigIN:
+        - buttonIzba: [ addr: [ 0x113, 0, 0 ], pin: PA1 ]
+      OwT:
+        - izba: [ addr: [ 0x113, 1 ] ]
+  - SvetlaPredne:
+      id: 3
+      DigOUT:
+        - svetloKuchyna: [ addr: [ 0x114, 0, 0 ], pin: PE0 ]
+        - svetloIzba: [ addr: [ 0x114, 0, 1 ], pin: PE1 ]
+        - svetloWc: [ addr: [ 0x114, 0, 2 ], pin: PE2 ]
+        - svetloPavlac: [ addr: [ 0x114, 0, 3 ], pin: PE3 ]
+  - Kuchyna:
+      id: 4
+      DigIN:
+        - buttonKuchynaLU: [ addr: [ 0x115, 0, 0 ], pin: PA7 ]
+        - buttonKuchynaLD: [ addr: [ 0x115, 0, 1 ], pin: PA6 ]
+        - buttonKuchynaRU: [ addr: [ 0x115, 0, 2 ], pin: PG2 ]
+        - buttonKuchynaRD: [ addr: [ 0x115, 0, 3 ], pin: PC7 ]
+      OwT:
+        - kuchyna: [ addr: [ 0x115, 1 ], owRomCode: ToDo ]
+        - obyvka: [ addr: [ 0x115, 3 ], owRomCode: ToDo ]
+  - SvetlaZadne:
+      id: 5
+      DigOUT:
+        - svetloObyvka: [ addr: [ 0x116, 0, 0 ], pin: PE0 ]
+        - svetloStena: [ addr: [ 0x116, 0, 1 ], pin: PE1 ]
+        - svetloStol: [ addr: [ 0x116, 0, 2 ], pin: PE2 ]
+        - svetloSpalna: [ addr: [ 0x116, 0, 3 ], pin: PE3 ]
+        - svetloChodbicka: [ addr: [ 0x116, 0, 4 ], pin: PE4 ]
+        - svetloKupelna: [ addr: [ 0x116, 0, 5 ], pin: PE5 ]
+  - KupelnaVypinac:
+      id: 6
+      DigIN:
+        - buttonKupelnaU: [ addr: [ 0x117, 0, 0 ], pin: PA1 ]
+        - buttonKupelnaD: [ addr: [ 0x117, 0, 1 ], pin: PA7 ]
+  - Spalna:
+      id: 7
+      DigIN:
+        - buttonSpalnaU: [ addr: [ 0x118, 0, 0 ], pin: PA1 ]
+        - buttonSpalnaD: [ addr: [ 0x118, 0, 1 ], pin: PA7 ]
+  - Kupelna:
+      id: 8
+      OwT:
+        - voda: [ addr: [ 0x119, 0 ], owRomCode: ToDo ]
+        - podlahovka: [ addr: [ 0x119, 3 ], owRomCode: ToDo ]
+      SensorionCO2: [addr: 0x11A]
+      Vlhkomer: [addr: 0x11B]
+
+BBDigIN:
+  - elmImp: []
+  - vodaImp: []
+
