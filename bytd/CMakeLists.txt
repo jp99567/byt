@@ -16,7 +16,6 @@ ENDIF()
 
 file(GLOB_RECURSE SRC_FILES *.cpp)
 add_executable(${PROJECT_NAME} ${SRC_FILES})
-target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system PostgreSQL::PostgreSQL systemd gpiodcxx rt mosquitto)
 target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system PostgreSQL::PostgreSQL systemd gpiodcxx rt mosquitto yaml-cpp)
 target_include_directories(${PROJECT_NAME} PRIVATE ${PostgreSQL_INCLUDE_DIRS})
 #set(CMAKE_CXX_FLAGS_RELEASE "-O2 -flto")
