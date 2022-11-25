@@ -18,6 +18,7 @@
 #include "mqtt.h"
 
 #include "yaml-cpp/yaml.h"
+#include <boost/asio/ip/tcp.hpp>
 
 class Facade : public ICore
 {
@@ -30,7 +31,7 @@ class AppContainer
 	ow::ExporterSptr exporter;
 	std::shared_ptr<MeranieTeploty> meranie;
 	std::shared_ptr<OpenTherm> openTherm;
-    MqttClient mqtt;
+    std::shared_ptr<MqttClient> mqtt;
 
 public:
 	AppContainer()
@@ -41,10 +42,11 @@ public:
             io_service.stop();
 		});
 
-		exporter = std::make_shared<ow::Exporter>();
-		auto pru = std::make_shared<Pru>();
-		meranie = std::make_shared<MeranieTeploty>(pru, exporter);
-		openTherm = std::make_shared<OpenTherm>(pru);
+        //exporter = std::make_shared<ow::Exporter>();
+        //auto pru = std::make_shared<Pru>();
+        //meranie = std::make_shared<MeranieTeploty>(pru, exporter);
+        //openTherm = std::make_shared<OpenTherm>(pru);
+        mqtt = std::make_shared<MqttClient>();
     }
 
 	void run()
@@ -56,9 +58,10 @@ public:
 		std::thread meastempthread([this,&running,&cv_running,&cvlock]{
 			thread_util::set_thread_name("bytd-meranie");
 
-			Elektromer em;
+            //Elektromer em;
 			do{
-				meranie->meas();
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+/*				meranie->meas();
 				std::unique_lock<std::mutex> ulck(cvlock);
 				cv_running.wait_for(ulck, std::chrono::seconds(10), [&running]{
 					return !running;
@@ -72,10 +75,24 @@ public:
 					std::ifstream fch("/run/bytd/setpoint_ch");
 					fch >> openTherm->chSetpoint;
 				}
-
+*/
 			}
 			while(running);
 		});
+
+        auto sfd = mqtt->socket();
+        boost::asio::ip::tcp::socket mqtt_socket(io_service, boost::asio::ip::tcp::v4(), sfd);
+        mqtt_socket.async_wait(boost::asio::socket_base::wait_read, [this,&mqtt_socket](const boost::system::error_code& error){
+            if(!error){
+                mqtt->do_read();
+            }
+        });
+        mqtt_socket.async_wait(boost::asio::socket_base::wait_write, [this](const boost::system::error_code& error){
+            if(!error){
+                mqtt->do_write();
+            }
+
+        });
 
 		sd_notify(0, "READY=1");
 
@@ -126,10 +143,7 @@ int main()
   MqttWrapper libmMosquitto;
 
   YAML::Node config = YAML::LoadFile("config.yaml");
-
-  if(config["NodeCAN"]){
-      dumpYaml(config);
-  }
+  dumpYaml(config);
 
   try
   {
