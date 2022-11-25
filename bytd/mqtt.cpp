@@ -53,7 +53,6 @@ MqttClient::MqttClient()
 
 MqttClient::~MqttClient()
 {
-
 }
 
 int MqttClient::socket() const
@@ -86,4 +85,9 @@ void MqttClient::do_write()
 void MqttClient::do_misc()
 {
     mosquitto_loop_misc(obj);
+}
+
+bool MqttClient::is_write_ready() const
+{
+    return mosquitto_want_write(obj);
 }

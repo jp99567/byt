@@ -20,6 +20,7 @@ public:
     void do_read();
     void do_write();
     void do_misc();
+    bool is_write_ready() const;
 
 private:
     struct mosquitto* obj = nullptr;

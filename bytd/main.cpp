@@ -33,6 +33,8 @@ class AppContainer
 	std::shared_ptr<OpenTherm> openTherm;
     std::shared_ptr<MqttClient> mqtt;
 
+    std::unique_ptr<boost::asio::ip::tcp::socket> mqtt_socket;
+
 public:
 	AppContainer()
 	:signals(io_service, SIGINT, SIGTERM)
@@ -47,6 +49,31 @@ public:
         //meranie = std::make_shared<MeranieTeploty>(pru, exporter);
         //openTherm = std::make_shared<OpenTherm>(pru);
         mqtt = std::make_shared<MqttClient>();
+    }
+
+    void sched_read_mqtt_socket()
+    {
+        if(mqtt_socket){
+            mqtt_socket->async_wait(boost::asio::socket_base::wait_read, [this](const boost::system::error_code& error){
+                if(!error){
+                    mqtt->do_read();
+                    sched_read_mqtt_socket();
+                    sched_write_mqtt_socket();
+                }
+            });
+        }
+    }
+
+    void sched_write_mqtt_socket()
+    {
+        if(mqtt->is_write_ready()){
+            mqtt_socket->async_wait(boost::asio::socket_base::wait_write, [this](const boost::system::error_code& error){
+                if(!error){
+                    mqtt->do_write();
+                    sched_write_mqtt_socket();
+                }
+            });
+        }
     }
 
 	void run()
@@ -81,18 +108,9 @@ public:
 		});
 
         auto sfd = mqtt->socket();
-        boost::asio::ip::tcp::socket mqtt_socket(io_service, boost::asio::ip::tcp::v4(), sfd);
-        mqtt_socket.async_wait(boost::asio::socket_base::wait_read, [this,&mqtt_socket](const boost::system::error_code& error){
-            if(!error){
-                mqtt->do_read();
-            }
-        });
-        mqtt_socket.async_wait(boost::asio::socket_base::wait_write, [this](const boost::system::error_code& error){
-            if(!error){
-                mqtt->do_write();
-            }
-
-        });
+        mqtt_socket = std::make_unique<boost::asio::ip::tcp::socket>(io_service, boost::asio::ip::tcp::v4(), sfd);
+        sched_read_mqtt_socket();
+        sched_write_mqtt_socket();
 
 		sd_notify(0, "READY=1");
 
