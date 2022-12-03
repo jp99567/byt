@@ -67,3 +67,27 @@ BBDigIN:
   - elmImp: []
   - vodaImp: []
 
+BBBDigOut:
+  - canbusPwr: []
+
+I2CDigOut:
+  - recirkulacia: []
+  - dverePavlac: []
+
+    # SCL P9.19 i2c2_scl
+    # SDA P9.20 i2c2_sda
+
+    # CANRX P9.24 dcan1_rx
+    # CANTX P9.26 dcan1_tx
+    # CANPWR P9.28 gpio3_17
+    
+    # OWIN P9.27 pru0_r31_in5
+    # OWSPU P9.29 pru0_r30_out1
+    # OWOUT P9.31 pru0_r30_out0
+    # PUMPA P9.25
+    # IMPELM p9.23
+    # IMPVM p9.21
+    
+    # OTIN pru0_in14 P8_16
+    # OTOUT pru0_out14 P8_12
+

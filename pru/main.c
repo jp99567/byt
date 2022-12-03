@@ -113,9 +113,9 @@ struct pru_rpmsg_transport transport;
 uint16_t src, dst;
 
 ///////////////////////////////////////// BEGIN OW /////////////////////////////////
-#define OW_OUTPIN 0       // P9.31 pru0_r30_0 zeleny
-#define OW_OUTPIN_POWER 1 // P9.29 pru0_r30_1 hnedy
-#define OW_INPIN 5        // P9.27 pru0_r31_in5 zeleno biely
+#define OW_OUTPIN 0       // pru0_r30_out0
+#define OW_OUTPIN_POWER 1 // pru0_r30_out1
+#define OW_INPIN 5        // pru0_r31_in5
 
 #include "rpm_iface.h"
 #include "common.h"
@@ -160,18 +160,19 @@ void send_status_with_param(enum ResponseCode code)
 
 void bus_pull(void)
 {
-    __R30 |= ( (1<<OW_OUTPIN_POWER) | (1<<OW_OUTPIN) );
+    __R30 &= ~(1<<OW_OUTPIN_POWER);
+    __R30 |= 1<<OW_OUTPIN;
 }
 
 void bus_power_strong(void)
 {
-	__R30 &= ~( (1<<OW_OUTPIN) | (1<<OW_OUTPIN_POWER) );
+    __R30 &= ~(1<<OW_OUTPIN);
+    __R30 |= 1<<OW_OUTPIN_POWER;
 }
 
 void bus_release(void)
 {
-    __R30 |= 1<<OW_OUTPIN_POWER;
-    __R30 &= ~(1<<OW_OUTPIN);
+    __R30 &= ~( (1<<OW_OUTPIN) | (1<<OW_OUTPIN_POWER) );
 }
 
 int bus_active (void)
@@ -187,8 +188,8 @@ extern void ow_sm_do(void);
 ///////////////////////////////// END OW ////////////////////////////////////////////
 
 ////////////////////////////////// OT ///////////////////////////////////////////////
-#define OT_INPIN 14 // pru0_in14 P8_16 sivy
-#define OT_OUTPIN 14 // pru0_out14 P8_12 biely
+#define OT_INPIN 14 // pru0_in14
+#define OT_OUTPIN 14 // pru0_out14
 int ot_bus(void)
 {
     return __R31 & (1<<OT_INPIN) ? 0 : 1;
