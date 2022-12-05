@@ -17,7 +17,7 @@
 #include <boost/asio.hpp>
 #include "mqtt.h"
 
-#include "yaml-cpp/yaml.h"
+#include <yaml-cpp/yaml.h>
 #include <boost/asio/ip/tcp.hpp>
 
 class Facade : public ICore
@@ -140,31 +140,33 @@ public:
 	}
 };
 
-void dumpYaml(YAML::Node& node);
+void dumpYaml(YAML::Node& node, int level=0);
 
-void dumpYaml(YAML::Node& node)
+void dumpYaml(YAML::Node& node, int level)
 {
+    std::string offset(1+2*level, '-');
+    offset.append("YAML");
     switch (node.Type()) {
     case YAML::NodeType::value::Scalar:
-        LogINFO("YANL Scalar: {}", node.as<std::string>());
+        LogINFO("{} Scalar: {}", offset, node.as<std::string>());
         break;
     case YAML::NodeType::value::Sequence:
-        LogINFO("YAML seq{}:", node.size());
+        LogINFO("{} seq{}:", offset, node.size());
         for(auto it = node.begin(); it != node.end(); ++it) {
           auto element = *it;
-          dumpYaml(element);
+          dumpYaml(element, level+1);
         }
         break;
     case YAML::NodeType::value::Map:
-        LogINFO("YAML map:");
+        LogINFO("{} map:", offset);
         for(auto it = node.begin(); it != node.end(); ++it) {
-          LogINFO("YAML map iterate {} {}:", (int)(it->first.Type()), (int)(it->second.Type()) );
-          dumpYaml(it->first);
-          dumpYaml(it->second);
+          LogINFO("{} map iterate {} {}:", offset, (int)(it->first.Type()), (int)(it->second.Type()) );
+          dumpYaml(it->first, level+1);
+          dumpYaml(it->second, level+1);
         }
         break;
     default:
-        LogINFO("YANL null or undefined");
+        LogINFO("YAML null or undefined");
         break;
     }
 }
