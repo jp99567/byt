@@ -19,8 +19,8 @@ public:
     MqttClient();
     ~MqttClient();
     int socket() const;
-    void do_read();
-    void do_write();
+    bool do_read();
+    bool do_write();
     void do_misc();
     bool is_write_ready() const;
     void subscribe(/*ToDo*/);

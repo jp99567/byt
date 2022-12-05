@@ -56,9 +56,10 @@ public:
         if(mqtt_socket){
             mqtt_socket->async_wait(boost::asio::socket_base::wait_read, [this](const boost::system::error_code& error){
                 if(!error){
-                    mqtt->do_read();
-                    sched_read_mqtt_socket();
-                    sched_write_mqtt_socket();
+                    if(mqtt->do_read()){
+                        sched_read_mqtt_socket();
+                        sched_write_mqtt_socket();
+                    }
                 }
             });
         }
@@ -69,11 +70,16 @@ public:
         if(mqtt->is_write_ready()){
             mqtt_socket->async_wait(boost::asio::socket_base::wait_write, [this](const boost::system::error_code& error){
                 if(!error){
-                    mqtt->do_write();
-                    sched_write_mqtt_socket();
+                    if(mqtt->do_write())
+                        sched_write_mqtt_socket();
                 }
             });
         }
+    }
+
+    void sched_reconnect_mqtt()
+    {
+
     }
 
 	void run()
@@ -111,6 +117,14 @@ public:
         mqtt_socket = std::make_unique<boost::asio::ip::tcp::socket>(io_service, boost::asio::ip::tcp::v4(), sfd);
         sched_read_mqtt_socket();
         sched_write_mqtt_socket();
+        mqtt->ConnectedCbk = [this](bool connected){
+            if(connected){
+                mqtt->subscribe();
+            }
+            else{
+                sched_reconnect_mqtt();
+            }
+        };
 
 		sd_notify(0, "READY=1");
 

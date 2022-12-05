@@ -69,32 +69,33 @@ int MqttClient::socket() const
     return mosquitto_socket(obj);
 }
 
-void MqttClient::do_read()
+namespace {
+bool handleIOreturnCode(int rv, const char* iosrc)
 {
-    auto rv = mosquitto_loop_read(obj, 1);
     if( rv != MOSQ_ERR_SUCCESS){
         if( rv == MOSQ_ERR_ERRNO)
         {
-            LogSYSERR("mosquitto_loop_read syserr");
+            LogSYSDIE("mosquitto loop io syserr");
         }
-        else{
-            LogERR("mosquitto_loop_read: {}", rv);
+        else if(rv != MOSQ_ERR_CONN_LOST){
+            LogDIE("mosquitto_loop_{} error {}", iosrc, rv);
         }
+        return false;
     }
+    return true;
+}
 }
 
-void MqttClient::do_write()
+bool MqttClient::do_read()
+{
+    auto rv = mosquitto_loop_read(obj, 1);
+    return handleIOreturnCode(rv, "read");
+}
+
+bool MqttClient::do_write()
 {
     auto rv = mosquitto_loop_write(obj, 1);
-    if( rv != MOSQ_ERR_SUCCESS){
-        if( rv == MOSQ_ERR_ERRNO)
-        {
-            LogSYSERR("mosquitto_loop_write syserr");
-        }
-        else{
-            LogERR("mosquitto_loop_write: {}", rv);
-        }
-    }
+    return handleIOreturnCode(rv, "write");
 }
 
 void MqttClient::do_misc()
