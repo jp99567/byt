@@ -44,10 +44,10 @@ public:
             io_service.stop();
 		});
 
-        //exporter = std::make_shared<ow::Exporter>();
-        //auto pru = std::make_shared<Pru>();
-        //meranie = std::make_shared<MeranieTeploty>(pru, exporter);
-        //openTherm = std::make_shared<OpenTherm>(pru);
+        exporter = std::make_shared<ow::Exporter>();
+        auto pru = std::make_shared<Pru>();
+        meranie = std::make_shared<MeranieTeploty>(pru, exporter);
+        openTherm = std::make_shared<OpenTherm>(pru);
         mqtt = std::make_shared<MqttClient>();
     }
 
@@ -94,12 +94,6 @@ public:
             //Elektromer em;
 			do{
                 std::this_thread::sleep_for(std::chrono::seconds(1));
-/*				meranie->meas();
-				std::unique_lock<std::mutex> ulck(cvlock);
-				cv_running.wait_for(ulck, std::chrono::seconds(10), [&running]{
-					return !running;
-				});
-
 				{
 					std::ifstream fdhw("/run/bytd/setpoint_dhw");
 					fdhw >> openTherm->dhwSetpoint;
@@ -108,7 +102,6 @@ public:
 					std::ifstream fch("/run/bytd/setpoint_ch");
 					fch >> openTherm->chSetpoint;
 				}
-*/
 			}
 			while(running);
 		});
