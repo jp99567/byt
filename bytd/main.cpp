@@ -28,6 +28,7 @@ class AppContainer
 {
 	boost::asio::io_service io_service;
     boost::asio::signal_set signals;
+    boost::asio::steady_timer t1sec;
 	ow::ExporterSptr exporter;
 	std::shared_ptr<MeranieTeploty> meranie;
 	std::shared_ptr<OpenTherm> openTherm;
@@ -37,7 +38,8 @@ class AppContainer
 
 public:
 	AppContainer()
-	:signals(io_service, SIGINT, SIGTERM)
+        :signals(io_service, SIGINT, SIGTERM)
+        ,t1sec(io_service, std::chrono::seconds(1))
     {
 		signals.async_wait([this](auto error, auto signum){
 			LogINFO("signal {}",signum);
@@ -82,6 +84,20 @@ public:
 
     }
 
+    void on1sec()
+    {
+        mqtt->do_misc();
+    }
+
+    void sched_1sect()
+    {
+        t1sec.async_wait([this](const boost::system::error_code&){
+            on1sec();
+            t1sec.expires_at(t1sec.expiry() + std::chrono::seconds(1));
+            sched_1sect();
+        });
+    }
+
 	void run()
 	{
 		bool running = true;
@@ -119,8 +135,9 @@ public:
             }
         };
 
-		sd_notify(0, "READY=1");
+        sched_1sect();
 
+        ::sd_notify(0, "READY=1");
         io_service.run();
         LogINFO("io service exited");
 
