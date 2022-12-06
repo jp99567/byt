@@ -1,54 +1,21 @@
 #include "mqtt.h"
-
-#include<mosquitto.h>
 #include "Log.h"
 
 MqttWrapper::MqttWrapper() noexcept
 {
-    mosquitto_lib_init();
+    mosqpp::lib_init();
 }
 
 MqttWrapper::~MqttWrapper()
 {
-    mosquitto_lib_cleanup();
+    mosqpp::lib_cleanup();
 }
 
 MqttClient::MqttClient()
+    :mosqpp::mosquittopp("bbb", false)
 {
-    obj = mosquitto_new("bbb", false, (void*)this);
-    if(!obj)
-    {
-        LogDIE("MqttClient new");
-    }
-
-    mosquitto_connect_callback_set(obj, [](struct mosquitto* client, void* self, int rc){
-        if(rc == 0){
-            LogINFO("on mqtt connect");
-            auto theInstance = static_cast<MqttClient*>(self);
-            if(theInstance->ConnectedCbk)
-                theInstance->ConnectedCbk(true);
-        }
-        else{
-            LogERR("on mqtt connect: {}", rc);
-        }
-    });
-
-    mosquitto_disconnect_callback_set(obj, [](struct mosquitto* client, void* self, int rc){
-        LogERR("on mqtt disconnect {}", rc);
-        auto theInstance = static_cast<MqttClient*>(self);
-        if(theInstance->ConnectedCbk)
-            theInstance->ConnectedCbk(false);
-    });
-
-    mosquitto_message_callback_set(obj, [](struct mosquitto*, void* userData, const struct mosquitto_message* msg){
-        std::string s((const char*)msg->payload, msg->payloadlen);
-        LogDBG("mqtt msg: {} {} {}", msg->mid, msg->topic, s);
-        auto self = static_cast<MqttClient*>(userData);
-        if(self->OnMsgRecv)
-            self->OnMsgRecv(std::string(msg->topic), std::move(s));
-    });
-
-    auto rv = mosquitto_connect_async(obj, "localhost", 1883, 900);
+    connecting = true;
+    auto rv = connect_async("localhost", 1883, 900);
     if( rv != MOSQ_ERR_SUCCESS){
         if( rv == MOSQ_ERR_ERRNO)
         {
@@ -62,11 +29,6 @@ MqttClient::MqttClient()
 
 MqttClient::~MqttClient()
 {
-}
-
-int MqttClient::socket() const
-{
-    return mosquitto_socket(obj);
 }
 
 namespace {
@@ -88,33 +50,63 @@ bool handleIOreturnCode(int rv, const char* iosrc)
 
 bool MqttClient::do_read()
 {
-    auto rv = mosquitto_loop_read(obj, 1);
+    auto rv = loop_read();
     return handleIOreturnCode(rv, "read");
 }
 
 bool MqttClient::do_write()
 {
-    auto rv = mosquitto_loop_write(obj, 1);
+    auto rv = loop_write();
     return handleIOreturnCode(rv, "write");
 }
 
 void MqttClient::do_misc()
 {
-    auto rv = mosquitto_loop_misc(obj);
+    auto rv = loop_misc();
     if( rv != MOSQ_ERR_SUCCESS){
+        if( rv == MOSQ_ERR_NO_CONN){
+            if(not connecting){
+                connecting = true;
+                LogERR("mosquitto_loop_misc: reconnect");
+                reconnect_async();
+                return;
+            }
+        }
         LogERR("mosquitto_loop_misc: {}", rv);
     }
-}
-
-bool MqttClient::is_write_ready() const
-{
-    return mosquitto_want_write(obj);
 }
 
 void MqttClient::subscribe(/*ToDo*/)
 {
     const char* const topics[] = {"ha/svetla", "ha/temp"};
-    auto rv = mosquitto_subscribe_multiple(obj, nullptr, 2, (char*const*)topics, 0, 0, nullptr);
-    if(rv != MOSQ_ERR_SUCCESS)
-        LogERR("mosquitto_subscribe_multiple:{}", rv);
+    for(const auto& topic : topics){
+        auto rv = mosqpp::mosquittopp::subscribe(nullptr, topic);
+        if(rv != MOSQ_ERR_SUCCESS)
+            LogERR("mosquitto_subscribe:{}", rv);
+    }
+}
+
+void MqttClient::on_connect(int rc)
+{
+    if(rc == 0){
+        LogINFO("on mqtt connect");
+        ConnectedCbk(true);
+    }
+    else{
+        LogERR("on mqtt connect: {}", rc);
+    }
+}
+
+void MqttClient::on_disconnect(int rc)
+{
+    LogERR("on mqtt disconnect {}", rc);
+    connecting = false;
+    ConnectedCbk(false);
+}
+
+void MqttClient::on_message(const mosquitto_message *msg)
+{
+    std::string s((const char*)msg->payload, msg->payloadlen);
+    LogDBG("mqtt msg: {} {} {}", msg->mid, msg->topic, s);
+    OnMsgRecv(std::string(msg->topic), std::move(s));
 }

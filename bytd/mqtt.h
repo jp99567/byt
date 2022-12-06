@@ -1,7 +1,7 @@
 #pragma once
 
 #include <functional>
-#include <mosquitto.h>
+#include <mosquittopp.h>
 #include <string>
 
 class MqttWrapper
@@ -11,24 +11,23 @@ public:
     ~MqttWrapper();
 };
 
-struct mosquitto;
-
-class MqttClient
+class MqttClient : public mosqpp::mosquittopp
 {
 public:
     MqttClient();
     ~MqttClient();
-    int socket() const;
     bool do_read();
     bool do_write();
     void do_misc();
-    bool is_write_ready() const;
     void subscribe(/*ToDo*/);
 
     std::function<void(bool)> ConnectedCbk;
     std::function<void(std::string &&topic, std::string &&msg)> OnMsgRecv;
 
 private:
-    struct mosquitto* obj = nullptr;
+    bool connecting = false;
+    void on_connect(int rc) override;
+    void on_disconnect(int rc) override;
+    void on_message(const struct mosquitto_message * message) override;
 };
 

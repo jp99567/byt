@@ -69,7 +69,7 @@ public:
 
     void sched_write_mqtt_socket()
     {
-        if(mqtt->is_write_ready()){
+        if(mqtt->want_write()){
             mqtt_socket->async_wait(boost::asio::socket_base::wait_write, [this](const boost::system::error_code& error){
                 if(!error){
                     if(mqtt->do_write())
@@ -81,7 +81,6 @@ public:
 
     void sched_reconnect_mqtt()
     {
-
     }
 
     void on1sec()
@@ -96,6 +95,14 @@ public:
             t1sec.expires_at(t1sec.expiry() + std::chrono::seconds(1));
             sched_1sect();
         });
+    }
+
+    void mqtt_conn_init()
+    {
+        auto sfd = mqtt->socket();
+        mqtt_socket = std::make_unique<boost::asio::ip::tcp::socket>(io_service, boost::asio::ip::tcp::v4(), sfd);
+        sched_read_mqtt_socket();
+        sched_write_mqtt_socket();
     }
 
 	void run()
@@ -122,10 +129,6 @@ public:
 			while(running);
 		});
 
-        auto sfd = mqtt->socket();
-        mqtt_socket = std::make_unique<boost::asio::ip::tcp::socket>(io_service, boost::asio::ip::tcp::v4(), sfd);
-        sched_read_mqtt_socket();
-        sched_write_mqtt_socket();
         mqtt->ConnectedCbk = [this](bool connected){
             if(connected){
                 mqtt->subscribe();
@@ -134,6 +137,11 @@ public:
                 sched_reconnect_mqtt();
             }
         };
+        mqtt->OnMsgRecv = [this](auto topic, auto msg){
+            LogINFO("mqtt msg {}:{}", topic, msg);
+        };
+
+        mqtt_conn_init();
 
         sched_1sect();
 
