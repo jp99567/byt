@@ -5,6 +5,7 @@
 #include "Log.h"
 #include "Pru.h"
 #include "../pru/rpm_iface.h"
+#include "mqtt.h"
 
 namespace opentherm
 {
@@ -114,21 +115,28 @@ struct Frame
 // Mrd-Srdack id=0 M: v16=03CA (00000011.11001010) f88=3.78906 S: v16=0320 (00000011.00100000) f88=3.125
 // Mwr2-Swrack id=56 M: v16=2700 (00100111.00000000) f88=39.0 S: v16=2700 (00100111.00000000) f88=39.0
 // Mwr-Swrack id=1 M: v16=3900 (00111001.00000000) f88=57.0 S: v16=3900 (00111001.00000000) f88=57.0
-OpenTherm::OpenTherm(std::shared_ptr<Pru> pru)
+OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
 	:pru(pru)
 	,rxMsg(std::make_shared<PruRxMsg>())
+    ,mqtt(mqtt)
 {
 	pru->setOtCbk(rxMsg);
 
 	thrd = std::thread([this]{
 		    int id=0;
+            float dhw = 0, ch = 0, rddhw=0, rdch=0;
 			while(not shutdown){
 				auto lastTransmit = std::chrono::steady_clock::now();
                 if(id==0){
                     //Mrd-Srdack id=0 M: v16=03CA (00000011.11001010) f88=3.78906 S: v16=0320 (00000011.00100000) f88=3.125
                     uint32_t txv = 0x03CA;
                     auto rsp = transmit(txv);
-                    LogINFO("ot transfer id0 {:b}", 0xFFFF&rsp);
+                    uint16_t v = 0xFFFF&rsp;
+                    if(v != status){
+                        publish_status(v);
+                        status = v;
+                        LogINFO("ot transfer id0 {:b}", status);
+                    }
                 }
                 else if(id==1){
                     // Mwr-Swrack id=1 M: v16=3900 (00111001.00000000) f88=57.0 S: v16=3900 (00111001.00000000) f88=57.0
@@ -136,7 +144,11 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru)
                     txv |= 1 << 16;
                     txv |= 0b00010000 << 24;
                     auto rsp = transmit(txv);
-                    LogINFO("ot transfer id1 {}", floatFromf88(rsp&0xFFFF));
+                    auto v = floatFromf88(rsp&0xFFFF);
+                    if(v != ch){
+                        ch = v;
+                        LogINFO("ot transfer id1 {}", ch);
+                    }
                 }
                 else if(id==2){
                     // Mwr-Swrack id=1 M: v16=3900 (00111001.00000000) f88=57.0 S: v16=3900 (00111001.00000000) f88=57.0
@@ -145,10 +157,36 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru)
                     txv |= 56 << 16;
                     txv |= 0b00011000 << 24;
                     auto rsp = transmit(txv);
-                    LogINFO("ot transfer id56 {}", floatFromf88(rsp&0xFFFF));
+                    auto v = floatFromf88(rsp&0xFFFF);
+                    if(v != dhw){
+                        dhw = v;
+                        LogINFO("ot transfer id56 {}", dhw);
+                    }
+                }
+                else if(id==3){
+                    Frame txv(opentherm::msg::type::Mrd, 25, 0);
+                    Frame rsp(transmit(txv.data));
+                    if(rsp.isValid()){
+                        auto v = floatFromf88(rsp.getV());
+                        if(v!=rddhw){
+                            rddhw = v;
+                            LogINFO("id{} cur dhw:{}", rsp.getId(), floatFromf88(rsp.getV()));
+                        }
+                    }
+                }
+                else if(id==4){
+                    Frame txv(opentherm::msg::type::Mrd, 26, 0);
+                    Frame rsp(transmit(txv.data));
+                    if(rsp.isValid()){
+                        auto v = floatFromf88(rsp.getV());
+                        if(v!=rdch){
+                            rdch = v;
+                            LogINFO("id{} cur ch:{}", rsp.getId(), floatFromf88(rsp.getV()));
+                        }
+                    }
                 }
 
-                if(++id > 2)
+                if(++id > 4)
                     id=0;
 
 				std::this_thread::sleep_until(lastTransmit + std::chrono::seconds(1));
@@ -160,7 +198,35 @@ OpenTherm::~OpenTherm()
 {
 	LogDBG("~OpenTherm");
 	shutdown = true;
-	thrd.join();
+    thrd.join();
+}
+
+void OpenTherm::publish_status(uint16_t newstat)
+{
+    const uint16_t changed = newstat ^ status;
+    for(auto bit : {0,1,2,3}){
+        const uint16_t mask = 1<<bit;
+        if(changed & mask){
+            const std::string v = newstat & mask ? "1" : "0";
+            switch (bit) {
+            case 0:
+                mqtt.publish("rb/ot/stat/fault", v, false);
+                break;
+            case 1:
+                mqtt.publish("rb/ot/stat/ch", v, false);
+                break;
+            case 2:
+                mqtt.publish("rb/ot/stat/dhw", v, false);
+                break;
+            case 3:
+                mqtt.publish("rb/ot/stat/flame", v, false);
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
 }
 
 uint32_t OpenTherm::transmit(uint32_t frame)
@@ -185,15 +251,20 @@ uint32_t OpenTherm::transmit(uint32_t frame)
 	switch((pru::ResponseCode)pmsg[0])
 	{
 	case pru::ResponseCode::eOtBusError:
+        LogERR("opentherm bus error");
+        break;
 	case pru::ResponseCode::eOtNoResponse:
-        LogERR("ot rx error {}", pmsg[0]);
+        LogERR("ot no response");
         break;
     case pru::ResponseCode::eOtFrameError:
     {
         auto timeout = std::numeric_limits<float>::quiet_NaN();
-        if(buf.size() == 2*sizeof(uint32_t))
-            timeout = pmsg[1]*200e-3;
-        LogERR("ot rx eOtFrameError timeout: {}ms", timeout);
+        uint32_t u = 0;
+        if(buf.size() == 2*sizeof(uint32_t)){
+            u = pmsg[1];
+            timeout = u * 5e-6;
+        }
+        LogERR("ot rx eOtFrameError timeout:({}) {}ms", u, timeout);
         break;
     }
 	case pru::ResponseCode::eOtOk:

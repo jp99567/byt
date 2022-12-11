@@ -112,10 +112,9 @@ Pru::~Pru() {
 	auto tmpfd = fd;
     if(tmpfd >= 0){
         fd = -1;
-		::close(tmpfd);
     }
 
-    int maxcnt = 5;
+    int maxcnt = 30;
     while(fd != -2){
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         if(--maxcnt < 0){
@@ -125,4 +124,5 @@ Pru::~Pru() {
         }
     }
 	thrd.join();
+    ::close(tmpfd);
 }

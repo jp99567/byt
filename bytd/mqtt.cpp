@@ -99,18 +99,9 @@ void MqttClient::do_misc()
     }
 }
 
-void MqttClient::subscribe(/*ToDo*/)
-{
-    const char* const topics[] = {"ha/svetla", "ha/temp"};
-    for(const auto& topic : topics){
-        auto rv = mosqpp::mosquittopp::subscribe(nullptr, topic);
-        if(rv != MOSQ_ERR_SUCCESS)
-            LogERR("mosquitto_subscribe: ({}) {}", rv, mosqpp::strerror(rv));
-    }
-}
-
 void MqttClient::publish(const std::string& topic, const std::string& value, bool retain)
 {
+    LogDBG("MqttClient::publish {} {} {}", topic, value, retain);
     auto rv = mosqpp::mosquittopp::publish(nullptr, topic.c_str(), value.length(), value.c_str(), 0, retain);
     if(rv != MOSQ_ERR_SUCCESS){
         if( rv != MOSQ_ERR_NO_CONN)
@@ -124,7 +115,9 @@ void MqttClient::on_connect(int rc)
 {
     if(rc == 0){
         LogINFO("on mqtt connect");
-        subscribe();
+        auto rv = mosqpp::mosquittopp::subscribe(nullptr, "rb/#");
+        if(rv != MOSQ_ERR_SUCCESS)
+            LogERR("mosquitto_subscribe: ({}) {}", rv, mosqpp::strerror(rv));
     }
     else{
         LogERR("on mqtt connect: ({}) {}", rc, mosqpp::strerror(rc));

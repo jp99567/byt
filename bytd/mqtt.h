@@ -31,7 +31,6 @@ public:
     std::function<void(std::string &&topic, std::string &&msg)> OnMsgRecv;
 
 private:
-    void subscribe(/*ToDo*/);
     void on_connect(int rc) override;
     void on_disconnect(int rc) override;
     void on_message(const struct mosquitto_message * message) override;

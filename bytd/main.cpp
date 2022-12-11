@@ -5,6 +5,7 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <filesystem>
 
 #include "Log.h"
 #include "thread_util.h"
@@ -16,6 +17,7 @@
 #include "ICore.h"
 #include <boost/asio.hpp>
 #include "mqtt.h"
+#include "slowswi2cpwm.h"
 
 #include <yaml-cpp/yaml.h>
 
@@ -32,6 +34,7 @@ class AppContainer
 	std::shared_ptr<MeranieTeploty> meranie;
 	std::shared_ptr<OpenTherm> openTherm;
     std::shared_ptr<MqttClient> mqtt;
+    std::unique_ptr<slowswi2cpwm> slovpwm;
 
 public:
 	AppContainer()
@@ -43,11 +46,12 @@ public:
             io_service.stop();
 		});
 
+        mqtt = std::make_shared<MqttClient>(io_service);
         exporter = std::make_shared<ow::Exporter>();
         auto pru = std::make_shared<Pru>();
         meranie = std::make_shared<MeranieTeploty>(pru, exporter);
-        openTherm = std::make_shared<OpenTherm>(pru);
-        mqtt = std::make_shared<MqttClient>(io_service);
+        openTherm = std::make_shared<OpenTherm>(pru, *mqtt);
+        slovpwm = std::make_unique<slowswi2cpwm>();
     }
 
     void on1sec()
@@ -77,19 +81,65 @@ public:
 			do{
                 std::this_thread::sleep_for(std::chrono::seconds(1));
 				{
-					std::ifstream fdhw("/run/bytd/setpoint_dhw");
-					fdhw >> openTherm->dhwSetpoint;
+                    const auto path = std::filesystem::path("/run/bytd/setpoint_dhw");
+                    if(std::filesystem::exists(path)){
+                        std::ifstream f(path);
+                        f >> openTherm->dhwSetpoint;
+                    }
 				}
 				{
-					std::ifstream fch("/run/bytd/setpoint_ch");
-					fch >> openTherm->chSetpoint;
+                    const auto path = std::filesystem::path("/run/bytd/setpoint_ch");
+                    if(std::filesystem::exists(path)){
+                        std::ifstream f(path);
+                        f >> openTherm->chSetpoint;
+                    }
 				}
 			}
 			while(running);
 		});
 
-        mqtt->OnMsgRecv = [](auto topic, auto msg){
+        mqtt->OnMsgRecv = [this](auto topic, auto msg){
             LogINFO("mqtt msg {}:{}", topic, msg);
+            if(topic == "rb/ot/setpoint/ch"){
+                auto v = std::stof(msg);
+                openTherm->chSetpoint = v;
+            }
+            else if(topic == "rb/ot/setpoint/dhw"){
+                auto v = std::stof(msg);
+                openTherm->dhwSetpoint = v;
+            }
+            else if(topic == "rb/i2cpwm/kuchyna"){
+                auto v = std::stof(msg);
+                slovpwm->update(0,v);
+            }
+            else if(topic == "rb/i2cpwm/obyvka"){
+                auto v = std::stof(msg);
+                slovpwm->update(1,v);
+            }
+            else if(topic == "rb/i2cpwm/spalna"){
+                auto v = std::stof(msg);
+                slovpwm->update(2,v);
+            }
+            else if(topic == "rb/i2cpwm/kupelna"){
+                auto v = std::stof(msg);
+                slovpwm->update(3,v);
+            }
+            else if(topic == "rb/i2cpwm/podlaha"){
+                auto v = std::stof(msg);
+                slovpwm->update(4,v);
+            }
+            else if(topic == "rb/i2cpwm/izba"){
+                auto v = std::stof(msg);
+                slovpwm->update(5,v);
+            }
+            else if(topic == "rb/i2cpwm/vetranie"){
+                auto v = std::stod(msg);
+                slovpwm->dig1Out(v);
+            }
+            else if(topic == "rb/i2cpwm/dvere"){
+                auto v = std::stod(msg);
+                slovpwm->dig2Out(v);
+            }
         };
 
         sched_1sect();

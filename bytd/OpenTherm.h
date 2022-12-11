@@ -13,6 +13,7 @@
 
 class Pru;
 class PruRxMsg;
+class MqttClient;
 
 struct OtParam
 {
@@ -29,13 +30,14 @@ struct OtWrParam : OtParam
 class OpenTherm
 {
 public:
-	explicit OpenTherm(std::shared_ptr<Pru> pru);
+    explicit OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt);
 	~OpenTherm();
 
 	float dhwSetpoint = 38;
 	float chSetpoint = 0;
 
 private:
+    void publish_status(uint16_t newstat);
 	uint32_t transmit(uint32_t frame);
 	std::thread thrd;
 	bool shutdown = false;
@@ -43,4 +45,6 @@ private:
 	std::shared_ptr<PruRxMsg> rxMsg;
 	std::vector<OtParam> rdParams;
 	std::vector<OtWrParam> wrParams;
+    MqttClient& mqtt;
+    uint16_t status = 0;
 };
