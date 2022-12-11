@@ -18,7 +18,6 @@
 #include "mqtt.h"
 
 #include <yaml-cpp/yaml.h>
-#include <boost/asio/ip/tcp.hpp>
 
 class Facade : public ICore
 {
@@ -34,8 +33,6 @@ class AppContainer
 	std::shared_ptr<OpenTherm> openTherm;
     std::shared_ptr<MqttClient> mqtt;
 
-    std::unique_ptr<boost::asio::ip::tcp::socket> mqtt_socket;
-
 public:
 	AppContainer()
         :signals(io_service, SIGINT, SIGTERM)
@@ -50,37 +47,7 @@ public:
         auto pru = std::make_shared<Pru>();
         meranie = std::make_shared<MeranieTeploty>(pru, exporter);
         openTherm = std::make_shared<OpenTherm>(pru);
-        mqtt = std::make_shared<MqttClient>();
-    }
-
-    void sched_read_mqtt_socket()
-    {
-        if(mqtt_socket){
-            mqtt_socket->async_wait(boost::asio::socket_base::wait_read, [this](const boost::system::error_code& error){
-                if(!error){
-                    if(mqtt->do_read()){
-                        sched_read_mqtt_socket();
-                        sched_write_mqtt_socket();
-                    }
-                }
-            });
-        }
-    }
-
-    void sched_write_mqtt_socket()
-    {
-        if(mqtt->want_write()){
-            mqtt_socket->async_wait(boost::asio::socket_base::wait_write, [this](const boost::system::error_code& error){
-                if(!error){
-                    if(mqtt->do_write())
-                        sched_write_mqtt_socket();
-                }
-            });
-        }
-    }
-
-    void sched_reconnect_mqtt()
-    {
+        mqtt = std::make_shared<MqttClient>(io_service);
     }
 
     void on1sec()
@@ -95,14 +62,6 @@ public:
             t1sec.expires_at(t1sec.expiry() + std::chrono::seconds(1));
             sched_1sect();
         });
-    }
-
-    void mqtt_conn_init()
-    {
-        auto sfd = mqtt->socket();
-        mqtt_socket = std::make_unique<boost::asio::ip::tcp::socket>(io_service, boost::asio::ip::tcp::v4(), sfd);
-        sched_read_mqtt_socket();
-        sched_write_mqtt_socket();
     }
 
 	void run()
@@ -129,19 +88,9 @@ public:
 			while(running);
 		});
 
-        mqtt->ConnectedCbk = [this](bool connected){
-            if(connected){
-                mqtt->subscribe();
-            }
-            else{
-                sched_reconnect_mqtt();
-            }
-        };
-        mqtt->OnMsgRecv = [this](auto topic, auto msg){
+        mqtt->OnMsgRecv = [](auto topic, auto msg){
             LogINFO("mqtt msg {}:{}", topic, msg);
         };
-
-        mqtt_conn_init();
 
         sched_1sect();
 
