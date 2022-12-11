@@ -102,15 +102,27 @@ Pru::Pru() {
 					}
 				}
 			}
+
+            if(fd == -1)
+                fd = -2; //finished
 	});
 }
 
 Pru::~Pru() {
 	auto tmpfd = fd;
-	fd = -1;
-	if(tmpfd >= 0)
+    if(tmpfd >= 0){
+        fd = -1;
 		::close(tmpfd);
+    }
 
-	::pthread_kill(thrd.native_handle(), SIGINT);
+    int maxcnt = 5;
+    while(fd != -2){
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        if(--maxcnt < 0){
+            LogERR("kill pru needed");
+            ::pthread_kill(thrd.native_handle(), SIGINT);
+            break;
+        }
+    }
 	thrd.join();
 }
