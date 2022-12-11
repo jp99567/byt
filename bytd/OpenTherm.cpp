@@ -185,9 +185,17 @@ uint32_t OpenTherm::transmit(uint32_t frame)
 	switch((pru::ResponseCode)pmsg[0])
 	{
 	case pru::ResponseCode::eOtBusError:
-	case pru::ResponseCode::eOtFrameError:
 	case pru::ResponseCode::eOtNoResponse:
-		break;
+        LogERR("ot rx error {}", pmsg[0]);
+        break;
+    case pru::ResponseCode::eOtFrameError:
+    {
+        auto timeout = std::numeric_limits<float>::quiet_NaN();
+        if(buf.size() == 2*sizeof(uint32_t))
+            timeout = pmsg[1]*200e-3;
+        LogERR("ot rx eOtFrameError timeout: {}ms", timeout);
+        break;
+    }
 	case pru::ResponseCode::eOtOk:
 	{
 		if(buf.size() != 2*sizeof(uint32_t)){
@@ -203,9 +211,8 @@ uint32_t OpenTherm::transmit(uint32_t frame)
 	}
 		break;
 	default:
+        LogERR("ot other rx error {}", pmsg[0]);
 		break;
 	}
-
-	LogERR("ot rx error {}", pmsg[0]);
 	return Frame::invalid;
 }
