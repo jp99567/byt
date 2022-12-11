@@ -55,11 +55,11 @@ Pru::Pru() {
 					break;
 				}
 				else{
-					buf.resize(len);
 					if(len < 4){
 						LogERR("invalid pru msg size:{}", len);
 						continue;
 					}
+                    buf.resize(len);
 
 					auto code = *reinterpret_cast<pru::ResponseCode*>(&buf[0]);
 
