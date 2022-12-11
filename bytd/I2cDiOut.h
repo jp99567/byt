@@ -8,6 +8,7 @@ class I2CDiOut
 
 public:
     I2CDiOut();
+    ~I2CDiOut();
     void value(const uint8_t v);
 private:
     void i2cwrite(const char* buf, unsigned len);

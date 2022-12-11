@@ -60,5 +60,10 @@ I2CDiOut::I2CDiOut()
     i2cwreg(5, iocon);
     i2cwreg(0xA, 0xFE);
     i2cwreg(0x0, 0x0);
+}
 
+I2CDiOut::~I2CDiOut()
+{
+    value(0);
+    ::close(fd);
 }
