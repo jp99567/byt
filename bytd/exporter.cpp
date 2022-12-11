@@ -44,11 +44,11 @@ Exporter::~Exporter()
 	LogINFO("export finish nice");
 }
 
-bool Exporter::put(Sample&& v)
-{
+bool Exporter::put(Sample&& /*v*/)
+{/*
 	std::unique_lock<std::mutex> lk(mLock);
 	mQueue.push(std::move(v));
-	mCond.notify_one();
+    mCond.notify_one();*/
 	return true;
 }
 
