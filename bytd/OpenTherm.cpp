@@ -210,16 +210,16 @@ void OpenTherm::publish_status(uint16_t newstat)
             const std::string v = newstat & mask ? "1" : "0";
             switch (bit) {
             case 0:
-                mqtt.publish("rb/ot/stat/fault", v, false);
+                mqtt.publish("rb/ot/stat/fault", v);
                 break;
             case 1:
-                mqtt.publish("rb/ot/stat/ch", v, false);
+                mqtt.publish("rb/ot/stat/ch", v);
                 break;
             case 2:
-                mqtt.publish("rb/ot/stat/dhw", v, false);
+                mqtt.publish("rb/ot/stat/dhw", v);
                 break;
             case 3:
-                mqtt.publish("rb/ot/stat/flame", v, false);
+                mqtt.publish("rb/ot/stat/flame", v);
                 break;
             default:
                 break;

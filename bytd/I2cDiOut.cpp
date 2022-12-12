@@ -39,7 +39,7 @@ void I2CDiOut::i2cread(char* buf, unsigned len)
 
 void I2CDiOut::value(const uint8_t v)
 {
-        i2cwreg(0xA, v);
+    i2cwreg(0xA, ~v);
 }
 
 I2CDiOut::I2CDiOut()
@@ -58,8 +58,8 @@ I2CDiOut::I2CDiOut()
 
     uint8_t iocon = (1<<2) | (1<<5);
     i2cwreg(5, iocon);
-    i2cwreg(0xA, 0xFE);
-    i2cwreg(0x0, 0x0);
+    value(0);
+    i2cwreg(0x0, 0x0); //dir output
 }
 
 I2CDiOut::~I2CDiOut()

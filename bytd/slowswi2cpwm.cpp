@@ -1,6 +1,8 @@
 #include "slowswi2cpwm.h"
 #include "thread_util.h"
+#include <algorithm>
 #include <cmath>
+#include "Log.h"
 
 namespace  {
 
@@ -14,17 +16,19 @@ std::chrono::milliseconds calc_dur(float pwm)
     return mints * count;
 }
 
-constexpr unsigned map[8] = { 1, 0, 2, 3, 4, 5, 6, 7};
+constexpr unsigned map[8] = { 7, 6, 5, 4, 3, 2, 0, 1};
 
 }
 
 slowswi2cpwm::slowswi2cpwm()
 {
+    pwm.fill(std::make_tuple(0.0, clk::time_point::max()));
     t = std::thread([this]{
         thread_util::sigblock(true, true);
         thread_util::set_thread_name("bytd-i2cpwm");
         auto to = clk::now() + period;
         clk::time_point next;
+        bool isT0 = true;
         while(not fini){
             std::unique_lock<std::mutex> lock(lck);
             uint8_t newval = 0;
@@ -39,7 +43,6 @@ slowswi2cpwm::slowswi2cpwm()
             }
             else{ //timeout
                 using namespace std::chrono_literals;
-                bool isT0 = schedule.empty();
                 if(isT0){
                     next = to + period;
                     pwm_bits = 0;
@@ -57,17 +60,21 @@ slowswi2cpwm::slowswi2cpwm()
                             schedule.emplace_back(chto);
                         }
                     }
+                    std::sort(std::begin(schedule), std::end(schedule), std::greater<decltype(schedule[0])>());
+                    auto last = std::unique(std::begin(schedule), std::end(schedule));
+                    schedule.erase(last, std::end(schedule));
                 }
                 else{
                     for(unsigned idx = 0; idx < pwm.size(); ++idx){
                         auto& ch = pwm[idx];
                         auto& chto = std::get<1>(ch);
-                        if(to > chto)
+                        if(to >= chto)
                             pwm_bits &= ~(1 << map[idx]);
                     }
                 }
 
-                if(schedule.empty()){
+                isT0 = schedule.empty();
+                if(isT0){
                     to = next;
                 }
                 else{

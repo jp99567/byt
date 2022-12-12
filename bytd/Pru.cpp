@@ -51,7 +51,8 @@ Pru::Pru() {
 				auto buf = PruRxMsg::Buf(32);
 				auto len = ::read(fd, buf.data(), buf.size());
 				if(len <= 0){
-					LogSYSERR("pru read");
+                    if(not(fd == -1 && errno == EINTR))
+                        LogSYSERR("pru read");
 					break;
 				}
 				else{
@@ -102,9 +103,6 @@ Pru::Pru() {
 					}
 				}
 			}
-
-            if(fd == -1)
-                fd = -2; //finished
 	});
 }
 
@@ -113,16 +111,7 @@ Pru::~Pru() {
     if(tmpfd >= 0){
         fd = -1;
     }
-
-    int maxcnt = 30;
-    while(fd != -2){
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        if(--maxcnt < 0){
-            LogERR("kill pru needed");
-            ::pthread_kill(thrd.native_handle(), SIGINT);
-            break;
-        }
-    }
+    ::pthread_kill(thrd.native_handle(), SIGINT);
 	thrd.join();
     ::close(tmpfd);
 }
