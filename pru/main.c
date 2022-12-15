@@ -113,8 +113,8 @@ struct pru_rpmsg_transport transport;
 uint16_t src, dst;
 
 ///////////////////////////////////////// BEGIN OW /////////////////////////////////
-#define OW_OUTPIN 0       // pru0_r30_out0
-#define OW_OUTPIN_POWER 1 // pru0_r30_out1
+#define OW_OUTPIN 1       // pru0_r30_out1
+#define OW_OUTPIN_POWER 0 // pru0_r30_out0
 #define OW_INPIN 5        // pru0_r31_in5
 
 #include "rpm_iface.h"
@@ -177,7 +177,7 @@ void bus_release(void)
 
 int bus_active (void)
 {
-    return __R31 & (1<<OW_INPIN) ? 1 : 0;
+    return __R31 & (1<<OW_INPIN) ? 0 : 1;
 }
 
 extern void ow_init(void);
