@@ -71,8 +71,13 @@ BBBDigOut:
   - canbusPwr: []
 
 I2CDigOut:
-  - recirkulacia: []
+  - recirkulacia: [owRomCode : 0x28625008060000eb]
   - dverePavlac: []
+
+BBOw:
+  t1: { owRomCode : 284b7a0a06000089 }
+  t2: { owRomCode : 28625008060000eb }
+#  - pavlac : [ owRomCode : 0x28625008060000eb ]
 
     # SCL P9.19 i2c2_scl
     # SDA P9.20 i2c2_sda
@@ -82,8 +87,8 @@ I2CDigOut:
     # CANPWR P9.28 gpio3_17
     
     # OWIN P9.27 pru0_r31_in5
-    # OWSPU P9.29 pru0_r30_out1
-    # OWOUT P9.31 pru0_r30_out0
+    # OWOUT P9.29 pru0_r30_out1
+    # OWSPWR P9.31 pru0_r30_out0
     # PUMPA P9.25
     # IMPELM p9.23
     # IMPVM p9.21

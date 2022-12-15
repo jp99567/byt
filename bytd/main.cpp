@@ -25,6 +25,37 @@ class Facade : public ICore
 {
 };
 
+void dumpYaml(YAML::Node& node, int level=0);
+
+void dumpYaml(YAML::Node& node, int level)
+{
+    std::string offset(1+2*level, '-');
+    offset.append("YAML");
+    switch (node.Type()) {
+    case YAML::NodeType::value::Scalar:
+        LogINFO("{} Scalar: {}", offset, node.as<std::string>());
+        break;
+    case YAML::NodeType::value::Sequence:
+        LogINFO("{} seq{}:", offset, node.size());
+        for(auto it = node.begin(); it != node.end(); ++it) {
+          auto element = *it;
+          dumpYaml(element, level+1);
+        }
+        break;
+    case YAML::NodeType::value::Map:
+        LogINFO("{} map:", offset);
+        for(auto it = node.begin(); it != node.end(); ++it) {
+          LogINFO("{} map iterate {} {}:", offset, (int)(it->first.Type()), (int)(it->second.Type()) );
+          dumpYaml(it->first, level+1);
+          dumpYaml(it->second, level+1);
+        }
+        break;
+    default:
+        LogINFO("YAML null or undefined");
+        break;
+    }
+}
+
 class AppContainer
 {
 	boost::asio::io_service io_service;
@@ -48,10 +79,6 @@ public:
 
         mqtt = std::make_shared<MqttClient>(io_service);
         exporter = std::make_shared<ow::Exporter>();
-        auto pru = std::make_shared<Pru>();
-        meranie = std::make_shared<MeranieTeploty>(pru, exporter);
-        openTherm = std::make_shared<OpenTherm>(pru, *mqtt);
-        slovpwm = std::make_unique<slowswi2cpwm>();
     }
 
     void on1sec()
@@ -74,6 +101,23 @@ public:
 		std::mutex cvlock;
 		std::condition_variable cv_running;
 
+        YAML::Node config = YAML::LoadFile("config.yaml");
+        dumpYaml(config);
+
+        auto node = config["BBOw"];
+        std::vector<std::tuple<std::string, std::string>> tsensors;
+        for(auto it = node.begin(); it != node.end(); ++it){
+            auto name = it->first.as<std::string>();
+            auto romcode = (it->second)["owRomCode"].as<std::string>();
+            LogINFO("yaml configured sensor {} {}", name, "a");
+            tsensors.emplace_back(std::make_tuple(name, romcode));
+        }
+
+        auto pru = std::make_shared<Pru>();
+        openTherm = std::make_shared<OpenTherm>(pru, *mqtt);
+        meranie = std::make_shared<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
+        slovpwm = std::make_unique<slowswi2cpwm>();
+
 		std::thread meastempthread([this,&running,&cv_running,&cvlock]{
 			thread_util::set_thread_name("bytd-meranie");
 
@@ -94,6 +138,7 @@ public:
                         f >> openTherm->chSetpoint;
                     }
 				}
+                meranie->meas();
 			}
 			while(running);
 		});
@@ -157,44 +202,10 @@ public:
 	}
 };
 
-void dumpYaml(YAML::Node& node, int level=0);
-
-void dumpYaml(YAML::Node& node, int level)
-{
-    std::string offset(1+2*level, '-');
-    offset.append("YAML");
-    switch (node.Type()) {
-    case YAML::NodeType::value::Scalar:
-        LogINFO("{} Scalar: {}", offset, node.as<std::string>());
-        break;
-    case YAML::NodeType::value::Sequence:
-        LogINFO("{} seq{}:", offset, node.size());
-        for(auto it = node.begin(); it != node.end(); ++it) {
-          auto element = *it;
-          dumpYaml(element, level+1);
-        }
-        break;
-    case YAML::NodeType::value::Map:
-        LogINFO("{} map:", offset);
-        for(auto it = node.begin(); it != node.end(); ++it) {
-          LogINFO("{} map iterate {} {}:", offset, (int)(it->first.Type()), (int)(it->second.Type()) );
-          dumpYaml(it->first, level+1);
-          dumpYaml(it->second, level+1);
-        }
-        break;
-    default:
-        LogINFO("YAML null or undefined");
-        break;
-    }
-}
-
 int main()
 {
   Util::LogExit scopedLog("GRACEFUL");
   MqttWrapper libmMosquitto;
-
-  YAML::Node config = YAML::LoadFile("config.yaml");
-  dumpYaml(config);
 
   try
   {
