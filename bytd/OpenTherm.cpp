@@ -163,7 +163,7 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                         LogINFO("ot transfer id56 {}", dhw);
                     }
                 }
-                else if(id==3){
+  /*              else if(id==3){
                     Frame txv(opentherm::msg::type::Mrd, 25, 0);
                     Frame rsp(transmit(txv.data));
                     if(rsp.isValid()){
@@ -184,9 +184,9 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                             LogINFO("id{} cur ch:{}", rsp.getId(), floatFromf88(rsp.getV()));
                         }
                     }
-                }
+                }*/
 
-                if(++id > 4)
+                if(++id > 2)
                     id=0;
 
 				std::this_thread::sleep_until(lastTransmit + std::chrono::seconds(1));
