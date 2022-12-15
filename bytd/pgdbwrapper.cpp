@@ -78,7 +78,7 @@ PgDbWrapper::SqlCmd PgDbWrapper::createSqlCmd(const std::vector<ow::Sample>& v) 
 		for( auto i = begin(sample->getData()); i != end(sample->getData()); ++i){
 			++count;
 			auto comma = sample+1 == end(v) && i+1 == end(sample->getData()) ? ")\n" : "),\n";
-			const std::string val = get<1>(*i) == ow::badval ? "NULL" : std::to_string(get<1>(*i));
+            const std::string val = get<1>(*i) == std::numeric_limits<float>::quiet_NaN() ? "NULL" : std::to_string(get<1>(*i));
 			s << "(to_timestamp(" << t << "),placeid(" << encodeRomCode(get<0>(*i)) << ")," << val << comma;
 		}
 	}

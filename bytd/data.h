@@ -1,12 +1,4 @@
-/*
- * data.h
- *
- *  Created on: Jan 9, 2015
- *      Author: j
- */
-
-#ifndef DATA_H_
-#define DATA_H_
+#pragma once
 
 #include <cstdint>
 #include <chrono>
@@ -16,8 +8,6 @@
 
 namespace ow
 {
-
-static constexpr float badval = std::numeric_limits<float>::infinity();
 
 bool check_crc(const uint8_t* ptr, unsigned size, uint8_t crc);
 
@@ -40,6 +30,7 @@ struct RomCode
 	bool operator==(const RomCode& other) const;
 	operator std::string() const;
 	RomCode& operator=(const std::string& str);
+    static bool fromStr(RomCode& rc, const std::string& str);
 };
 #pragma pack(pop)
 
@@ -69,4 +60,3 @@ private:
 
 }
 
-#endif /* DATA_H_ */

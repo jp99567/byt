@@ -78,24 +78,31 @@ bool RomCode::operator==(const RomCode& other) const
 
 RomCode& RomCode::operator=(const std::string& str)
 {
-//287fc80a06000074
-	std::stringstream s(str);
+    fromStr(*this, str);
+    return *this;
+}
 
-	if(str.size() < sizeof(*this)*2)
-		LogDIE("mismatch size {}", str);
+bool RomCode::fromStr(RomCode &rc, const std::string &str)
+{
+    //287fc80a06000074
+        std::stringstream s(str);
 
-	std::string u;
-	uint8_t *c = (uint8_t*)this;
-	while(c < (uint8_t*)this+sizeof(*this)){
-		s >> std::setw(2) >> u;
-		*c = std::stoi(u, nullptr, 16);
-		c++;
-	}
+        if(str.size() < sizeof(rc)*2)
+            LogDIE("mismatch size {}", str);
 
-	if(!check_crc(*this))
-		LogERR("mismatch crc {}", str);
+        std::string u;
+        uint8_t *c = (uint8_t*)&rc;
+        while(c < (uint8_t*)&rc+sizeof(rc)){
+            s >> std::setw(2) >> u;
+            *c = std::stoi(u, nullptr, 16);
+            c++;
+        }
 
-	return *this;
+        if(!check_crc(rc)){
+            LogERR("mismatch crc {}", str);
+            return false;
+        }
+        return true;
 }
 
 Sample::Sample()
