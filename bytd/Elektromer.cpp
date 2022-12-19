@@ -10,6 +10,7 @@
 #include "Log.h"
 #include <fstream>
 #include "thread_util.h"
+#include "mqtt.h"
 
 namespace
 {
@@ -36,7 +37,6 @@ double Elektromer::getPowerCur() const
 
 	if( d > lastPeriod)
 	{
-		LogINFO("check1 {}s", std::chrono::duration_cast<std::chrono::seconds>(d).count());
 		return calcPwr(std::chrono::duration_cast<std::chrono::milliseconds>(d));
 	}
 
@@ -45,49 +45,74 @@ double Elektromer::getPowerCur() const
 
 double Elektromer::getKWh() const
 {
-	return impCount / imp_per_kwh;
+    return impCount / imp_per_kwh;
 }
 
-Elektromer::Elektromer()
+void Elektromer::event(EventType e)
 {
-	t = std::thread([this]{
-		thread_util::set_thread_name("bytd-elektromer");
+    if(e == EventType::rising){
+        ++impCount;
+        auto nt = Clock::now();
+        lastPeriod = std::chrono::duration_cast<std::chrono::milliseconds>(nt - lastImp);
+        lastImp = nt;
+    }
 
-		gpiod::chip gpiochip("1");
-		auto impin = gpiochip.get_line(17);
+    auto pwr = getPowerCur();
+    if( pwr != curPwr){
+        LogINFO("Elekromer: {}W {}s", pwr, lastPeriod.count()/1000.0);
+        curPwr = pwr;
+        mqtt.publish("rb/stat/power", std::to_string(pwr));
+    }
+}
 
-		if( impin.direction() != gpiod::line::DIRECTION_INPUT )
-		{
-			LogERR("Impulz direction not input");
-			active = false;
-		}
-		impin.request({"bytd", gpiod::line_request::EVENT_RISING_EDGE});
-
-		while(active){
-			constexpr unsigned long long toutns = 1e9;
-			if(impin.event_wait(std::chrono::nanoseconds(toutns)))
-			{
-				if( impin.event_read().event_type == gpiod::line_event::RISING_EDGE )
-				{
-					++impCount;
-					auto nt = Clock::now();
-					lastPeriod = std::chrono::duration_cast<std::chrono::milliseconds>(nt - lastImp);
-					lastImp = nt;
-				}
-			}
-			auto pwr = getPowerCur();
-			if( pwr != curPwr){
-				LogINFO("Elekromer: {}W {}s", pwr, lastPeriod.count()/1000.0);
-				std::ofstream f("/run/cur_power_watts");
-				f << pwr << '\n';
-				curPwr = pwr;
-			}
-		}
-	});
+Elektromer::Elektromer(MqttClient& mqtt)
+    :Impulzy("1", 17)
+    ,mqtt(mqtt)
+{
+    threadName = "bytd-elektromer";
+    svc_init();
 }
 
 Elektromer::~Elektromer()
 {
-	active = false;
-	t.join();
+}
+
+Impulzy::Impulzy(std::string chipname, unsigned int line)
+    :chipName(chipname)
+    ,chipLine(line)
+{
+}
+
+Impulzy::~Impulzy()
+{
+    active = false;
+    t.join();
+}
+
+void Impulzy::svc_init()
+{
+    t = std::thread([this]{
+        thread_util::set_thread_name(threadName.c_str());
+
+        gpiod::chip gpiochip(chipName);
+        auto impin = gpiochip.get_line(chipLine);
+
+        if( impin.direction() != gpiod::line::DIRECTION_INPUT )
+        {
+            LogERR("Impulz direction not input");
+            active = false;
+        }
+        impin.request({"bytd", gpiod::line_request::EVENT_RISING_EDGE});
+
+        while(active){
+            constexpr unsigned long long toutns = 1e9;
+            if(impin.event_wait(std::chrono::nanoseconds(toutns)))
+            {
+                event(impin.event_read().event_type == gpiod::line_event::RISING_EDGE ? EventType::rising : EventType::falling);
+            }
+            else{
+                event(EventType::timeout);
+            }
+        }
+    });
 }

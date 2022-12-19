@@ -117,11 +117,11 @@ public:
         openTherm = std::make_shared<OpenTherm>(pru, *mqtt);
         meranie = std::make_shared<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
         slovpwm = std::make_unique<slowswi2cpwm>();
+        Elektromer elektomer(*mqtt);
 
 		std::thread meastempthread([this,&running,&cv_running,&cvlock]{
 			thread_util::set_thread_name("bytd-meranie");
 
-            //Elektromer em;
 			do{
                 std::this_thread::sleep_for(std::chrono::seconds(1));
 				{
