@@ -25,75 +25,61 @@ MeranieTeploty::~MeranieTeploty()
 MeranieTeploty::MeranieTeploty(std::shared_ptr<Pru> pru, std::vector<std::tuple<std::string, std::string>> reqsensors, MqttClient& mqtt)
     :mqtt(mqtt)
 {
-		std::set<ow::RomCode> predefined;
+    std::set<ow::RomCode> predefined;
 
-        for(const auto& reqsens : reqsensors){
-            ow::RomCode rc;
-            ow::RomCode::fromStr(rc, std::get<1>(reqsens));
-            auto name = std::get<0>(reqsens);
-            if(!predefined.insert(rc).second){
-                LogDIE("duplicates:{} {}", name, (std::string)rc);
+    for(const auto& reqsens : reqsensors){
+        ow::RomCode rc;
+        ow::RomCode::fromStr(rc, std::get<1>(reqsens));
+        auto name = std::get<0>(reqsens);
+        if(!predefined.insert(rc).second){
+            LogDIE("duplicates:{} {}", name, (std::string)rc);
+        }
+        sensors.emplace_back(rc, std::move(name));
+    }
+
+    if(predefined.empty()){
+        throw std::runtime_error("no predefined sensors");
+    }
+
+    therm = std::make_unique<ow::OwThermNet>(pru);
+
+    std::set<ow::RomCode> found;
+    using std::begin;
+    using std::end;
+
+    auto found_sensors = therm->search();
+    for(auto& i: found_sensors){
+
+        if(!found.insert(i).second){
+            LogERR("duplicate");
+            throw std::runtime_error("search failed");
+        }
+    }
+
+    std::vector<ow::RomCode> tmpv(found.size()+predefined.size());
+
+    if(found != predefined){
+        auto it = std::set_difference(begin(found), end(found),
+                                 begin(predefined), end(predefined),
+                                 begin(tmpv));
+
+        if(it!=begin(tmpv)){
+            for(auto i=begin(tmpv); i!=it; ++i){
+                LogERR("new sensors: {}", (std::string)*i);
             }
-            sensors.emplace_back(rc, std::move(name));
         }
 
-		if(predefined.empty()){
-			throw std::runtime_error("no predefined sensors");
-		}
+        it = std::set_difference(begin(predefined), end(predefined),
+                                      begin(found), end(found),
+                                      begin(tmpv));
 
-        therm = std::make_unique<ow::OwThermNet>(pru);
-
-		bool search_success(false);
-		int try_nr(10);
-		do{
-			std::set<ow::RomCode> found;
-			using std::begin;
-			using std::end;
-
-            auto found_sensors = therm->search();
-			bool goto_break(false);
-            for(auto& i: found_sensors){
-
-                if(!found.insert(i).second){
-					LogERR("duplicate");
-					goto_break = true;
-				}
-			}
-			if(goto_break)break;
-
-			std::vector<ow::RomCode> tmpv(found.size()+predefined.size());
-
-			if(found == predefined){
-				search_success = true;
-				break;
-			}
-			else{
-				auto it = std::set_difference(begin(predefined), end(predefined),
-								       	   	  begin(found), end(found),
-											  begin(tmpv));
-
-				if(it!=begin(tmpv)){
-					for(auto i=begin(tmpv); i!=it; ++i){
-						LogERR("missing sensor: {}", (std::string)*i);
-					}
-				}
-
-				it = std::set_difference(begin(found), end(found),
-										 begin(predefined), end(predefined),
-										 begin(tmpv));
-
-				if(it!=begin(tmpv)){
-					for(auto i=begin(tmpv); i!=it; ++i){
-						LogERR("new sensors: {}", (std::string)*i);
-					}
-				}
-			}
-			sleep(1);
-		}
-		while(--try_nr > 0);
-
-	if(!search_success)
-		throw std::runtime_error("search failed");
+        if(it!=begin(tmpv)){
+            for(auto i=begin(tmpv); i!=it; ++i){
+                LogERR("missing sensor: {}", (std::string)*i);
+            }
+            throw std::runtime_error("missing ow sensors");
+        }
+    }
 }
 
 void MeranieTeploty::meas()
