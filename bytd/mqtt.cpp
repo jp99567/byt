@@ -101,7 +101,7 @@ void MqttClient::do_misc()
 
 void MqttClient::publish(const std::string& topic, const std::string& value, bool retain)
 {
-    LogDBG("MqttClient::publish {} {} {}", topic, value, retain);
+    //LogDBG("MqttClient::publish {} {} {}", topic, value, retain);
     auto rv = mosqpp::mosquittopp::publish(nullptr, topic.c_str(), value.length(), value.c_str(), 0, retain);
     if(rv != MOSQ_ERR_SUCCESS){
         if( rv != MOSQ_ERR_NO_CONN)
@@ -111,11 +111,21 @@ void MqttClient::publish(const std::string& topic, const std::string& value, boo
     sched_write_mqtt_socket();
 }
 
+void MqttClient::publish(const std::string& topic, const double value, bool retain)
+{
+    publish(topic, std::to_string(value), retain);
+}
+
+void MqttClient::publish(const std::string& topic, const int value, bool retain)
+{
+    publish(topic, std::to_string(value), retain);
+}
+
 void MqttClient::on_connect(int rc)
 {
     if(rc == 0){
         LogINFO("on mqtt connect");
-        auto rv = mosqpp::mosquittopp::subscribe(nullptr, "rb/#");
+        auto rv = mosqpp::mosquittopp::subscribe(nullptr, "rb/ctrl/#");
         if(rv != MOSQ_ERR_SUCCESS)
             LogERR("mosquitto_subscribe: ({}) {}", rv, mosqpp::strerror(rv));
     }
@@ -133,7 +143,6 @@ void MqttClient::on_disconnect(int rc)
 void MqttClient::on_message(const mosquitto_message *msg)
 {
     std::string s((const char*)msg->payload, msg->payloadlen);
-    LogDBG("mqtt msg: {} {} {}", msg->mid, msg->topic, s);
     OnMsgRecv(std::string(msg->topic), std::move(s));
 }
 

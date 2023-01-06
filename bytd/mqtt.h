@@ -26,6 +26,8 @@ public:
     MqttClient(boost::asio::io_service& io_context);
     ~MqttClient();
     void do_misc();
+    void publish(const std::string& topic, const double value, bool retain = true);
+    void publish(const std::string& topic, const int value, bool retain = true);
     void publish(const std::string& topic, const std::string& value, bool retain = true);
 
     std::function<void(std::string &&topic, std::string &&msg)> OnMsgRecv;
