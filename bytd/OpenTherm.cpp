@@ -7,25 +7,6 @@
 #include "../pru/rpm_iface.h"
 #include "mqtt.h"
 
-namespace opentherm
-{
-namespace msg
-{
-    enum class type
-    {
-        Mrd = 0b000'0000,
-        Mwr = 0b001'0000,
-        Minvalid = 0b010'0000,
-        Mreserved = 0b011'0000,
-        Srdack = 0b100'0000,
-        Swrack = 0b101'0000,
-        Sinvalid = 0b110'0000,
-        Sunknown = 0b111'0000,
-        Mwr2 = 0b001'1000
-    };
-}
-}
-
 namespace {
 
 constexpr uint32_t calc_parity(unsigned v, unsigned pos);
@@ -62,53 +43,16 @@ constexpr float floatFromf88(uint16_t v)
 	return v / 256.0;
 }
 
-struct Frame
+std::string frameToStr(opentherm::Frame f)
 {
-    void setType(opentherm::msg::type type)
-    {
-        reinterpret_cast<uint8_t*>(&data)[0] = (uint8_t)type;
-    }
-
-    opentherm::msg::type getType() const
-    {
-        return (opentherm::msg::type)(reinterpret_cast<const uint8_t*>(&data)[0]);
-    }
-
-    void setId(int id)
-    {
-        reinterpret_cast<uint8_t*>(&data)[1] = (uint8_t)id;
-    }
-
-    int getId() const
-    {
-        return (int)(reinterpret_cast<const uint8_t*>(&data)[1]);
-    }
-
-    void setV(uint16_t v)
-    {
-        reinterpret_cast<uint16_t*>(&data)[1] = (uint16_t)v;
-    }
-
-    uint16_t getV() const
-    {
-        return (reinterpret_cast<const uint16_t*>(&data)[1]);
-    }
-
-    Frame(opentherm::msg::type type, int id, uint16_t val)
-    {
-        setType(type);
-        setId(id);
-        setV(val);
-    }
-
-    Frame(uint32_t data)
-    :data(data){}
-
-    bool isValid() const { return data != invalid; }
-
-    static constexpr uint32_t invalid = 0x7FFFFFFF;
-    uint32_t data = invalid;
-};
+    std::ostringstream ss;
+    ss << '(' << opentherm::msg::msgToStr(f.getType())
+       << '-' << f.getId()
+       << "-/" << floatFromf88(f.getV())
+       << "/0x" << std::hex << f.getV()
+       << ')';
+    return ss.str();
+}
 
 }
 
@@ -119,7 +63,11 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
 	:pru(pru)
 	,rxMsg(std::make_shared<PruRxMsg>())
     ,mqtt(mqtt)
+    ,asyncReq(opentherm::Frame::invalid)
 {
+    using opentherm::Frame;
+    Flame = [](bool){};
+    DhwActive = [](bool){};
 	pru->setOtCbk(rxMsg);
 
 	thrd = std::thread([this]{
@@ -131,11 +79,23 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                     //Mrd-Srdack id=0 M: v16=03CA (00000011.11001010) f88=3.78906 S: v16=0320 (00000011.00100000) f88=3.125
                     uint32_t txv = 0x03CA;
                     auto rsp = transmit(txv);
-                    uint16_t v = 0xFFFF&rsp;
-                    if(v != status){
-                        publish_status(v);
-                        status = v;
-                        LogINFO("ot transfer id0 {:b}", status);
+                    if(Frame(rsp).isValid()){
+                        uint16_t v = 0xFFFF&rsp;
+                        if(v != status){
+                            publish_status(v);
+                            status = v;
+                            LogINFO("ot transfer id0 req:{} rsp:{:b} {} ", frameToStr(opentherm::Frame(txv)), status, frameToStr(opentherm::Frame(status)));
+                        }
+                    }
+                    if(asyncReq.isValid()){
+                        Frame arsp = transmit(asyncReq.data);
+                        if(arsp.isValid()){
+                            auto rspstr = frameToStr(arsp);
+                            LogINFO("ot req:{} repsonse:{}", frameToStr(asyncReq), rspstr);
+                            rspstr = "otTransfer " + rspstr;
+                            this->mqtt.publish("rb/stat/response", rspstr);
+                        }
+                        asyncReq = Frame::invalid;
                     }
                 }
                 else if(id==1){
@@ -144,10 +104,12 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                     txv |= 1 << 16;
                     txv |= 0b00010000 << 24;
                     auto rsp = transmit(txv);
-                    auto v = floatFromf88(rsp&0xFFFF);
-                    if(v != ch){
-                        ch = v;
-                        LogINFO("ot transfer id1 {}", ch);
+                    if(Frame(rsp).isValid()){
+                        auto v = floatFromf88(rsp&0xFFFF);
+                        if(v != ch){
+                            ch = v;
+                            LogINFO("ot transfer id1 {}", ch);
+                        }
                     }
                 }
                 else if(id==2){
@@ -157,20 +119,24 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                     txv |= 56 << 16;
                     txv |= 0b00011000 << 24;
                     auto rsp = transmit(txv);
-                    auto v = floatFromf88(rsp&0xFFFF);
-                    if(v != dhw){
-                        dhw = v;
-                        LogINFO("ot transfer id56 {}", dhw);
+                    if(Frame(rsp).isValid()){
+                        auto v = floatFromf88(rsp&0xFFFF);
+                        if(v != dhw){
+                            dhw = v;
+                            LogINFO("ot transfer id56 {}", dhw);
+                        }
                     }
                 }
-  /*              else if(id==3){
+                else if(id==3){
                     Frame txv(opentherm::msg::type::Mrd, 25, 0);
                     Frame rsp(transmit(txv.data));
                     if(rsp.isValid()){
                         auto v = floatFromf88(rsp.getV());
                         if(v!=rddhw){
                             rddhw = v;
-                            LogINFO("id{} cur dhw:{}", rsp.getId(), floatFromf88(rsp.getV()));
+                            auto fv = floatFromf88(rsp.getV());
+                            LogINFO("id{} cur ch:{}", rsp.getId(), fv);
+                            this->mqtt.publish("rb/stat/ot/tCH", fv);
                         }
                     }
                 }
@@ -181,12 +147,14 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                         auto v = floatFromf88(rsp.getV());
                         if(v!=rdch){
                             rdch = v;
-                            LogINFO("id{} cur ch:{}", rsp.getId(), floatFromf88(rsp.getV()));
+                            auto fv = floatFromf88(rsp.getV());
+                            LogINFO("id{} cur dhw:{}", rsp.getId(), fv);
+                            this->mqtt.publish("rb/stat/ot/tDHW", fv);
                         }
                     }
-                }*/
+                }
 
-                if(++id > 2)
+                if(++id > 4)
                     id=0;
 
 				std::this_thread::sleep_until(lastTransmit + std::chrono::seconds(1));
@@ -207,19 +175,21 @@ void OpenTherm::publish_status(uint16_t newstat)
     for(auto bit : {0,1,2,3}){
         const uint16_t mask = 1<<bit;
         if(changed & mask){
-            const std::string v = newstat & mask ? "1" : "0";
+            const bool v = newstat & mask;
             switch (bit) {
             case 0:
-                mqtt.publish("rb/ot/stat/fault", v);
+                mqtt.publish("rb/stat/ot/fault", v);
                 break;
             case 1:
-                mqtt.publish("rb/ot/stat/ch", v);
+                mqtt.publish("rb/stat/ot/ch", v);
                 break;
             case 2:
-                mqtt.publish("rb/ot/stat/dhw", v);
+                DhwActive(v);
+                mqtt.publish("rb/stat/ot/dhw", v);
                 break;
             case 3:
-                mqtt.publish("rb/ot/stat/flame", v);
+                Flame(v);
+                mqtt.publish("rb/stat/ot/flame", v);
                 break;
             default:
                 break;
@@ -231,6 +201,7 @@ void OpenTherm::publish_status(uint16_t newstat)
 
 uint32_t OpenTherm::transmit(uint32_t frame)
 {
+    using opentherm::Frame;
 	uint32_t data[2] = { pru::eCmdOtTransmit, parity(frame) };
 	pru->send((uint8_t*)&data, sizeof(data));
 	auto buf = rxMsg->wait(std::chrono::seconds(4));

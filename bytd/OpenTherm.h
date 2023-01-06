@@ -10,6 +10,8 @@
 #include <memory>
 #include <thread>
 #include <vector>
+#include <functional>
+#include "OtFrame.h"
 
 class Pru;
 class PruRxMsg;
@@ -36,6 +38,13 @@ public:
 	float dhwSetpoint = 38;
 	float chSetpoint = 0;
 
+    std::function<void(bool)> Flame;
+    std::function<void(bool)> DhwActive;
+    void asyncTransferRequest(uint32_t req)
+    {
+        asyncReq = req;
+    }
+
 private:
     void publish_status(uint16_t newstat);
 	uint32_t transmit(uint32_t frame);
@@ -47,4 +56,5 @@ private:
 	std::vector<OtWrParam> wrParams;
     MqttClient& mqtt;
     uint16_t status = 0;
+    opentherm::Frame asyncReq;
 };
