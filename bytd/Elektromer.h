@@ -34,7 +34,7 @@ class Elektromer : public Impulzy
 {
 public:
     explicit Elektromer(MqttClient& mqtt);
-	~Elektromer();
+    ~Elektromer() override;
 
 	double getPowerCur() const;
 	double getKWh() const;
@@ -46,3 +46,15 @@ private:
     MqttClient& mqtt;
 };
 
+class Vodomer : public Impulzy
+{
+public:
+    explicit Vodomer(MqttClient& mqtt);
+    ~Vodomer() override;
+
+private:
+    void event(EventType) override;
+    std::chrono::milliseconds lastPeriod = std::chrono::milliseconds::max();
+    unsigned impCount = 0;
+    MqttClient& mqtt;
+};

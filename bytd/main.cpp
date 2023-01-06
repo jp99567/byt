@@ -18,7 +18,7 @@
 #include <boost/asio.hpp>
 #include "mqtt.h"
 #include "slowswi2cpwm.h"
-
+#include <gpiod.hpp>
 #include <yaml-cpp/yaml.h>
 
 class Facade : public ICore
@@ -56,6 +56,100 @@ void dumpYaml(YAML::Node& node, int level)
     }
 }
 
+class IDigiOut
+{
+public:
+    virtual operator bool() const = 0;
+    virtual bool operator()(bool value) = 0;
+    virtual ~IDigiOut(){}
+};
+
+class BBDigiOut : public IDigiOut
+{
+    gpiod::line line;
+public:
+    explicit BBDigiOut(gpiod::chip& chip, unsigned lineNr)
+        :line(chip.get_line(lineNr))
+    {
+        gpiod::line_request req;
+        req.request_type = gpiod::line_request::DIRECTION_OUTPUT;
+        req.consumer = "bytd";
+        line.request(req);
+        if( line.direction() != gpiod::line::DIRECTION_OUTPUT )
+        {
+            LogERR("BBDigiOut direction not output");
+        }
+    }
+
+    operator bool() const override
+    {
+        return line.get_value();
+    }
+
+    bool operator()(bool value) override
+    {
+        line.set_value(value);
+        return value;
+    }
+
+    ~BBDigiOut(){}
+};
+
+class Pumpa
+{
+    std::unique_ptr<IDigiOut> out;
+    int plamenOffCount = -1;
+    std::shared_ptr<MqttClient> mqtt;
+
+public:
+    explicit Pumpa(std::unique_ptr<IDigiOut> digiout, std::shared_ptr<MqttClient> mqtt)
+        :out(std::move(digiout))
+        ,mqtt(mqtt)
+    {
+        (*out)(false);
+    }
+
+    void start()
+    {
+        LogINFO("Pumpa start {}", plamenOffCount);
+        setPumpa(true);
+        plamenOffCount = 0;
+    }
+
+    void stop()
+    {
+        LogINFO("Pumpa stop {}", plamenOffCount);
+        setPumpa(false);
+        plamenOffCount = -1;
+    }
+
+    void onPlamenOff()
+    {
+        if(plamenOffCount >= 0){
+            LogINFO("Pumpa onPlamenOff {}", plamenOffCount);
+            if(++plamenOffCount > 2){
+                stop();
+                LogINFO("pumpa automatic Off");
+            }
+        }
+    }
+
+    ~Pumpa()
+    {
+        (*out)(false);
+    }
+
+private:
+    void setPumpa(bool value)
+    {
+        if( value != *out)
+        {
+            (*out)(value);
+            mqtt->publish("rb/stat/pumpa", (int)value);
+        }
+    }
+};
+
 class AppContainer
 {
 	boost::asio::io_service io_service;
@@ -66,6 +160,8 @@ class AppContainer
 	std::shared_ptr<OpenTherm> openTherm;
     std::shared_ptr<MqttClient> mqtt;
     std::unique_ptr<slowswi2cpwm> slovpwm;
+    std::shared_ptr<gpiod::chip> gpiochip3;
+    std::unique_ptr<Pumpa> pumpa;
 
 public:
 	AppContainer()
@@ -119,6 +215,15 @@ public:
         slovpwm = std::make_unique<slowswi2cpwm>();
         Elektromer elektomer(*mqtt);
 
+        gpiochip3 = std::make_shared<gpiod::chip>("3");
+        pumpa = std::make_unique<Pumpa>(std::make_unique<BBDigiOut>(*gpiochip3, 21), mqtt);
+
+        openTherm->Flame = [this](bool flameOn){
+            if(!flameOn){
+                pumpa->onPlamenOff();
+            }
+        };
+
 		std::thread meastempthread([this,&running,&cv_running,&cvlock]{
 			thread_util::set_thread_name("bytd-meranie");
 
@@ -144,46 +249,61 @@ public:
 		});
 
         mqtt->OnMsgRecv = [this](auto topic, auto msg){
-            LogINFO("mqtt msg {}:{}", topic, msg);
-            if(topic == "rb/ot/setpoint/ch"){
+            if(topic.substr(0,8) != "rb/ctrl/")
+                return;
+
+            LogINFO("OnMsgRecv {}:{}", topic, msg);
+            if(topic == "rb/ctrl/ot/setpoint/ch"){
                 auto v = std::stof(msg);
                 openTherm->chSetpoint = v;
             }
-            else if(topic == "rb/ot/setpoint/dhw"){
+            else if(topic == "rb/ctrl/ot/setpoint/dhw"){
                 auto v = std::stof(msg);
                 openTherm->dhwSetpoint = v;
             }
-            else if(topic == "rb/i2cpwm/kuchyna"){
+            else if(topic == "rb/ctrl/i2cpwm/kuchyna"){
                 auto v = std::stof(msg);
                 slovpwm->update(0,v);
             }
-            else if(topic == "rb/i2cpwm/obyvka"){
+            else if(topic == "rb/ctrl/i2cpwm/obyvka"){
                 auto v = std::stof(msg);
                 slovpwm->update(1,v);
             }
-            else if(topic == "rb/i2cpwm/spalna"){
+            else if(topic == "rb/ctrl/i2cpwm/spalna"){
                 auto v = std::stof(msg);
                 slovpwm->update(2,v);
             }
-            else if(topic == "rb/i2cpwm/kupelna"){
+            else if(topic == "rb/ctrl/i2cpwm/kupelna"){
                 auto v = std::stof(msg);
                 slovpwm->update(3,v);
             }
-            else if(topic == "rb/i2cpwm/podlaha"){
+            else if(topic == "rb/ctrl/i2cpwm/podlaha"){
                 auto v = std::stof(msg);
                 slovpwm->update(4,v);
             }
-            else if(topic == "rb/i2cpwm/izba"){
+            else if(topic == "rb/ctrl/i2cpwm/izba"){
                 auto v = std::stof(msg);
                 slovpwm->update(5,v);
             }
-            else if(topic == "rb/i2cpwm/vetranie"){
+            else if(topic == "rb/ctrl/i2cpwm/vetranie"){
                 auto v = std::stod(msg);
                 slovpwm->dig1Out(v);
             }
-            else if(topic == "rb/i2cpwm/dvere"){
+            else if(topic == "rb/ctrl/i2cpwm/dvere"){
                 auto v = std::stod(msg);
                 slovpwm->dig2Out(v);
+            }
+            else if(topic == "rb/ctrl/pumpa"){
+                auto v = std::stod(msg);
+                if(v){
+                    pumpa->start();
+                }
+                else {
+                    pumpa->stop();
+                }
+            }
+            else if(topic == "rb/ctrl/req"){
+                doRequest(msg);
             }
         };
 
@@ -200,6 +320,18 @@ public:
 		}
 		meastempthread.join();
 	}
+
+    void doRequest(std::string msg)
+    {
+        std::istringstream ss(msg);
+        std::string cmd;
+        ss >> cmd;
+        if(cmd == "otTransfer"){
+            uint32_t req;
+            ss >> req;
+            openTherm->asyncTransferRequest(req);
+        }
+    }
 };
 
 int main()

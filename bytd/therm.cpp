@@ -90,7 +90,7 @@ void MeranieTeploty::meas()
         auto v = therm->measure(sensor.romcode);
 
         if(sensor.update(v)){
-            mqtt.publish(std::string("rb/ow/").append(sensor.name), std::to_string(v));
+            mqtt.publish(std::string("rb/stat/ow/").append(sensor.name), std::to_string(v));
         }
     }
 }

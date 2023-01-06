@@ -59,7 +59,6 @@ void Elektromer::event(EventType e)
 
     auto pwr = getPowerCur();
     if( pwr != curPwr){
-        LogINFO("Elekromer: {}W {}s", pwr, lastPeriod.count()/1000.0);
         curPwr = pwr;
         mqtt.publish("rb/stat/power", std::to_string(pwr));
     }
@@ -115,4 +114,34 @@ void Impulzy::svc_init()
             }
         }
     });
+}
+
+Vodomer::Vodomer(MqttClient &mqtt)
+    :Impulzy("0", 3)
+    ,mqtt(mqtt)
+{
+
+}
+
+Vodomer::~Vodomer()
+{
+
+}
+
+constexpr double imp_per_liter = 1;
+
+void Vodomer::event(EventType e)
+{
+    if(e == EventType::rising){
+        ++impCount;
+        auto nt = Clock::now();
+        lastPeriod = std::chrono::duration_cast<std::chrono::milliseconds>(nt - lastImp);
+        lastImp = nt;
+    }
+    else if(e == EventType::falling){
+    }
+
+
+    //    mqtt.publish("rb/stat/prietok", std::to_string(pwr));
+
 }
