@@ -75,8 +75,8 @@ I2CDigOut:
   dverePavlac: {}
 
 BBOw:
-  tRecir: { owRomCode : 284b7a0a06000089 }
-  tBoiler: { owRomCode : 28625008060000eb }
+  tBoiler: { owRomCode : 284b7a0a06000089 }
+  tRecir: { owRomCode : 28625008060000eb }
   tPavlac : { owRomCode : 28bf6f0a06000089 }
   tKupelna: { owRomCode : 28aa97e33b14013c }
   tPodlaha: { owRomCode : 28362709060000aa }
