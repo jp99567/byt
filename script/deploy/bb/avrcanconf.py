@@ -4,11 +4,16 @@ from math import ceil
 from struct import pack, unpack
 import argparse
 
+import yaml
+from yaml import load, dump
+
 parser = argparse.ArgumentParser(description='avr can bus nodes configuration')
 parser.add_argument('--id', type=int, choices=list(range(1, 31)))
 parser.add_argument('--all', action='store_true')
 parser.add_argument('--fw_upload', action='store_true')
 parser.add_argument('--stat', action='store_true')
+parser.add_argument('--config', action='store_true')
+parser.add_argument('--candev', default='can1')
 
 args = parser.parse_args()
 canconf_bcast = 0xEC33F000 >> 3
@@ -19,9 +24,62 @@ def canconfidfromnodeid(nodeid):
 
 
 bus = can.Bus(interface='socketcan',
-              channel='can1',
+              channel=args.candev,
               receive_own_messages=False)
 
+def class_info(trieda):
+    count = len(trieda.keys())
+    ids = set()
+    for i in trieda.keys():
+        ids.add(trieda[i]['addr'][0])
+    return { 'ids' : ids, 'count' : count }
+
+class ClassInfo:
+    def __init__(self, node):
+        self.node = node
+
+    def info(self):
+        count = len(self.node.keys())
+        ids = set()
+        for i in self.node.keys():
+            ids.add(self.node[i]['addr'][0])
+        return {'ids': ids, 'count': count}
+
+
+class ClassInfoUniq(ClassInfo):
+    def info(self):
+        return {'ids': {self.node['addr']}, 'count': 1}
+
+
+def buildClassInfo(trieda, node):
+    if trieda in ('DigIN', 'OwT'):
+        return ClassInfo(node)
+    else:
+        return ClassInfoUniq(node)
+
+
+def configure_node(node):
+    nodeId = node['id']
+    outputCanIds = set()
+    triedyNrIN = dict()
+
+    for trieda in ('DigIN', 'OwT', 'SensorionCO2', 'Vlhkomer'):
+        if trieda in node:
+            triedaInfo = buildClassInfo(trieda, node[trieda])
+            info = triedaInfo.info()
+            outputCanIds.update(info['ids'])
+            triedyNrIN[trieda] = info['count']
+
+    print(f"nodeId:{nodeId} {triedyNrIN} outputCanIds:{outputCanIds}")
+
+
+
+def configure_all():
+    with open('config.yaml', "r") as stream:
+        config = yaml.load(stream)
+        for node in config['NodeCAN']:
+            print(f"node name: {node}")
+            configure_node(config['NodeCAN'][node])
 
 def upload_fw(nodeid):
     avrid1tx = canconfidfromnodeid(nodeid)
@@ -77,3 +135,6 @@ if args.stat:
 
 if args.fw_upload:
     upload_fw(args.id)
+
+if args.config:
+    configure_all()
