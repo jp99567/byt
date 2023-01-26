@@ -5,7 +5,7 @@ import os
 from math import ceil
 from struct import pack, unpack
 import argparse
-
+import time
 import yaml
 from yaml import load, dump
 
@@ -118,6 +118,7 @@ def upload_fw(nodeid):
                 for i in msgdata:
                     pgxor ^= i
                 bus.send(can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=msgdata))
+                time.sleep(10/1000)
                 page_bytes_in += 8
             rsp = bus.recv()
             print(rsp)
