@@ -7,6 +7,10 @@
 #include <mosquittopp.h>
 #include <string>
 
+namespace mqtt {
+ constexpr auto rbResponse = "rb/stat/response";
+}
+
 class MqttWrapper
 {
 public:

@@ -303,7 +303,20 @@ public:
                 }
             }
             else if(topic == "rb/ctrl/req"){
-                doRequest(msg);
+                try{
+                    doRequest(msg);
+                }
+                catch (std::exception& e)
+                {
+                    LogERR("request exception: {}", e.what());
+                    mqtt->publish(mqtt::rbResponse, e.what(), false);
+                }
+                catch (...)
+                {
+                     LogERR("request unkown exception");
+                     mqtt->publish(mqtt::rbResponse, "unkown exception", false);
+                }
+
             }
         };
 
@@ -327,9 +340,9 @@ public:
         std::string cmd;
         ss >> cmd;
         if(cmd == "otTransfer"){
-            uint32_t req;
-            ss >> req;
-            openTherm->asyncTransferRequest(req);
+            std::string sreq;
+            ss >> sreq;
+            openTherm->asyncTransferRequest(std::stoi(sreq, nullptr,0));
         }
     }
 };

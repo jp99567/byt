@@ -93,7 +93,7 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                             auto rspstr = frameToStr(arsp);
                             LogINFO("ot req:{} repsonse:{}", frameToStr(asyncReq), rspstr);
                             rspstr = "otTransfer " + rspstr;
-                            this->mqtt.publish("rb/stat/response", rspstr);
+                            this->mqtt.publish(mqtt::rbResponse, rspstr, false);
                         }
                         asyncReq = Frame::invalid;
                     }

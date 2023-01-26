@@ -50,7 +50,7 @@ public:
             :observers(observers), thisObserver(thisObserver), releaseInDestructor(release)
         {}
 
-        IObserverConnectionHandler makeScopedDestructor()
+        IObserverConnectionHandler makeScopedDestructor() override
         { 
             this->releaseInDestructor = false;
             auto handler = std::make_unique<HandlerImpl>(*this);
