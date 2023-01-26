@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import can
 import os
 from math import ceil
@@ -134,11 +136,14 @@ def upload_fw(nodeid):
 
 
 if args.stat:
-    message = can.Message(arbitration_id=canconfidfromnodeid(args.id), is_extended_id=True, data=[ord('s')])
-    rv = bus.send(message)
-    print(f"send rv:{rv}")
+    tx_id = canconfidfromnodeid(args.id)
+    message = can.Message(arbitration_id=tx_id, is_extended_id=True, data=[ord('s')])
+    bus.send(message)
     messagein = bus.recv(1.5)
-    print(f"in: {messagein}")
+    if messagein is None:
+        print("No response")
+    else:
+        print(f"in: {messagein} txId:{tx_id:04X} rxId:{messagein.arbitration_id:04X}")
 
 if args.fw_upload:
     upload_fw(args.id)
