@@ -5,6 +5,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/opt/rb
 ExecStartPre=/opt/rb/init.sh
+LimitCORE=infinity
 ExecStart=/opt/rb/bytd
 
 [Install]
