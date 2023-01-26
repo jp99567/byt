@@ -2,8 +2,37 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
+#include "ow.h"
+
 ISR(TIMER0_OVF_vect){
 	PIND = _BV(PD0);
+}
+
+constexpr uint8_t MCUSR_EXTENSION_NOT_BOOTLOADER = _BV(7);
+
+namespace ow {
+unsigned timer(void)
+{
+	return 0;
+}
+
+void send_status(enum ResponseCode code)
+{
+
+}
+
+void send_status_with_data(enum ResponseCode code)
+{
+
+}
+
+void send_status_with_param(enum ResponseCode code)
+{
+
+}
+
+int gOwBitsCount;
+uint8_t gOwData[12];
 }
 
 constexpr uint8_t u8min(uint8_t a, uint8_t b){
@@ -45,7 +74,7 @@ void can_tx(void) {
 
 void init()
 {
-	CANTCON = 100;
+	CANTCON = 99;
 	TCCR0A = 0b101;
 	DDRD |= _BV(PD0);
 	PORTD |= _BV(PD0);
@@ -66,10 +95,9 @@ int main() {
 		{
 		case 's':
 			msglen = 8;
-			msg[0] = 'S';
 			msg[1] = CANTEC;
 			msg[2] = CANREC;
-			msg[3] = MCUSR;
+			msg[3] = MCUSR|MCUSR_EXTENSION_NOT_BOOTLOADER;
 			msg[4] = CANIDT1;
 			msg[5] = CANIDT2;
 			msg[6] = CANIDT3;
@@ -85,4 +113,62 @@ int main() {
 		}
 	}
 	return 0;
+}
+
+void setPort(uint8_t portid, uint8_t val)
+{
+	switch(portid){
+	case 0:
+		PORTA = val;
+		break;
+	case 1:
+		PORTB = val;
+		break;
+	case 2:
+		PORTC = val;
+		break;
+	case 3:
+		PORTD = val & ~_BV(PD6);
+		break;
+	case 4:
+		PORTE = val;
+		break;
+	case 5:
+		PORTF = val;
+		break;
+	case 6:
+		PORTG = val & 0x1F;
+		break;
+	default:
+		break;
+	}
+}
+
+void setDir(uint8_t portid, uint8_t val)
+{
+	switch(portid){
+	case 0:
+		DDRA = val;
+		break;
+	case 1:
+		DDRB = val;
+		break;
+	case 2:
+		DDRC = val;
+		break;
+	case 3:
+		DDRD = val & ~_BV(PD6);
+		break;
+	case 4:
+		DDRE = val;
+		break;
+	case 5:
+		DDRF = val;
+		break;
+	case 6:
+		DDRG = val & 0x1F;
+		break;
+	default:
+		break;
+	}
 }
