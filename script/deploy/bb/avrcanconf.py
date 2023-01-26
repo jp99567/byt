@@ -52,7 +52,7 @@ class ClassInfoUniq(ClassInfo):
 
 
 def buildClassInfo(trieda, node):
-    if trieda in ('DigIN', 'OwT'):
+    if trieda in ('DigIN', 'DigOUT', 'OwT'):
         return ClassInfo(node)
     else:
         return ClassInfoUniq(node)
@@ -61,17 +61,24 @@ def buildClassInfo(trieda, node):
 def configure_node(node):
     nodeId = node['id']
     outputCanIds = set()
-    triedyNrIN = dict()
+    inputCanIds = set()
+    triedyNr = dict()
 
     for trieda in ('DigIN', 'OwT', 'SensorionCO2', 'Vlhkomer'):
         if trieda in node:
             triedaInfo = buildClassInfo(trieda, node[trieda])
             info = triedaInfo.info()
             outputCanIds.update(info['ids'])
-            triedyNrIN[trieda] = info['count']
+            triedyNr[trieda] = info['count']
 
-    print(f"nodeId:{nodeId} {triedyNrIN} outputCanIds:{outputCanIds}")
+    for trieda in ('DigOUT',):
+        if trieda in node:
+            triedaInfo = buildClassInfo(trieda, node[trieda])
+            info = triedaInfo.info()
+            inputCanIds.update(info['ids'])
+            triedyNr[trieda] = info['count']
 
+    print(f"nodeId:{nodeId} {triedyNr} outputCanIdNr:{len(outputCanIds)} inputCanIdNr:{len(inputCanIds)}")
 
 
 def configure_all():
