@@ -97,6 +97,7 @@ public:
 
 class Pumpa
 {
+    constexpr static int maxPlamenOff = 6;
     std::unique_ptr<IDigiOut> out;
     int plamenOffCount = -1;
     std::shared_ptr<MqttClient> mqtt;
@@ -127,7 +128,7 @@ public:
     {
         if(plamenOffCount >= 0){
             LogINFO("Pumpa onPlamenOff {}", plamenOffCount);
-            if(++plamenOffCount > 2){
+            if(++plamenOffCount > maxPlamenOff){
                 stop();
                 LogINFO("pumpa automatic Off");
             }
