@@ -9,6 +9,8 @@ import time
 import yaml
 import enum
 
+from samba.dcerpc.dcerpc import bind
+
 parser = argparse.ArgumentParser(description='avr can bus nodes configuration')
 parser.add_argument('--candev', default='vcan0')
 parser.add_argument('--id', type=int, choices=list(range(1, 31)))
@@ -25,6 +27,10 @@ class SvcProtocol(enum.Enum):
     CmdSetAllocCounts = enum.auto()
     CmdGetAllocCounts = enum.auto()
     CmdSetStage = enum.auto()
+    CmdSetOwObjParams = enum.auto()
+    CmdSetOwObjRomCode = enum.auto()
+    CmdSetDigINObjParams = enum.auto()
+    CmdSetDigOUTObjParams = enum.auto()
     CmdStatus = ord('s')
     CmdInvalid = ord('X')
 
@@ -85,7 +91,24 @@ class ClassInfo:
             ids.add(self.node[i]['addr'][0])
         return {'ids': ids, 'count': count}
 
+    def initNodeObject(self, nodebus, mobs, mobSize):
+        pass
+
+def pinStr2Num(pin):
+    pin = pin.upper()
+    if len(pin) != 3 or pin[0] != 'P':
+        raise Exception(f"invalid pin {pin}")
+    bitidx = int(pin[2])
+    portidx = ord(pin[1]) - ord('A')
+    if portidx > 6 or bitidx > 7:
+        raise Exception(f"invalid pin {pin} out of range")
+    return portidx * 8 + bitidx
+
 class ClassDigInOutInfo(ClassInfo):
+    def __init__(self, node, initCmd):
+        super().__init__(node)
+        self.initObjCmd = initCmd
+
     def info(self):
         inf = ClassInfo.info(self)
         items = {}
@@ -98,6 +121,17 @@ class ClassDigInOutInfo(ClassInfo):
             items[canid].append([8*byte+bit, 1])
         inf['items'] = items
         return inf
+
+    def initNodeObject(self, nodebus, mobs, mobSize):
+        idx = 0
+        for i in self.node.keys():
+            canid = self.node[i]['addr'][0]
+            mobidx = mobs.index(canid)
+            byte = self.node[i]['addr'][1] + mobSize[canid]['start']
+            mask = 1 << self.node[i]['addr'][2]
+            pin = pinStr2Num(self.node[i]['pin'])
+            nodebus.svcTransfer(self.initObjCmd, [idx, mobidx, byte, mask, pin])
+            idx += 1
 
 
 class ClassOwtInfo(ClassInfo):
@@ -113,6 +147,18 @@ class ClassOwtInfo(ClassInfo):
         inf['items'] = items
         return inf
 
+    def initNodeObject(self, nodebus, mobs, mobSize):
+        idx = 0
+        for i in self.node.keys():
+            canid = self.node[i]['addr'][0]
+            mobidx = mobs.index(canid)
+            byte = self.node[i]['addr'][1] + mobSize[canid]['start']
+            nodebus.svcTransfer(SvcProtocol.CmdSetOwObjParams, [idx, mobidx, byte])
+            if len(self.node.keys()) > 1:
+                rc = self.node[i]['owRomCode']
+                print(f"ToDo send romcode {rc}")
+                nodebus.svcTransfer(SvcProtocol.CmdSetOwObjRomCode, [idx, 0])
+            idx += 1
 
 class ClassInfoUniq(ClassInfo):
     def info(self):
@@ -120,8 +166,10 @@ class ClassInfoUniq(ClassInfo):
 
 
 def buildClassInfo(trieda, node):
-    if trieda in ('DigIN', 'DigOUT'):
-        return ClassDigInOutInfo(node)
+    if trieda == 'DigIN':
+        return ClassDigInOutInfo(node, SvcProtocol.CmdSetDigINObjParams)
+    elif trieda == 'DigOUT':
+        return ClassDigInOutInfo(node, SvcProtocol.CmdSetDigOUTObjParams)
     elif trieda == 'OwT':
         return ClassOwtInfo(node)
     else:
@@ -134,7 +182,7 @@ def configure_node(node):
     inputCanIds = set()
     triedyNr = dict()
     triedyInfo = dict()
-    triedy = dict()
+    triedy = []
 
     for trieda in ('DigIN', 'OwT', 'SensorionCO2', 'Vlhkomer'):
         if trieda in node:
@@ -143,7 +191,7 @@ def configure_node(node):
             outputCanIds.update(info['ids'])
             triedyNr[trieda] = info['count']
             triedyInfo[trieda] = info
-            triedy[trieda] = triedaInfo
+            triedy.append(triedaInfo)
         else:
             triedyNr[trieda] = 0
 
@@ -154,6 +202,7 @@ def configure_node(node):
             inputCanIds.update(info['ids'])
             triedyNr[trieda] = info['count']
             triedyInfo[trieda] = info
+            triedy.append(triedaInfo)
         else:
             triedyNr[trieda] = 0
 
@@ -198,6 +247,19 @@ def configure_node(node):
                        len(canmobsList)])
 
     trans.svcTransfer(SvcProtocol.CmdSetStage, [2])
+
+    startOffset = 0
+    for canmobidx in canmobsList:
+        size = canmob_size[canmobidx]
+        canmob_size[canmobidx] = {'start': startOffset, 'size': size}
+        startOffset += size
+
+    print(canmob_size)
+
+    for trieda in triedy:
+        trieda.initNodeObject(trans, canmobsList, canmob_size)
+
+    trans.svcTransfer(SvcProtocol.CmdSetStage, [3])
 
 def configure_all():
     with open('config.yaml', "r") as stream:

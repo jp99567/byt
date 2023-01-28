@@ -29,3 +29,4 @@ RemoteSystemsTempFiles
 core
 
 pru/gen/*
+avr/fw/SvcProtocol_generated.h

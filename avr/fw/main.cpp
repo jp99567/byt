@@ -1,6 +1,7 @@
 #include <avr/sleep.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <string.h>
 
 #include "ow.h"
 #include "SvcProtocol_generated.h"
@@ -23,6 +24,14 @@ struct Dig_Obj : Base_Obj
 {
 	uint8_t mask;
 	uint8_t pin;
+
+	void setParams(const uint8_t* msg)
+	{
+		mobIdx = msg[2];
+		iodataIdx = msg[3];
+		mask = msg[4];
+		pin = msg[5];
+	}
 };
 
 using DigIN_Obj = Dig_Obj;
@@ -149,6 +158,36 @@ void svc() {
 		gFwStage = msg[1];
 		msglen = 1;
 		break;
+	case Svc::Protocol::CmdSetOwObjParams:
+	{
+		auto& obj = gOwT_Obj[msg[1]];
+		obj.mobIdx = msg[2];
+		obj.iodataIdx = msg[3];
+		msglen = 1;
+	}
+		break;
+	case Svc::Protocol::CmdSetOwObjRomCode:
+		{
+			auto& obj = gOwT_Obj[msg[1]];
+			obj.rc = *reinterpret_cast<const ow::RomCode*>(&msg[2]);
+			msglen = 1;
+		}
+			break;
+	case Svc::Protocol::CmdSetDigINObjParams:
+		{
+			auto& obj = gDigIN_Obj[msg[1]];
+			obj.setParams(msg);
+			msglen = 1;
+		}
+			break;
+	case Svc::Protocol::CmdSetDigOUTObjParams:
+		{
+			auto& obj = gDigOUT_Obj[msg[1]];
+			obj.setParams(msg);
+			//setDir(obj.pin);ToDo
+			msglen = 1;
+		}
+			break;
 	default:
 		msg[1] = Svc::Protocol::CmdInvalid;
 		msglen = svc_rx_broadcast ? 0 : 1;
@@ -156,6 +195,11 @@ void svc() {
 	}
 
 	can_tx_svc();
+}
+
+void setDir(uint8_t pin)
+{
+
 }
 
 bool getDigInVal(uint8_t pin)
@@ -234,6 +278,7 @@ int main() {
 
 	uint8_t allocIOData[gIOData_count];
 	gIOData = allocIOData;
+	::memset(gIOData, 0, gIOData_count);
 
 	while(gFwStage == cFwStageInit2){
 		if(can_rx_svc()){
