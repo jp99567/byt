@@ -3,7 +3,7 @@
 #include <avr/interrupt.h>
 
 #include "ow.h"
-#include "SvcProtocol.h"
+#include "SvcProtocol_generated.h"
 
 ISR(TIMER0_OVF_vect){
 }
@@ -39,7 +39,7 @@ static uint8_t gDigOUT_count;
 static uint8_t gOwT_count;
 static uint8_t gIOData_count;
 static uint8_t gMobFirstTx;
-static uint8_t gMobEnd;
+static uint8_t gMobCount;
 
 DigIN_Obj* gDigIN_Obj;
 DigOUT_Obj* gDigOUT_Obj;
@@ -79,6 +79,7 @@ constexpr uint8_t u8min(uint8_t a, uint8_t b){
 
 static uint8_t msg[8] __attribute__ ((section (".noinit")));
 static uint8_t msglen __attribute__ ((section (".noinit")));
+bool svc_rx_broadcast = false;
 bool can_rx_svc()
 {
 	for(uint8_t id=13; id<=14; ++id){
@@ -90,14 +91,18 @@ bool can_rx_svc()
 				msg[i] = CANMSG;
 			CANSTMOB = 0;
 			CANCDMOB = ( 1 << CONMOB1) | ( 1 << IDE );
-			if(msglen > 0)
+			if(msglen > 0){
+				svc_rx_broadcast = id == 14;
 				return true;
+			}
 		}
 	}
 	return false;
 }
 
 void can_tx_svc(void) {
+	if(not msglen or msglen > 8)
+		return;
 	CANPAGE = ( 12 << MOBNB0 );
 	while ( CANEN1 & ( 1 << ENMOB12 ) ); // Wait for MOb 0 to be free
 	CANSTMOB = 0x00;    	// Clear mob status register
@@ -117,7 +122,7 @@ void init()
 
 void svc() {
 	switch (msg[0]) {
-	case 's':
+	case Svc::Protocol::CmdStatus:
 		msglen = 1;
 		msg[msglen++] = CANTEC;
 		msg[msglen++] = CANREC;
@@ -128,6 +133,8 @@ void svc() {
 		gDigOUT_count = msg[2];
 		gOwT_count = msg[3];
 		gIOData_count = msg[4];
+		gMobFirstTx = msg[5];
+		gMobCount = msg[6];
 		msglen = 1;
 		break;
 	case Svc::Protocol::CmdGetAllocCounts:
@@ -136,6 +143,8 @@ void svc() {
 		msg[msglen++] = gDigOUT_count;
 		msg[msglen++] = gOwT_count;
 		msg[msglen++] = gIOData_count;
+		msg[msglen++] = gMobFirstTx;
+		msg[msglen++] = gMobCount;
 		break;
 	case Svc::Protocol::CmdSetStage:
 		gFwStage = msg[1];
@@ -143,13 +152,11 @@ void svc() {
 		break;
 	default:
 		msg[1] = Svc::Protocol::CmdInvalid;
-		msglen = 1;
+		msglen = svc_rx_broadcast ? 0 : 1;
 		break;
 	}
 
-	if(msglen > 0){
-		can_tx_svc();
-	}
+	can_tx_svc();
 }
 
 bool getDigInVal(uint8_t pin)
@@ -196,7 +203,7 @@ void run()
 			}
 		}
 
-		for(uint8_t mobidx = gMobFirstTx; mobidx < gMobEnd; ++mobidx){
+		for(uint8_t mobidx = gMobFirstTx; mobidx < gMobCount; ++mobidx){
 			if(isMobMarked(mobidx)){
 				CANPAGE = ( mobidx << MOBNB0 );
 				if(not ( CANEN1 & ( 1 << ENMOB12 ) )){

@@ -7,34 +7,43 @@ from struct import pack, unpack
 import argparse
 import time
 import yaml
-from yaml import load, dump
+import enum
 
 parser = argparse.ArgumentParser(description='avr can bus nodes configuration')
+parser.add_argument('--candev', default='vcan0')
 parser.add_argument('--id', type=int, choices=list(range(1, 31)))
 parser.add_argument('--all', action='store_true')
 parser.add_argument('--fw_upload', action='store_true')
 parser.add_argument('--stat', action='store_true')
 parser.add_argument('--config', action='store_true')
-parser.add_argument('--candev', default='can1')
+parser.add_argument('--generate', action='store_true')
 
 args = parser.parse_args()
 canconf_bcast = 0xEC33F000 >> 3
+
+class SvcProtocol(enum.Enum):
+    CmdSetAllocCounts = enum.auto()
+    CmdGetAllocCounts = enum.auto()
+    CmdSetStage = enum.auto()
+    CmdStatus = ord('s')
+    CmdInvalid = ord('X')
 
 
 def canconfidfromnodeid(nodeid):
     return canconf_bcast | (nodeid << 2)
 
+bus = None
+if args.stat or args.config or args.fw_upload:
+    bus = can.Bus(interface='socketcan', channel=args.candev, receive_own_messages=False)
 
-bus = can.Bus(interface='socketcan',
-              channel=args.candev,
-              receive_own_messages=False)
 
 def class_info(trieda):
     count = len(trieda.keys())
     ids = set()
     for i in trieda.keys():
         ids.add(trieda[i]['addr'][0])
-    return { 'ids' : ids, 'count' : count }
+    return {'ids': ids, 'count': count}
+
 
 class ClassInfo:
     def __init__(self, node):
@@ -82,13 +91,18 @@ def configure_node(node):
 
     print(f"nodeId:{nodeId} {triedyNr} outputCanIdNr:{len(outputCanIds)} inputCanIdNr:{len(inputCanIds)}")
 
+    if inputCanIds.intersection(outputCanIds):
+        raise Exception(f"IN/OUT can ids mixed {inputCanIds} {outputCanIds}")
+
+
 
 def configure_all():
     with open('config.yaml', "r") as stream:
-        config = yaml.load(stream)
+        config = yaml.safe_load(stream)
         for node in config['NodeCAN']:
             print(f"node name: {node}")
             configure_node(config['NodeCAN'][node])
+
 
 def upload_fw(nodeid):
     avrid1tx = canconfidfromnodeid(nodeid)
@@ -118,7 +132,7 @@ def upload_fw(nodeid):
                 for i in msgdata:
                     pgxor ^= i
                 bus.send(can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=msgdata))
-                time.sleep(10/1000)
+                time.sleep(10 / 1000)
                 page_bytes_in += 8
             rsp = bus.recv()
             print(rsp)
@@ -151,3 +165,21 @@ if args.fw_upload:
 
 if args.config:
     configure_all()
+
+def generateCppHeader():
+    head = '''# pragma once
+// GENERATED
+namespace Svc { namespace Protocol {
+    enum Cmd  {
+'''
+    foot = ''' };
+}}'''
+
+    with open("avr/fw/SvcProtocol_generated.h", 'w') as f:
+        f.write(head)
+        for i in SvcProtocol:
+            f.write(f"{i.name} = {i.value},\n")
+        f.write(foot)
+
+if args.generate:
+    generateCppHeader()
