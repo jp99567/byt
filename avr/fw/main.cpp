@@ -13,23 +13,22 @@ constexpr uint8_t cFwStageInit2 = _BV(6);
 constexpr uint8_t cFwStageRunning = _BV(6) | _BV(7);
 static uint8_t gFwStage = cFwStageInit1;
 
-struct DigIN_Obj
+struct Base_Obj
 {
-	uint8_t pin;
+	uint8_t mobIdx;
 	uint8_t iodataIdx;
+};
+
+struct Dig_Obj : Base_Obj
+{
 	uint8_t mask;
-	uint8_t mobIdx;
-};
-
-struct DigOUT_Obj
-{
 	uint8_t pin;
-	uint8_t iodataIdx;
-	uint8_t ioBitIdx;
-	uint8_t mobIdx;
 };
 
-struct OwT_Obj
+using DigIN_Obj = Dig_Obj;
+using DigOUT_Obj = Dig_Obj;
+
+struct OwT_Obj : Base_Obj
 {
 	ow::RomCode rc;
 };

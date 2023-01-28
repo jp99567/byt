@@ -16,7 +16,7 @@ parser.add_argument('--all', action='store_true')
 parser.add_argument('--fw_upload', action='store_true')
 parser.add_argument('--stat', action='store_true')
 parser.add_argument('--config', action='store_true')
-parser.add_argument('--generate', action='store_true')
+parser.add_argument('--generate', action='store_true', help='header file for can fw')
 
 args = parser.parse_args()
 canconf_bcast = 0xEC33F000 >> 3
@@ -32,17 +32,46 @@ class SvcProtocol(enum.Enum):
 def canconfidfromnodeid(nodeid):
     return canconf_bcast | (nodeid << 2)
 
+def parseStatusResponse(data):
+    if len(data) < 2 or data[0] != SvcProtocol.CmdStatus:
+        raise Exception(f"not a status response {data}")
+    stage = data[1] & 0b11
+    if stage == 0:
+        print(f"stage bootloader")
+    elif stage == 1:
+        print(f"stage1")
+    elif stage == 2:
+        print(f"stage2")
+    else:
+        print(f"stage running")
+
+
+class NodeBus:
+    def __init__(self, canbus, nodeid):
+        self.bus = canbus
+        self.canid = canconfidfromnodeid(nodeid)
+        self.nodeid = nodeid
+
+    def svcTransfer(self, cmd, data):
+        print(f"can send {cmd.name} {data}")
+        message = can.Message(arbitration_id=self.canid, is_extended_id=True, data=[cmd.value, *data, ])
+        self.bus.send(message)
+        timeout = 1.5
+        abs_timeout = time.time() + timeout
+        max_count = 20
+        while max_count or timeout <= 0:
+            max_count -= 1
+            messagein = bus.recv(timeout)
+            if messagein is None:
+                raise Exception(f"no response nodeid:{self.nodeid} canid:{self.canid:X}")
+            if messagein.arbitration_id == self.canid+1:
+                return messagein.data
+            timeout = abs_timeout - time.time()
+        raise Exception(f"no response (or bus flooded) nodeid:{self.nodeid} canid:{self.canid:X}")
+
 bus = None
 if args.stat or args.config or args.fw_upload:
     bus = can.Bus(interface='socketcan', channel=args.candev, receive_own_messages=False)
-
-
-def class_info(trieda):
-    count = len(trieda.keys())
-    ids = set()
-    for i in trieda.keys():
-        ids.add(trieda[i]['addr'][0])
-    return {'ids': ids, 'count': count}
 
 
 class ClassInfo:
@@ -56,15 +85,45 @@ class ClassInfo:
             ids.add(self.node[i]['addr'][0])
         return {'ids': ids, 'count': count}
 
+class ClassDigInOutInfo(ClassInfo):
+    def info(self):
+        inf = ClassInfo.info(self)
+        items = {}
+        for i in self.node.keys():
+            canid = self.node[i]['addr'][0]
+            if canid not in items:
+                items[canid] = []
+            byte = self.node[i]['addr'][1]
+            bit = self.node[i]['addr'][2]
+            items[canid].append([8*byte+bit, 1])
+        inf['items'] = items
+        return inf
+
+
+class ClassOwtInfo(ClassInfo):
+    def info(self):
+        inf = ClassInfo.info(self)
+        items = {}
+        for i in self.node.keys():
+            canid = self.node[i]['addr'][0]
+            if canid not in items:
+                items[canid] = []
+            byte = self.node[i]['addr'][1]
+            items[canid].append([8*byte, 16])
+        inf['items'] = items
+        return inf
+
 
 class ClassInfoUniq(ClassInfo):
     def info(self):
-        return {'ids': {self.node['addr']}, 'count': 1}
+        return {'ids': {self.node['addr']}, 'count': 1, 'items': {self.node['addr'] : [[0, 4*8]]}}
 
 
 def buildClassInfo(trieda, node):
-    if trieda in ('DigIN', 'DigOUT', 'OwT'):
-        return ClassInfo(node)
+    if trieda in ('DigIN', 'DigOUT'):
+        return ClassDigInOutInfo(node)
+    elif trieda == 'OwT':
+        return ClassOwtInfo(node)
     else:
         return ClassInfoUniq(node)
 
@@ -74,6 +133,8 @@ def configure_node(node):
     outputCanIds = set()
     inputCanIds = set()
     triedyNr = dict()
+    triedyInfo = dict()
+    triedy = dict()
 
     for trieda in ('DigIN', 'OwT', 'SensorionCO2', 'Vlhkomer'):
         if trieda in node:
@@ -81,6 +142,10 @@ def configure_node(node):
             info = triedaInfo.info()
             outputCanIds.update(info['ids'])
             triedyNr[trieda] = info['count']
+            triedyInfo[trieda] = info
+            triedy[trieda] = triedaInfo
+        else:
+            triedyNr[trieda] = 0
 
     for trieda in ('DigOUT',):
         if trieda in node:
@@ -88,13 +153,51 @@ def configure_node(node):
             info = triedaInfo.info()
             inputCanIds.update(info['ids'])
             triedyNr[trieda] = info['count']
+            triedyInfo[trieda] = info
+        else:
+            triedyNr[trieda] = 0
 
     print(f"nodeId:{nodeId} {triedyNr} outputCanIdNr:{len(outputCanIds)} inputCanIdNr:{len(inputCanIds)}")
+    print(triedyInfo)
+    canmobs = dict()
+    for trieda in triedyInfo:
+        for canid, items in triedyInfo[trieda]['items'].items():
+            if canid not in canmobs:
+                canmobs[canid] = items
+            else:
+                canmobs[canid].extend(items)
+
+    canmob_size = dict()
+    for id in canmobs:
+        canmobs[id].sort(key=lambda e: e[0])
+        prev_end = 0
+        for i in canmobs[id]:
+            if prev_end > i[0]:
+                raise Exception(f"canid:{id:X} overlaps at bit {i[0]} items {canmobs[id]}")
+            prev_end = i[0] + i[1]
+        if prev_end > 8*8:
+            raise Exception(f"canid:{id:X} exceeds 8B items:({canmobs[id]})")
+        canmob_size[id] = (prev_end + 7) // 8
+
+    print(canmob_size)
 
     if inputCanIds.intersection(outputCanIds):
         raise Exception(f"IN/OUT can ids mixed {inputCanIds} {outputCanIds}")
 
+    canmobsList = sorted(inputCanIds)
+    canmobsList.extend(sorted(outputCanIds))
+    print(canmobsList)
 
+    trans = NodeBus(bus, nodeId)
+    trans.svcTransfer(SvcProtocol.CmdSetAllocCounts,
+                      [triedyNr['DigIN'],
+                       triedyNr['DigOUT'],
+                       triedyNr['OwT'],
+                       sum(canmob_size.values()),
+                       len(inputCanIds),
+                       len(canmobsList)])
+
+    trans.svcTransfer(SvcProtocol.CmdSetStage, [2])
 
 def configure_all():
     with open('config.yaml', "r") as stream:
