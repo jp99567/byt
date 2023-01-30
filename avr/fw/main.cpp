@@ -284,7 +284,7 @@ void svc(bool broadcast) {
 		msglen = 1;
 		static_assert(1+test::_IoPortNr <= sizeof(msg));
 		for(int port=0; port < test::_IoPortNr; ++port){
-			msg[msglen++] = test::getDDR(port);
+			msg[msglen++] = test::getPIN(port);
 		}
 	}
 		break;

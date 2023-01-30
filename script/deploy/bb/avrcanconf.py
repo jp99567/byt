@@ -20,10 +20,12 @@ parser.add_argument('--config', action='store_true')
 parser.add_argument('--yamlfile', default='config.yaml')
 parser.add_argument('--generate', action='store_true', help='header file for can fw')
 parser.add_argument('--cmd', help='svc command send to node')
+parser.add_argument('--exit_bootloader', action='store_true')
 parser.add_argument('msg', nargs='*', help='data for command')
 
 args = parser.parse_args()
-canconf_bcast = 0xEC33F000 >> 3
+canid_bcast = 0xEC33F000 >> 3
+canid_bcast_mask = ((1 << 20) - 1) << 9
 
 
 class SvcProtocol(enum.Enum):
@@ -52,60 +54,89 @@ class NodeStage(enum.Enum):
     stage3run = 0b11000000
 
 
-def canconfidfromnodeid(nodeid):
-    return canconf_bcast | (nodeid << 2)
+def canIdFromNodeId(nodeid):
+    return canid_bcast | (nodeid << 2)
+
+
+def nodeIfFromCanId(canid):
+    return (canid & ~canid_bcast_mask) >> 2
+
+
+def canIdCheck(canid):
+    if (canid & canid_bcast_mask) == canid_bcast:
+        idnet = canid & ~canid_bcast_mask
+        nodeId = idnet >> 2
+        hostid = idnet & 0b11
+        return nodeId, hostid
+    return None
+
+
+def sendBlocking(canbus, messageTx):
+    canbus.send(messageTx)
+    timeout = 1
+    abs_timeout = time.time() + timeout
+    while timeout >= 0:
+        messageRx = canbus.recv(timeout)
+        if messageRx is None:
+            raise Exception(f"send read back failed: {messageTx}")
+        if messageTx.arbitration_id == messageRx.arbitration_id:
+            break
+        timeout = abs_timeout - time.time()
 
 
 class NodeBus:
-    def __init__(self, canbus, nodeid):
+    def __init__(self, canbus, nodeid=canid_bcast):
         self.bus = canbus
-        self.canid = canconfidfromnodeid(nodeid)
+        self.canid = canIdFromNodeId(nodeid)
         self.nodeid = nodeid
 
     def svcTransfer(self, cmd, data=None):
-        print(f"can send {cmd.name} {data}")
+        if self.nodeid == canid_bcast:
+            return self.svcTransferBroadcast(cmd, data)
         txdata = [cmd.value] if data is None else [cmd.value, *data, ]
-        print(txdata)
-        message = can.Message(arbitration_id=self.canid, is_extended_id=True, data=txdata)
-        self.bus.send(message)
+        messageTx = can.Message(arbitration_id=self.canid, is_extended_id=True, data=txdata)
+        # print(f"can send {cmd.name} {txdata} {messageTx}")
+        sendBlocking(self.bus, messageTx)
         timeout = 1.5
         abs_timeout = time.time() + timeout
-        max_count = 20
-        while max_count or timeout <= 0:
-            max_count -= 1
+        count = 20
+        while count and timeout >= 0:
+            count -= 1
             messagein = self.bus.recv(timeout)
             if messagein is None:
                 raise Exception(f"no response nodeid:{self.nodeid} canid:{self.canid:X}")
-            if messagein.arbitration_id == self.canid + 1:
+            elif messagein.arbitration_id == self.canid + 1:
                 return messagein.data
             timeout = abs_timeout - time.time()
         raise Exception(f"no response (or bus flooded) nodeid:{self.nodeid} canid:{self.canid:X}")
 
     def svcTransferBroadcast(self, cmd, data=None):
-        print(f"can send {cmd.name} {data}")
         txdata = [cmd.value] if data is None else [cmd.value, *data, ]
-        print(txdata)
-        message = can.Message(arbitration_id=self.canid, is_extended_id=True, data=txdata)
-        self.bus.send(message)
+        messageTx = can.Message(arbitration_id=canid_bcast, is_extended_id=True, data=txdata)
+        sendBlocking(self.bus, messageTx)
         timeout = 1.5
         abs_timeout = time.time() + timeout
-        max_count = 20
-        while max_count or timeout <= 0:
-            max_count -= 1
-            messagein = bus.recv(timeout)
-            if messagein is None:
-                raise Exception(f"no response nodeid:{self.nodeid} canid:{self.canid:X}")
-            if messagein.arbitration_id == self.canid + 1:
-                return messagein.data
+        received = []
+        while timeout >= 0:
+            msgRx = bus.recv(timeout)
+            if msgRx is None:
+                if received:
+                    break
+                raise Exception(f"no response on broadcast")
+            elif canIdCheck(msgRx.arbitration_id):
+                n, h = canIdCheck(msgRx.arbitration_id)
+                if h == 1:
+                    received.append([n, msgRx.data])
             timeout = abs_timeout - time.time()
-        raise Exception(f"no response (or bus flooded) nodeid:{self.nodeid} canid:{self.canid:X}")
+        if received is None: raise Exception(f"no response (or bus flooded) nodeid:{self.nodeid} canid:{self.canid:X}")
+        return received
 
 
 bus = None
 
 
 def openBus():
-    return can.Bus(interface='socketcan', channel=args.candev, receive_own_messages=False)
+    return can.Bus(interface='socketcan', channel=args.candev, receive_own_messages=True)
 
 
 if args.stat or args.config or args.fw_upload:
@@ -309,12 +340,11 @@ def configure_all():
 
 
 def upload_fw(nodeid):
-    avrid1tx = canconfidfromnodeid(nodeid)
+    avrid1tx = canIdFromNodeId(nodeid)
     avrid1rx = avrid1tx + 1
     message = can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=[ord('s')])
-    bus.send(message)
+    sendBlocking(bus, message)
     messagein = bus.recv(1.5)
-    print(f"in: {messagein}")
     if messagein.dlc != 4 or messagein.data[0] != ord('s') or (messagein.data[3] & 0x80) != 0:
         raise 'invalid response, maybe not bootloader'
 
@@ -330,48 +360,57 @@ def upload_fw(nodeid):
             page_bytes_in = 0
             pgxor = 0xA5
             print(f"upload page:{page} {len(pgdata)}")
-            bus.send(can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=[ord('d')]))
+            sendBlocking(bus, can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=[ord('d')]))
             while page_bytes_in < pgsize:
                 msgdata = pgdata[page_bytes_in:page_bytes_in + 8].ljust(8, bytes.fromhex('ff'))
                 for i in msgdata:
                     pgxor ^= i
-                bus.send(can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=msgdata))
-                time.sleep(10 / 1000)
+                sendBlocking(bus, can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=msgdata))
                 page_bytes_in += 8
             rsp = bus.recv()
-            print(rsp)
             if rsp.dlc != 2:
                 raise 'invalid size'
             if rsp.data[1] != pgxor:
                 raise 'xorsum mismatch'
             pgaddr = page * pgsize
-            bus.send(can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=pack('<BI', ord('f'), pgaddr)))
+            sendBlocking(bus,
+                         can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=pack('<BI', ord('f'), pgaddr)))
             rsp = bus.recv()
             if rsp.dlc == 1 and rsp.data[0] == ord('f'):
                 print(f"flash page:{page} pageaddr:{pgaddr} OK")
             else:
                 raise f"flash page {page} error"
-        print(f"Upload fw nodeid:{nodeid} finnished.")
+        print(f"Upload fw nodeid:{nodeid} finnished Ok.")
+
+
+def statusRsp(rsp):
+    if SvcProtocol.CmdStatus == SvcProtocol(rsp[0]):
+        stage = rsp[3] >> 6
+        stat = {'canTxErr': rsp[1], 'canRxErr': rsp[2], 'stage': stage}
+        flags = []
+        if rsp[3] & (1 << 4): flags.append('JTRF')
+        if rsp[3] & (1 << 3): flags.append('WDRF')
+        if rsp[3] & (1 << 2): flags.append('BORF')
+        if rsp[3] & (1 << 1): flags.append('EXTRF')
+        if rsp[3] & (1 << 0): flags.append('PORF')
+        return f"status {stat} {flags}"
+    else:
+        return f"unknown: {messagein}"
 
 
 if args.stat:
-    tran = NodeBus(bus, args.id)
-    rsp = tran.svcTransfer(SvcProtocol.CmdStatus)
-    if rsp is None:
-        print("No response")
+    if args.all:
+        tran = NodeBus(bus)
+        rsp = tran.svcTransferBroadcast(SvcProtocol.CmdStatus)
+        for node, data in rsp:
+            print(f"node:{node} {statusRsp(data)}")
     else:
-        if SvcProtocol.CmdStatus.value == rsp[0]:
-            stage = rsp[3] >> 6
-            stat = {'canTxErr': rsp[1], 'canRxErr': rsp[2], 'stage': stage}
-            flags = []
-            if rsp[3] & (1 << 4): flags.append('JTRF')
-            if rsp[3] & (1 << 3): flags.append('WDRF')
-            if rsp[3] & (1 << 2): flags.append('BORF')
-            if rsp[3] & (1 << 1): flags.append('EXTRF')
-            if rsp[3] & (1 << 0): flags.append('PORF')
-            print(f"status {stat} {flags}")
+        tran = NodeBus(bus, args.id)
+        rsp = tran.svcTransfer(SvcProtocol.CmdStatus)
+        if rsp is None:
+            print("No response")
         else:
-            print(f"unknown: {messagein}")
+            print(f"{statusRsp(rsp)}")
 
 if args.fw_upload:
     upload_fw(args.id)
@@ -402,4 +441,14 @@ if args.generate:
 if args.cmd:
     trans = NodeBus(openBus(), args.id)
     data = [int(v, 0) for v in args.msg]
-    print(trans.svcTransfer(SvcProtocol[args.cmd], data))
+    rsp = trans.svcTransfer(SvcProtocol[args.cmd], data)
+    if SvcProtocol(rsp[0]) in (SvcProtocol.CmdTestGetPIN, SvcProtocol.CmdTestGetPORT, SvcProtocol.CmdTestGetDDR):
+        out = [f"{v:08b}" for v in rsp[1:]]
+        print(f"{out}")
+
+if args.exit_bootloader:
+    id = canid_bcast
+    if not args.all:
+        id = canIdFromNodeId(args.id)
+    msg = can.Message(arbitration_id=id, is_extended_id=True, data=[ord('c')])
+    sendBlocking(openBus(), msg)
