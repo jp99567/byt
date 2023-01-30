@@ -29,7 +29,7 @@ def canconfidfromnodeid(nodeid):
 def parseStatusResponse(data):
     if len(data) < 2 or data[0] != SvcProtocol.CmdStatus:
         raise Exception(f"not a status response {data}")
-    stage = data[1] & 0b11
+    stage = (data[1] >> 6) & 0b11
     if stage == 0:
         print(f"stage bootloader")
     elif stage == 1:

@@ -5,12 +5,13 @@
 
 #include "ow.h"
 #include "SvcProtocol_generated.h"
+#include "gpio.h"
 
 ISR(TIMER0_OVF_vect){
 }
 
-constexpr uint8_t cFwStageInit1 = _BV(7);
-constexpr uint8_t cFwStageInit2 = _BV(6);
+constexpr uint8_t cFwStageInit1 = _BV(6);
+constexpr uint8_t cFwStageInit2 = _BV(7);
 constexpr uint8_t cFwStageRunning = _BV(6) | _BV(7);
 static uint8_t gFwStage = cFwStageInit1;
 
@@ -34,8 +35,16 @@ struct Dig_Obj : Base_Obj
 	}
 };
 
+struct DigOUT_Obj : Dig_Obj
+{
+	void setParams(const uint8_t* msg)
+	{
+		Dig_Obj::setParams(msg);
+		setDirOut(pin);
+	}
+};
+
 using DigIN_Obj = Dig_Obj;
-using DigOUT_Obj = Dig_Obj;
 
 struct OwT_Obj : Base_Obj
 {
@@ -53,6 +62,7 @@ DigIN_Obj* gDigIN_Obj;
 DigOUT_Obj* gDigOUT_Obj;
 OwT_Obj* gOwT_Obj;
 uint8_t* gIOData;
+uint8_t* gMobEndIdx;
 uint16_t gMobMarkedUpdated;
 
 namespace ow {
@@ -87,8 +97,8 @@ constexpr uint8_t u8min(uint8_t a, uint8_t b){
 
 static uint8_t msg[8] __attribute__ ((section (".noinit")));
 static uint8_t msglen __attribute__ ((section (".noinit")));
-bool svc_rx_broadcast = false;
-bool can_rx_svc()
+
+uint8_t can_rx_svc()
 {
 	for(uint8_t id=13; id<=14; ++id){
 		CANPAGE = ( id << MOBNB0 );
@@ -100,12 +110,11 @@ bool can_rx_svc()
 			CANSTMOB = 0;
 			CANCDMOB = ( 1 << CONMOB1) | ( 1 << IDE );
 			if(msglen > 0){
-				svc_rx_broadcast = id == 14;
-				return true;
+				return id;
 			}
 		}
 	}
-	return false;
+	return 0;
 }
 
 void can_tx_svc(void) {
@@ -128,13 +137,46 @@ void init()
 	CANTCON = 99;
 }
 
-void svc() {
+void initMob(uint8_t mobIdx, uint8_t endIoDataIdx, uint16_t canid11bit)
+{
+	CANPAGE = ( mobIdx << MOBNB0 );
+	constexpr uint32_t umask = 0;
+	CANIDM = ~umask;
+	CANIDT = (uint32_t)canid11bit << (32-11);
+	gMobEndIdx[mobIdx] = endIoDataIdx;
+}
+
+void prepareStatusMsg()
+{
+	msg[0] = Svc::Protocol::CmdStatus;
+	msglen = 1;
+	msg[msglen++] = CANTEC;
+	msg[msglen++] = CANREC;
+	msg[msglen++] = MCUSR | gFwStage;
+}
+
+void enableCanPvExchange()
+{
+	auto mobidx = 0;
+	while(mobidx < gMobFirstTx){
+		CANPAGE = ( mobidx++ << MOBNB0 );
+		CANCDMOB = ( 1 << CONMOB1); //enable RX
+	}
+	while(mobidx < gMobCount){
+		uint8_t beginIoIdx = 0;
+		if(mobidx > 0)
+			beginIoIdx = gIOData[mobidx-1];
+		uint8_t endIoIdx = gIOData[mobidx];
+		uint8_t size =  endIoIdx - beginIoIdx;
+		CANPAGE = ( mobidx++ << MOBNB0 );
+		CANCDMOB = size;
+	}
+}
+
+void svc(bool broadcast) {
 	switch (msg[0]) {
 	case Svc::Protocol::CmdStatus:
-		msglen = 1;
-		msg[msglen++] = CANTEC;
-		msg[msglen++] = CANREC;
-		msg[msglen++] = MCUSR | gFwStage;
+		prepareStatusMsg();
 		break;
 	case Svc::Protocol::CmdSetAllocCounts:
 		gDigIN_count = msg[1];
@@ -155,8 +197,13 @@ void svc() {
 		msg[msglen++] = gMobCount;
 		break;
 	case Svc::Protocol::CmdSetStage:
-		gFwStage = msg[1];
+	{
+		auto newStage = msg[1];
+		if(newStage != gFwStage && newStage == cFwStageRunning)
+			enableCanPvExchange();
+		gFwStage = newStage;
 		msglen = 1;
+	}
 		break;
 	case Svc::Protocol::CmdSetOwObjParams:
 	{
@@ -184,40 +231,79 @@ void svc() {
 		{
 			auto& obj = gDigOUT_Obj[msg[1]];
 			obj.setParams(msg);
-			//setDir(obj.pin);ToDo
 			msglen = 1;
 		}
 			break;
+	case Svc::Protocol::CmdSetCanMob:
+		{
+			uint8_t mobIdx = msg[1];
+			uint8_t ioEndIdx = msg[2];
+			auto canid = *reinterpret_cast<const uint16_t*>(&msg[3]);
+			initMob(mobIdx, ioEndIdx, canid);
+			msglen = 1;
+		}
+		break;
+	case Svc::Protocol::CmdTestGetDDR:
+	{
+		msglen = 1;
+		static_assert(1+test::_IoPortNr <= sizeof(msg));
+		for(int port=0; port < test::_IoPortNr; ++port){
+			msg[msglen++] = test::getDDR(port);
+		}
+	}
+		break;
+	case Svc::Protocol::CmdTestSetDDR:
+	{
+		unsigned idx = 1, port = 0;
+		while((port < test::_IoPortNr) && (idx < msglen)){
+			test::setDDR(port++, msg[idx++]);
+		}
+		msglen=1;
+	}
+		break;
+	case Svc::Protocol::CmdTestGetPORT:
+	{
+		msglen = 1;
+		static_assert(1+test::_IoPortNr <= sizeof(msg));
+		for(int port=0; port < test::_IoPortNr; ++port){
+			msg[msglen++] = test::getPORT(port);
+		}
+	}
+		break;
+	case Svc::Protocol::CmdTestSetPORT:
+	{
+		unsigned idx = 1, port = 0;
+		while((port < test::_IoPortNr) && (idx < msglen)){
+			test::setPORT(port++, msg[idx++]);
+		}
+		msglen=1;
+	}
+		break;
+	case Svc::Protocol::CmdTestGetPIN:
+	{
+		msglen = 1;
+		static_assert(1+test::_IoPortNr <= sizeof(msg));
+		for(int port=0; port < test::_IoPortNr; ++port){
+			msg[msglen++] = test::getDDR(port);
+		}
+	}
+		break;
+	case Svc::Protocol::CmdTestSetPIN:
+	{
+		unsigned idx = 1, port = 0;
+		while((port < test::_IoPortNr) && (idx < msglen)){
+			test::setPIN(port++, msg[idx++]);
+		}
+		msglen=1;
+	}
+		break;
 	default:
 		msg[1] = Svc::Protocol::CmdInvalid;
-		msglen = svc_rx_broadcast ? 0 : 1;
+		msglen = broadcast ? 0 : 1;
 		break;
 	}
 
 	can_tx_svc();
-}
-
-void setDir(uint8_t pin)
-{
-
-}
-
-bool getDigInVal(uint8_t pin)
-{
-	uint8_t portid = pin >> 3;
-	uint8_t mask = 1 << (pin & 0b111);
-
-		switch(portid){
-		case 0:	return PINA & mask;
-		case 1: return PINB & mask;
-		case 2: return PINC & mask;
-		case 3: return PIND & mask;
-		case 4: return PINE & mask;
-		case 5:	return PINF & mask;
-		case 6:	return PING & mask;
-		default:
-			return false;
-		}
 }
 
 void markMob(uint8_t idx)
@@ -261,9 +347,13 @@ int main() {
 
 	init();
 
+	prepareStatusMsg();
+	can_tx_svc();
+
 	while(gFwStage == cFwStageInit1){
-		if(can_rx_svc()){
-			svc();
+		auto id = can_rx_svc();
+		if(id){
+			svc(id==14);
 		}
 	}
 
@@ -280,11 +370,18 @@ int main() {
 	gIOData = allocIOData;
 	::memset(gIOData, 0, gIOData_count);
 
+	uint8_t allocMobEndIdx[gMobCount];
+	gMobEndIdx = allocMobEndIdx;
+
 	while(gFwStage == cFwStageInit2){
-		if(can_rx_svc()){
-			svc();
+		auto id = can_rx_svc();
+		if(id){
+			svc(id==14);
 		}
 	}
+
+	prepareStatusMsg();
+	can_tx_svc();
 
 	run();
 

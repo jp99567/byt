@@ -73,7 +73,7 @@ static enum OwStrongPowerRequest sStrongPowerRequest;
 static enum OwBitIoState sBitIoState = eOwBitIoFinishedOk;
 static int sBitidx;
 
-#define US2TICK(us) ((us)*200)
+#define US2TICK(us) ((us)*8)
 
 #define cDurFallingEdge US2TICK(10)
 #define cDurResetPulse US2TICK(480)

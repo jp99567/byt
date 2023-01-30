@@ -8,8 +8,7 @@ import argparse
 import time
 import yaml
 import enum
-
-from samba.dcerpc.dcerpc import bind
+from struct import pack
 
 parser = argparse.ArgumentParser(description='avr can bus nodes configuration')
 parser.add_argument('--candev', default='vcan0')
@@ -18,10 +17,14 @@ parser.add_argument('--all', action='store_true')
 parser.add_argument('--fw_upload', action='store_true')
 parser.add_argument('--stat', action='store_true')
 parser.add_argument('--config', action='store_true')
+parser.add_argument('--yamlfile', default='config.yaml')
 parser.add_argument('--generate', action='store_true', help='header file for can fw')
+parser.add_argument('--cmd', help='svc command send to node')
+parser.add_argument('msg', nargs='*', help='data for command')
 
 args = parser.parse_args()
 canconf_bcast = 0xEC33F000 >> 3
+
 
 class SvcProtocol(enum.Enum):
     CmdSetAllocCounts = enum.auto()
@@ -31,25 +34,26 @@ class SvcProtocol(enum.Enum):
     CmdSetOwObjRomCode = enum.auto()
     CmdSetDigINObjParams = enum.auto()
     CmdSetDigOUTObjParams = enum.auto()
+    CmdSetCanMob = enum.auto()
+    CmdTestSetDDR = enum.auto()
+    CmdTestGetDDR = enum.auto()
+    CmdTestSetPORT = enum.auto()
+    CmdTestGetPORT = enum.auto()
+    CmdTestSetPIN = enum.auto()
+    CmdTestGetPIN = enum.auto()
     CmdStatus = ord('s')
     CmdInvalid = ord('X')
 
 
+class NodeStage(enum.Enum):
+    stage0boot = 0
+    stage1 = 0b01000000
+    stage2 = 0b10000000
+    stage3run = 0b11000000
+
+
 def canconfidfromnodeid(nodeid):
     return canconf_bcast | (nodeid << 2)
-
-def parseStatusResponse(data):
-    if len(data) < 2 or data[0] != SvcProtocol.CmdStatus:
-        raise Exception(f"not a status response {data}")
-    stage = data[1] & 0b11
-    if stage == 0:
-        print(f"stage bootloader")
-    elif stage == 1:
-        print(f"stage1")
-    elif stage == 2:
-        print(f"stage2")
-    else:
-        print(f"stage running")
 
 
 class NodeBus:
@@ -58,9 +62,30 @@ class NodeBus:
         self.canid = canconfidfromnodeid(nodeid)
         self.nodeid = nodeid
 
-    def svcTransfer(self, cmd, data):
+    def svcTransfer(self, cmd, data=None):
         print(f"can send {cmd.name} {data}")
-        message = can.Message(arbitration_id=self.canid, is_extended_id=True, data=[cmd.value, *data, ])
+        txdata = [cmd.value] if data is None else [cmd.value, *data, ]
+        print(txdata)
+        message = can.Message(arbitration_id=self.canid, is_extended_id=True, data=txdata)
+        self.bus.send(message)
+        timeout = 1.5
+        abs_timeout = time.time() + timeout
+        max_count = 20
+        while max_count or timeout <= 0:
+            max_count -= 1
+            messagein = self.bus.recv(timeout)
+            if messagein is None:
+                raise Exception(f"no response nodeid:{self.nodeid} canid:{self.canid:X}")
+            if messagein.arbitration_id == self.canid + 1:
+                return messagein.data
+            timeout = abs_timeout - time.time()
+        raise Exception(f"no response (or bus flooded) nodeid:{self.nodeid} canid:{self.canid:X}")
+
+    def svcTransferBroadcast(self, cmd, data=None):
+        print(f"can send {cmd.name} {data}")
+        txdata = [cmd.value] if data is None else [cmd.value, *data, ]
+        print(txdata)
+        message = can.Message(arbitration_id=self.canid, is_extended_id=True, data=txdata)
         self.bus.send(message)
         timeout = 1.5
         abs_timeout = time.time() + timeout
@@ -70,14 +95,21 @@ class NodeBus:
             messagein = bus.recv(timeout)
             if messagein is None:
                 raise Exception(f"no response nodeid:{self.nodeid} canid:{self.canid:X}")
-            if messagein.arbitration_id == self.canid+1:
+            if messagein.arbitration_id == self.canid + 1:
                 return messagein.data
             timeout = abs_timeout - time.time()
         raise Exception(f"no response (or bus flooded) nodeid:{self.nodeid} canid:{self.canid:X}")
 
+
 bus = None
+
+
+def openBus():
+    return can.Bus(interface='socketcan', channel=args.candev, receive_own_messages=False)
+
+
 if args.stat or args.config or args.fw_upload:
-    bus = can.Bus(interface='socketcan', channel=args.candev, receive_own_messages=False)
+    bus = openBus()
 
 
 class ClassInfo:
@@ -94,6 +126,7 @@ class ClassInfo:
     def initNodeObject(self, nodebus, mobs, mobSize):
         pass
 
+
 def pinStr2Num(pin):
     pin = pin.upper()
     if len(pin) != 3 or pin[0] != 'P':
@@ -103,6 +136,7 @@ def pinStr2Num(pin):
     if portidx > 6 or bitidx > 7:
         raise Exception(f"invalid pin {pin} out of range")
     return portidx * 8 + bitidx
+
 
 class ClassDigInOutInfo(ClassInfo):
     def __init__(self, node, initCmd):
@@ -118,7 +152,7 @@ class ClassDigInOutInfo(ClassInfo):
                 items[canid] = []
             byte = self.node[i]['addr'][1]
             bit = self.node[i]['addr'][2]
-            items[canid].append([8*byte+bit, 1])
+            items[canid].append([8 * byte + bit, 1])
         inf['items'] = items
         return inf
 
@@ -143,7 +177,7 @@ class ClassOwtInfo(ClassInfo):
             if canid not in items:
                 items[canid] = []
             byte = self.node[i]['addr'][1]
-            items[canid].append([8*byte, 16])
+            items[canid].append([8 * byte, 16])
         inf['items'] = items
         return inf
 
@@ -160,9 +194,10 @@ class ClassOwtInfo(ClassInfo):
                 nodebus.svcTransfer(SvcProtocol.CmdSetOwObjRomCode, [idx, 0])
             idx += 1
 
+
 class ClassInfoUniq(ClassInfo):
     def info(self):
-        return {'ids': {self.node['addr']}, 'count': 1, 'items': {self.node['addr'] : [[0, 4*8]]}}
+        return {'ids': {self.node['addr']}, 'count': 1, 'items': {self.node['addr']: [[0, 4 * 8]]}}
 
 
 def buildClassInfo(trieda, node):
@@ -224,7 +259,7 @@ def configure_node(node):
             if prev_end > i[0]:
                 raise Exception(f"canid:{id:X} overlaps at bit {i[0]} items {canmobs[id]}")
             prev_end = i[0] + i[1]
-        if prev_end > 8*8:
+        if prev_end > 8 * 8:
             raise Exception(f"canid:{id:X} exceeds 8B items:({canmobs[id]})")
         canmob_size[id] = (prev_end + 7) // 8
 
@@ -246,12 +281,12 @@ def configure_node(node):
                        len(inputCanIds),
                        len(canmobsList)])
 
-    trans.svcTransfer(SvcProtocol.CmdSetStage, [2])
+    trans.svcTransfer(SvcProtocol.CmdSetStage, [NodeStage.stage2.value])
 
     startOffset = 0
-    for canmobidx in canmobsList:
-        size = canmob_size[canmobidx]
-        canmob_size[canmobidx] = {'start': startOffset, 'size': size}
+    for mobcanid in canmobsList:
+        size = canmob_size[mobcanid]
+        canmob_size[mobcanid] = {'start': startOffset, 'size': size}
         startOffset += size
 
     print(canmob_size)
@@ -259,10 +294,14 @@ def configure_node(node):
     for trieda in triedy:
         trieda.initNodeObject(trans, canmobsList, canmob_size)
 
-    trans.svcTransfer(SvcProtocol.CmdSetStage, [3])
+    for idx, canid in enumerate(canmobsList):
+        endIoIdx = canmob_size[canid]['start'] + canmob_size[canid]['size']
+        data = pack('BBH', idx, endIoIdx, canid)
+        trans.svcTransfer(SvcProtocol.CmdSetCanMob, data)
+
 
 def configure_all():
-    with open('config.yaml', "r") as stream:
+    with open(args.yamlfile, "r") as stream:
         config = yaml.safe_load(stream)
         for node in config['NodeCAN']:
             print(f"node name: {node}")
@@ -316,20 +355,30 @@ def upload_fw(nodeid):
 
 
 if args.stat:
-    tx_id = canconfidfromnodeid(args.id)
-    message = can.Message(arbitration_id=tx_id, is_extended_id=True, data=[ord('s')])
-    bus.send(message)
-    messagein = bus.recv(1.5)
-    if messagein is None:
+    tran = NodeBus(bus, args.id)
+    rsp = tran.svcTransfer(SvcProtocol.CmdStatus)
+    if rsp is None:
         print("No response")
     else:
-        print(f"in: {messagein} txId:{tx_id:04X} rxId:{messagein.arbitration_id:04X}")
+        if SvcProtocol.CmdStatus.value == rsp[0]:
+            stage = rsp[3] >> 6
+            stat = {'canTxErr': rsp[1], 'canRxErr': rsp[2], 'stage': stage}
+            flags = []
+            if rsp[3] & (1 << 4): flags.append('JTRF')
+            if rsp[3] & (1 << 3): flags.append('WDRF')
+            if rsp[3] & (1 << 2): flags.append('BORF')
+            if rsp[3] & (1 << 1): flags.append('EXTRF')
+            if rsp[3] & (1 << 0): flags.append('PORF')
+            print(f"status {stat} {flags}")
+        else:
+            print(f"unknown: {messagein}")
 
 if args.fw_upload:
     upload_fw(args.id)
 
 if args.config:
     configure_all()
+
 
 def generateCppHeader():
     head = '''# pragma once
@@ -346,5 +395,11 @@ namespace Svc { namespace Protocol {
             f.write(f"{i.name} = {i.value},\n")
         f.write(foot)
 
+
 if args.generate:
     generateCppHeader()
+
+if args.cmd:
+    trans = NodeBus(openBus(), args.id)
+    data = [int(v, 0) for v in args.msg]
+    print(trans.svcTransfer(SvcProtocol[args.cmd], data))
