@@ -16,7 +16,7 @@ CXXOBJS := $(patsubst %.cpp,%.o,$(CXXSRCS))
 # Override is only needed by avr-lib build system.
 
 CFLAGS        = -g -Wall -std=gnu++14 $(OPTIMIZE) -mmcu=$(MCU_TARGET) $(DEFS)
-LDFLAGS       = -Wl,-Map,$(PRG).map
+LDFLAGS       = -flto -Wl,-Map,$(PRG).map
 CFLAGS += -MD -MP
 LDFLAGS += -Wl,--section-start=.text=$(BOOTSTART)
 CXXFLAGS = $(CFLAGS)
