@@ -7,6 +7,12 @@
 #include "SvcProtocol_generated.h"
 #include "gpio.h"
 
+#include <stdio.h>
+
+#define DBG(fmt, ...) do { \
+	printf(fmt"\n", ##__VA_ARGS__); \
+} while(0)
+
 ISR(TIMER0_OVF_vect){
 }
 
@@ -63,7 +69,7 @@ DigOUT_Obj* gDigOUT_Obj;
 OwT_Obj* gOwT_Obj;
 uint8_t* gIOData;
 uint8_t* gMobEndIdx;
-uint16_t gMobMarkedUpdated;
+uint16_t gMobMarkedTx;
 
 namespace ow {
 unsigned timer(void)
@@ -118,7 +124,7 @@ uint8_t can_rx_svc()
 }
 
 void can_tx_svc(void) {
-	if(not msglen or msglen > 8)
+	if(not (msglen > 0 && msglen <= 8))
 		return;
 	CANPAGE = ( 12 << MOBNB0 );
 	while ( CANEN1 & ( 1 << ENMOB12 ) ); // Wait for MOb 0 to be free
@@ -132,16 +138,41 @@ void can_tx_svc(void) {
 	CANSTMOB = 0x00;
 }
 
+int USART0_Transmit(char c, FILE*);
+static FILE mystdout;
+void USART0_Init()
+{
+	UBRR0 = 0;
+	UCSR0A = _BV(U2X0);
+	UCSR0B = _BV(TXEN0);
+	mystdout.flags = _FDEV_SETUP_WRITE;
+	mystdout.put = &USART0_Transmit;
+	stdout = &mystdout;
+}
+
+int USART0_Transmit(char c, FILE*)
+{
+	if( c == '\0')
+		c = '\n';
+	while ( ! ( UCSR0A & (1<<UDRE0)));
+	UDR0 = c;
+	return 0;
+}
+
 void init()
 {
 	CANTCON = 99;
+	CANGIE |= _BV(ENRX)|_BV(ENTX);
+	CANIE |= _BV(13) | _BV(14);
+
+	USART0_Init();
 }
 
 void initMob(uint8_t mobIdx, uint8_t endIoDataIdx, uint16_t canid11bit)
 {
 	CANPAGE = ( mobIdx << MOBNB0 );
-	constexpr uint32_t umask = 0;
-	CANIDM = ~umask;
+	constexpr uint32_t mask = 0b1111'1111'1110'0000'0000'0000'0000'0101;
+	CANIDM = mask;
 	CANIDT = (uint32_t)canid11bit << (32-11);
 	gMobEndIdx[mobIdx] = endIoDataIdx;
 }
@@ -159,17 +190,22 @@ void enableCanPvExchange()
 {
 	auto mobidx = 0;
 	while(mobidx < gMobFirstTx){
-		CANPAGE = ( mobidx++ << MOBNB0 );
-		CANCDMOB = ( 1 << CONMOB1); //enable RX
+		const uint8_t beginIoIdx = mobidx > 0
+						? gMobEndIdx[mobidx-1] : 0;
+		const uint8_t endIoIdx = gMobEndIdx[mobidx];
+		const uint8_t size =  endIoIdx - beginIoIdx;
+		CANPAGE = ( mobidx << MOBNB0 );
+		CANCDMOB = _BV(CONMOB1)|size; //enable RX
+		CANIE |= _BV(mobidx++);
 	}
 	while(mobidx < gMobCount){
-		uint8_t beginIoIdx = 0;
-		if(mobidx > 0)
-			beginIoIdx = gIOData[mobidx-1];
-		uint8_t endIoIdx = gIOData[mobidx];
-		uint8_t size =  endIoIdx - beginIoIdx;
-		CANPAGE = ( mobidx++ << MOBNB0 );
+		const uint8_t beginIoIdx = mobidx > 0
+				? gMobEndIdx[mobidx-1] : 0;
+		const uint8_t endIoIdx = gMobEndIdx[mobidx];
+		const uint8_t size =  endIoIdx - beginIoIdx;
+		CANPAGE = ( mobidx << MOBNB0 );
 		CANCDMOB = size;
+		CANIE |= _BV(mobidx++);
 	}
 }
 
@@ -198,11 +234,24 @@ void svc(bool broadcast) {
 		break;
 	case Svc::Protocol::CmdSetStage:
 	{
-		auto newStage = msg[1];
-		if(newStage != gFwStage && newStage == cFwStageRunning)
-			enableCanPvExchange();
-		gFwStage = newStage;
-		msglen = 1;
+		const auto newStage = msg[1];
+		switch(newStage){
+		case 0:
+		case cFwStageInit1:
+		case cFwStageInit2:
+		case cFwStageRunning:
+		{
+			msg[2] = gFwStage;
+			if(newStage != gFwStage && newStage == cFwStageRunning)
+				enableCanPvExchange();
+			gFwStage = newStage;
+			msglen = 3;
+		}
+			break;
+		default:
+			msg[0] = Svc::Protocol::CmdInvalid;
+			msglen = 1;
+		}
 	}
 		break;
 	case Svc::Protocol::CmdSetOwObjParams:
@@ -214,34 +263,34 @@ void svc(bool broadcast) {
 	}
 		break;
 	case Svc::Protocol::CmdSetOwObjRomCode:
-		{
-			auto& obj = gOwT_Obj[msg[1]];
-			obj.rc = *reinterpret_cast<const ow::RomCode*>(&msg[2]);
-			msglen = 1;
-		}
-			break;
+	{
+		auto& obj = gOwT_Obj[msg[1]];
+		obj.rc = *reinterpret_cast<const ow::RomCode*>(&msg[2]);
+		msglen = 1;
+	}
+		break;
 	case Svc::Protocol::CmdSetDigINObjParams:
-		{
-			auto& obj = gDigIN_Obj[msg[1]];
-			obj.setParams(msg);
-			msglen = 1;
-		}
+	{
+		auto& obj = gDigIN_Obj[msg[1]];
+		obj.setParams(msg);
+		msglen = 1;
+	}
 			break;
 	case Svc::Protocol::CmdSetDigOUTObjParams:
-		{
-			auto& obj = gDigOUT_Obj[msg[1]];
-			obj.setParams(msg);
-			msglen = 1;
-		}
-			break;
+	{
+		auto& obj = gDigOUT_Obj[msg[1]];
+		obj.setParams(msg);
+		msglen = 1;
+	}
+		break;
 	case Svc::Protocol::CmdSetCanMob:
-		{
-			uint8_t mobIdx = msg[1];
-			uint8_t ioEndIdx = msg[2];
-			auto canid = *reinterpret_cast<const uint16_t*>(&msg[3]);
-			initMob(mobIdx, ioEndIdx, canid);
-			msglen = 1;
-		}
+	{
+		uint8_t mobIdx = msg[1];
+		uint8_t ioEndIdx = msg[2];
+		auto canid = *reinterpret_cast<const uint16_t*>(&msg[3]);
+		initMob(mobIdx, ioEndIdx, canid);
+		msglen = 1;
+	}
 		break;
 	case Svc::Protocol::CmdTestGetDDR:
 	{
@@ -306,37 +355,102 @@ void svc(bool broadcast) {
 	can_tx_svc();
 }
 
-void markMob(uint8_t idx)
+void markMobTx(uint8_t idx)
 {
-	gMobMarkedUpdated |= _BV(idx);
+	gMobMarkedTx |= _BV(idx);
 }
 
-bool isMobMarked(uint8_t idx)
+bool isMobMarkedTx(uint8_t idx)
 {
-	return gMobMarkedUpdated & _BV(idx);
+	return gMobMarkedTx & _BV(idx);
+}
+
+void clearMarkTxMob(uint8_t idx)
+{
+	gMobMarkedTx &= ~_BV(idx);
+}
+
+void iterateOutputObjs(uint8_t mobidx)
+{
+	for(int i=0; i<gDigOUT_count; ++i){
+		auto& obj = gDigOUT_Obj[i];
+		if(mobidx == obj.mobIdx){
+			bool v = gIOData[obj.iodataIdx] & obj.mask;
+			setDigOut(obj.pin, v);
+		}
+	}
 }
 
 void run()
 {
 	while(1){
+		if(CANGIT & _BV(CANIT))
+		{
+			{
+				auto id = can_rx_svc();
+				if(id)
+					svc(id==14);
+			}
+
+			uint8_t mobidx=0;
+			while(mobidx < gMobFirstTx){ //iterate rx mobs
+				if(CANSIT & _BV(mobidx)){
+					CANPAGE = ( mobidx << MOBNB0 );
+					if(CANSTMOB & _BV(RXOK)){
+						const uint8_t beginIdx = mobidx > 0
+								? gMobEndIdx[mobidx-1] : 0;
+						const uint8_t endIdx = gMobEndIdx[mobidx];
+						auto idx = beginIdx;
+						auto dlc = CANCDMOB & 0x0F;
+						while((idx < endIdx) && ((idx-beginIdx) < dlc))
+							gIOData[idx++] = CANMSG;
+						CANSTMOB = 0;
+						CANCDMOB = ( 1 << CONMOB1 ) | ( (endIdx-beginIdx) << DLC0 );
+						iterateOutputObjs(mobidx++);
+						continue;
+					}
+					CANSTMOB = 0;
+				}
+				++mobidx;
+			}
+			while(mobidx < gMobCount){ //iterate and clear tx mobs
+				if(CANSIT & _BV(mobidx)){
+					CANPAGE = ( mobidx << MOBNB0 );
+					if(CANSTMOB){
+						CANCDMOB = 0x00;
+						CANSTMOB = 0x00;
+					}
+				}
+				++mobidx;
+			}
+		}
+
 		for(int i=0; i<gDigIN_count; ++i){
 			bool v = getDigInVal(gDigIN_Obj[i].pin);
 			auto& iobyte = gIOData[gDigIN_Obj[i].iodataIdx];
 			auto mask = gDigIN_Obj[i].mask;
-			if( (bool)(iobyte & mask) == v){
+			if( (bool)(iobyte & mask) != v){
 				if(v)
 					iobyte |= mask;
 				else
 					iobyte &= ~mask;
-				markMob(gDigIN_Obj[i].mobIdx);
+				markMobTx(gDigIN_Obj[i].mobIdx);
 			}
 		}
 
 		for(uint8_t mobidx = gMobFirstTx; mobidx < gMobCount; ++mobidx){
-			if(isMobMarked(mobidx)){
-				CANPAGE = ( mobidx << MOBNB0 );
-				if(not ( CANEN1 & ( 1 << ENMOB12 ) )){
-
+			if(isMobMarkedTx(mobidx)){
+				if(not ( CANEN & ( 1 << mobidx ) )){
+					CANPAGE = ( mobidx << MOBNB0 );
+					CANSTMOB = 0;
+					const uint8_t beginIdx = mobidx > 0
+							? gMobEndIdx[mobidx-1] : 0;
+					const uint8_t endIdx = gMobEndIdx[mobidx];
+					auto idx = beginIdx;
+					while(idx < endIdx)
+						CANMSG = gIOData[idx++];
+					CANCDMOB = ( 1 << CONMOB0 ) | ( (endIdx-beginIdx) << DLC0 );
+					clearMarkTxMob(mobidx);
 				}
 			}
 		}

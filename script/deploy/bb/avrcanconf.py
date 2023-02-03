@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import struct
 
 import can
 import os
@@ -22,13 +23,16 @@ parser.add_argument('--generate', action='store_true', help='header file for can
 parser.add_argument('--cmd', help='svc command send to node')
 parser.add_argument('--exit_bootloader', action='store_true')
 parser.add_argument('msg', nargs='*', help='data for command')
+parser.add_argument('--simulator', action='store_true',  help='avr can node simulator')
+parser.add_argument('--sniffer', action='store_true')
+
 
 args = parser.parse_args()
 canid_bcast = 0xEC33F000 >> 3
 canid_bcast_mask = ((1 << 20) - 1) << 9
 
 
-class SvcProtocol(enum.Enum):
+class SvcProtocol(enum.IntEnum):
     CmdSetAllocCounts = enum.auto()
     CmdGetAllocCounts = enum.auto()
     CmdSetStage = enum.auto()
@@ -72,6 +76,7 @@ def canIdCheck(canid):
 
 
 def sendBlocking(canbus, messageTx):
+    messageTx.dlc = len(messageTx.data)
     canbus.send(messageTx)
     timeout = 1
     abs_timeout = time.time() + timeout
@@ -393,7 +398,8 @@ def statusRsp(rsp):
         if rsp[3] & (1 << 2): flags.append('BORF')
         if rsp[3] & (1 << 1): flags.append('EXTRF')
         if rsp[3] & (1 << 0): flags.append('PORF')
-        return f"status {stat} {flags}"
+        rest = [f"{v:02X}" for v in rsp[3:]]
+        return f"status {stat} {flags} {rest}"
     else:
         return f"unknown: {messagein}"
 
@@ -452,3 +458,44 @@ if args.exit_bootloader:
         id = canIdFromNodeId(args.id)
     msg = can.Message(arbitration_id=id, is_extended_id=True, data=[ord('c')])
     sendBlocking(openBus(), msg)
+
+if args.simulator:
+    bus = openBus()
+    stage = 0b01000000
+    while True:
+        msg = bus.recv()
+        print(msg)
+        if msg.data[0] == SvcProtocol.CmdStatus:
+            sendBlocking(bus, can.Message(arbitration_id=msg.arbitration_id + 1, is_extended_id=True,
+                                 data=[msg.data[0], 0, 0, stage]))
+            continue
+        elif msg.data[0] == SvcProtocol.CmdSetStage:
+            stage = msg.data[1]
+        sendBlocking(bus, can.Message(arbitration_id=msg.arbitration_id + 1, is_extended_id=True, data=[msg.data[0]]))
+
+if args.sniffer:
+    bus = openBus()
+    while True:
+        msg = bus.recv()
+        data = list(msg.data)
+        if canIdCheck(msg.arbitration_id):
+            nodeid, minor = canIdCheck(msg.arbitration_id)
+            if minor == 0b11:
+                if len(data) == 8:
+                    CANSIT, CANEN = struct.unpack('HH', msg.data[0:4])
+                    rest = [f"{v:02X}" for v in data[4:6]]
+                    tmp, = struct.unpack('H', msg.data[6:8])
+                    print(f"debug({nodeid},{minor}) {CANSIT:04X} {CANEN:04X} {rest} {tmp:04X}")
+                else:
+                    rest = [f"{v:02X}" for v in data]
+                    print(f"debug({nodeid},{minor}) {rest}")
+
+            elif data[0] in iter(SvcProtocol):
+                rest = [f"{v:02X}" for v in data[1:]]
+                print(f"({nodeid},{minor}) {SvcProtocol(data[0]).name} {rest}")
+            else:
+                rest = [f"{v:02X}" for v in data]
+                print(f"({nodeid},{minor}) ? {rest}")
+        else:
+            print(msg)
+
