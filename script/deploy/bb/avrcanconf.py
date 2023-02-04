@@ -350,7 +350,7 @@ def upload_fw(nodeid):
     message = can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=[ord('s')])
     sendBlocking(bus, message)
     messagein = bus.recv(1.5)
-    if messagein.dlc != 4 or messagein.data[0] != ord('s') or (messagein.data[3] & 0x80) != 0:
+    if messagein.dlc != 4 or messagein.data[0] != ord('s') or 0 != (messagein.data[3] & 0x03):
         raise 'invalid response, maybe not bootloader'
 
     binfile = '/mnt/w/byt/avr/fw/fw.bin'
