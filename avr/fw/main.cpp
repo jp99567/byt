@@ -101,11 +101,11 @@ static uint8_t msglen __attribute__ ((section (".noinit")));
 
 uint8_t can_rx_svc()
 {
-	for(uint8_t id=13; id<=14; ++id){
-		CANPAGE = ( id << MOBNB0 );
-		if(CANSTMOB & _BV(RXOK)){
+	CANPAGE = CANHPMOB;
+	if(CANSTMOB & _BV(RXOK)){
+		uint8_t id = CANPAGE >> 4;
+		if(id==13 || id<=14){
 			msglen = u8min(CANCDMOB & 0x0F, 8);
-
 			for(uint8_t i=0; i<msglen; ++i)
 				msg[i] = CANMSG;
 			CANSTMOB = 0;
