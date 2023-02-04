@@ -6,12 +6,7 @@
 #include "ow.h"
 #include "SvcProtocol_generated.h"
 #include "gpio.h"
-
-#include <stdio.h>
-
-#define DBG(fmt, ...) do { \
-	printf(fmt"\n", ##__VA_ARGS__); \
-} while(0)
+#include "log_debug.h"
 
 ISR(TIMER0_OVF_vect){
 }
@@ -138,34 +133,12 @@ void can_tx_svc(void) {
 	CANSTMOB = 0x00;
 }
 
-int USART0_Transmit(char c, FILE*);
-static FILE mystdout;
-void USART0_Init()
-{
-	UBRR0 = 0;
-	UCSR0A = _BV(U2X0);
-	UCSR0B = _BV(TXEN0);
-	mystdout.flags = _FDEV_SETUP_WRITE;
-	mystdout.put = &USART0_Transmit;
-	stdout = &mystdout;
-}
-
-int USART0_Transmit(char c, FILE*)
-{
-	if( c == '\0')
-		c = '\n';
-	while ( ! ( UCSR0A & (1<<UDRE0)));
-	UDR0 = c;
-	return 0;
-}
-
 void init()
 {
 	CANTCON = 99;
 	CANGIE |= _BV(ENRX)|_BV(ENTX);
 	CANIE |= _BV(13) | _BV(14);
-
-	USART0_Init();
+	init_log_debug();
 }
 
 void initMob(uint8_t mobIdx, uint8_t endIoDataIdx, uint16_t canid11bit)
