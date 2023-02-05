@@ -69,33 +69,38 @@ bool bus_active(void)
 
 ow::ResponseCode gResponseCode;
 
-constexpr uint8_t clockdiv(unsigned us)
+constexpr uint8_t clockdiv(const unsigned us)
 {
-	if(us*8 < 128+64)
+	if(us*8 < 255)
 		return 0b001; //No prescaling
-	if(us < 128+64)
+	if(us < 255)
 		return 0b010; //clkI/O/8 (From prescaler)
-	if(us / 8 < 128+64)
+	if(us / 8 < 255)
 		return 0b110; // clkI/O/64 (From prescaler)
-	static_assert("not defined clock divider for a such time");
+	else{
+		return 0;
+	}
 }
 
 constexpr uint8_t ticks(unsigned us)
 {
-	if(us*8 < 128+64)
+	if(us*8 < 255)
 		return us * 8; //No prescaling
-	if(us < 128+64)
+	if(us < 255)
 		return us; //clkI/O/8 (From prescaler)
-	if(us / 8 < 128+64)
+	if(us / 8 < 255)
 		return us / 8; // clkI/O/64 (From prescaler)
-	static_assert("not defined ticks conversion for a such time");
+	else{
+		return 0;
+	}
 }
 
 template<uint8_t ClockDiv, uint8_t Ticks>
 void setT0Timeout()
 {
+	static_assert(Ticks > 0, "invalid ticks value");
 	TCCR0A = ClockDiv;
-	TCNT0 = Ticks;
+	TCNT0 = 255-Ticks+1;
 }
 
 #define SCHEDULE_TIMEOUT(us) setT0Timeout<clockdiv((us)), ticks((us))>()
