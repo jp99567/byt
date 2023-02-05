@@ -1,7 +1,6 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#include "ow.h"
 #include "ow_sm.h"
 
 namespace ow{
@@ -292,7 +291,7 @@ static enum OwBitIoState read_bit(void)
 	return sBitIoState;
 }
 
-static void write_bits(void)
+static void do_write_bits(void)
 {
     enum OwBitIoState status = write_bit();
 
@@ -322,7 +321,7 @@ static void write_bits(void)
     }
 }
 
-static void read_bits(void)
+static void do_read_bits(void)
 {
     enum OwBitIoState status = read_bit();
 
@@ -366,7 +365,7 @@ void setBit2(bool v)
 	ow::gOwData[0] = v ? ( ow::gOwData[0] | mask ) : (ow::gOwData[0] & ~mask);
 }
 
-static void search()
+static void do_search()
 {
 	switch(sBitidx)
 	{
@@ -459,7 +458,7 @@ ResponseCode response()
 	return gResponseCode;
 }
 
-void ow_read_bits(uint8_t count)
+void read_bits(uint8_t count)
 {
 	if(sState != eOwIdle)
 	{
@@ -478,7 +477,7 @@ void ow_read_bits(uint8_t count)
 	sei();
 }
 
-void ow_write_bits(uint8_t count, bool strong_power_req)
+void write_bits(uint8_t count, bool strong_power_req)
 {
 	if(sState != eOwIdle)
 	{
@@ -498,7 +497,7 @@ void ow_write_bits(uint8_t count, bool strong_power_req)
 	sei();
 }
 
-void ow_search(bool direction)
+void search(bool direction)
 {
 	if(sState != eOwIdle)
 	{
@@ -517,7 +516,7 @@ void ow_search(bool direction)
 	sei();
 }
 
-void ow_init(void)
+void init(void)
 {
 	if(sState != eOwIdle)
 	{
@@ -558,13 +557,13 @@ void ow_sm_do(void)
 		wait_presence_cleared();
 		break;
 	case eOwReadBits:
-		read_bits();
+		do_read_bits();
 		break;
 	case eOwWriteBits:
-	    write_bits();
+	    do_write_bits();
 	    break;
 	case eOwSearch:
-		search();
+		do_search();
 		break;
 	default:
 		break;
