@@ -51,6 +51,24 @@ class SvcProtocol(enum.IntEnum):
     CmdInvalid = ord('X')
 
 
+class OwResponseCode(enum.IntEnum):
+    eBusy = enum.auto()
+    eRspError = enum.auto()
+    eOwPresenceOk = enum.auto()
+    eOwBusFailure0 = enum.auto()
+    eOwBusFailure1 = enum.auto()
+    eOwNoPresence = enum.auto()
+    eOwBusFailure3 = enum.auto()
+    eOwReadBitsOk = enum.auto()
+    eOwReadBitsFailure = enum.auto()
+    eOwWriteBitsOk = enum.auto()
+    eOwWriteBitsFailure = enum.auto()
+    eOwSearchResult0 = enum.auto()
+    eOwSearchResult1 = enum.auto()
+    eOwSearchResult11 = enum.auto()
+    eOwSearchResult00 = enum.auto()
+
+
 class NodeStage(enum.Enum):
     stage0boot = 0
     stage1 = 0b01000000
@@ -426,19 +444,33 @@ if args.config:
 
 
 def generateCppHeader():
-    head = '''# pragma once
+    head1 = '''# pragma once
 // GENERATED
 namespace Svc { namespace Protocol {
     enum Cmd  {
 '''
-    foot = ''' };
+    foot1 = ''' };
 }}'''
 
-    with open("avr/fw/SvcProtocol_generated.h", 'w') as f:
-        f.write(head)
-        for i in SvcProtocol:
-            f.write(f"{i.name} = {i.value},\n")
-        f.write(foot)
+    def write_enums(file, ename):
+        for item in ename:
+            file.write(f"{item.name} = {item.value},\n")
+
+    def path(ename): return f"avr/fw/{ename}_generated.h"
+
+    def write_header(head, enuminst, foot):
+        with open(path(enuminst.__name__), 'w') as f:
+            f.write(head)
+            write_enums(f, enuminst)
+            f.write(foot)
+
+    head2 = '''# pragma once
+// GENERATED
+namespace ow { 
+   enum ResponseCode {
+'''
+    write_header(head1, SvcProtocol, foot1)
+    write_header(head2, OwResponseCode, foot1[:-1])
 
 
 if args.generate:

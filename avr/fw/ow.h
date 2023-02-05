@@ -1,3 +1,4 @@
+#include "OwResponseCode_generated.h"
 
 namespace ow {
 
@@ -13,22 +14,4 @@ struct RomData : RomCode
 	uint8_t crc = 0;
 };
 #pragma pack(pop)
-
-enum ResponseCode {
-	eBusy,
-    eRspError,
-    eOwPresenceOk,
-    eOwBusFailure0,
-    eOwBusFailure1,
-    eOwNoPresence,
-    eOwBusFailure3,
-    eOwReadBitsOk,
-    eOwReadBitsFailure,
-    eOwWriteBitsOk,
-    eOwWriteBitsFailure,
-	eOwSearchResult0,
-	eOwSearchResult1,
-	eOwSearchResult11,
-	eOwSearchResult00,
-};
 }
