@@ -15,12 +15,13 @@ struct RomData : RomCode
 #pragma pack(pop)
 
 enum ResponseCode {
+	eBusy,
     eRspError,
     eOwPresenceOk,
     eOwBusFailure0,
     eOwBusFailure1,
     eOwNoPresence,
-    eOwBusFailureTimeout,
+    eOwBusFailure3,
     eOwReadBitsOk,
     eOwReadBitsFailure,
     eOwWriteBitsOk,

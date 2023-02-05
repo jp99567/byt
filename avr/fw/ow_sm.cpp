@@ -1,43 +1,16 @@
 #include <avr/io.h>
+#include <avr/interrupt.h>
 
 #include "ow.h"
+#include "ow_sm.h"
 
-namespace ow {
-
-void bus_pull(void)
-{
-	PORTA &= ~_BV(PA0);
-	DDRA |= _BV(PA0);
-}
-
-void bus_release(void)
-{
-	DDRA &= ~_BV(PA0);
-}
-
-void bus_power_strong(void)
-{
-	PORTA |= _BV(PA0);
-	DDRA |= _BV(PA0);
-}
-
-bool bus_active(void)
-{
-	return PINA & _BV(PA0);
-}
-
-extern unsigned timer(void);
-extern void send_status(enum ResponseCode code);
-extern void send_status_with_data(enum ResponseCode code);
-extern void send_status_with_param(enum ResponseCode code);
+namespace ow{
+void response(enum ResponseCode code);
 extern int gOwBitsCount;
 extern uint8_t gOwData[12];
+}
 
-void ow_init(void);
-void ow_search(int direction);
-void ow_read_bits(void);
-void ow_write_bits(int strong_power_req);
-void ow_sm_do(void);
+namespace {
 
 enum OwState
 {
@@ -68,45 +41,106 @@ enum OwStrongPowerRequest
 };
 
 static enum OwState sState = eOwIdle;
-static unsigned sT0;
 static enum OwStrongPowerRequest sStrongPowerRequest;
 static enum OwBitIoState sBitIoState = eOwBitIoFinishedOk;
-static int sBitidx;
+static uint8_t sBitidx;
 
-#define US2TICK(us) ((us)*8)
-
-#define cDurFallingEdge US2TICK(10)
-#define cDurResetPulse US2TICK(480)
-#define cDurWaitPresenceT (cDurResetPulse + US2TICK(60))
-#define cDurPresenceMinT US2TICK(15)
-#define cDurPresenceMaxT US2TICK(240)
-#define cDurInitMasterRx US2TICK(480)
-#define cDurReadInitT US2TICK(6)
-#define cDurReadSample US2TICK(15)
-#define cDurWrite0Pulse US2TICK(64)
-#define cDurWrite1Pulse US2TICK(6)
-#define cDurSlot US2TICK(70)
-
-static int timeout(unsigned delay)
+void bus_pull(void)
 {
-	return (timer() - sT0) > delay;
+	PORTA &= ~_BV(PA0);
+	DDRA |= _BV(PA0);
+}
+
+void bus_release(void)
+{
+	DDRA &= ~_BV(PA0);
+}
+
+void bus_power_strong(void)
+{
+	PORTA |= _BV(PA0);
+	DDRA |= _BV(PA0);
+}
+
+bool bus_active(void)
+{
+	return PINA & _BV(PA0);
+}
+
+ow::ResponseCode gResponseCode;
+
+constexpr uint8_t clockdiv(unsigned us)
+{
+	if(us*8 < 128+64)
+		return 0b001; //No prescaling
+	if(us < 128+64)
+		return 0b010; //clkI/O/8 (From prescaler)
+	if(us / 8 < 128+64)
+		return 0b110; // clkI/O/64 (From prescaler)
+	static_assert("not defined clock divider for a such time");
+}
+
+constexpr uint8_t ticks(unsigned us)
+{
+	if(us*8 < 128+64)
+		return us * 8; //No prescaling
+	if(us < 128+64)
+		return us; //clkI/O/8 (From prescaler)
+	if(us / 8 < 128+64)
+		return us / 8; // clkI/O/64 (From prescaler)
+	static_assert("not defined ticks conversion for a such time");
+}
+
+template<uint8_t ClockDiv, uint8_t Ticks>
+void setT0Timeout()
+{
+	TCCR0A = ClockDiv;
+	TCNT0 = Ticks;
+}
+
+#define SCHEDULE_TIMEOUT(us) setT0Timeout<clockdiv((us)), ticks((us))>()
+
+constexpr unsigned cDurFallingEdge = 10;
+constexpr unsigned cDurResetPulse = 489;
+constexpr unsigned cDurWaitPresence = 90;
+constexpr unsigned cDurWaitPresenceCleared = cDurResetPulse-cDurWaitPresence;
+constexpr unsigned cDurReadInitT = 2;
+constexpr unsigned cDurReadSample = 20;
+constexpr unsigned cDurSlot = 60;
+constexpr unsigned cDurWrite0Pulse = 60;
+constexpr unsigned cDurWrite1Pulse = cDurReadInitT;
+constexpr unsigned cDurWrite0Relax = 80 - cDurWrite0Pulse;
+constexpr unsigned cDurWrite1Relax = 80 - cDurWrite1Pulse;
+
+static void set_state_idle()
+{
+	sState = eOwIdle;
+	TCCR0A = 0; //timer off
 }
 
 static void wait_reset_pulse(void)
 {
-	if(timeout(cDurResetPulse))
+	if(not bus_active())
 	{
+		ow::response(ow::eOwBusFailure1);
+		set_state_idle();
 		bus_release();
-		sState = eOwInitWaitPresence;
+		return;
 	}
+	bus_release();
+	SCHEDULE_TIMEOUT(cDurWaitPresence);
+	sState = eOwInitWaitPresence;
 }
 
 static void wait_presence_pulse(void)
 {
-	if(timeout(cDurWaitPresenceT))
-	{
+	if(bus_active()){
 		sState = eOwInitWaitPresenceCleared;
-		sT0 = timer();
+		SCHEDULE_TIMEOUT(cDurWaitPresenceCleared);
+	}
+	else{
+		ow::response(ow::eOwNoPresence);
+		set_state_idle();
 	}
 }
 
@@ -114,30 +148,13 @@ static void wait_presence_cleared(void)
 {
 	if(!bus_active())
 	{
-		if(timeout(cDurPresenceMinT))
-		{
-		    sState = eOwInitWaitRecovery;
-		}
-		else
-		{
-			send_status_with_param(eOwNoPresence);
-			sState = eOwIdle;
-		}
+		ow::response(ow::eOwPresenceOk);
 	}
-	else if(timeout(cDurPresenceMaxT))
+	else
 	{
-		send_status_with_param(eOwBusFailureTimeout);
-		sState = eOwIdle;
+		ow::response(ow::eOwBusFailure3);
 	}
-}
-
-static void wait_init_recovery(void)
-{
-    if(timeout(cDurInitMasterRx))
-    {
-        send_status_with_param(eOwPresenceOk);
-        sState = eOwIdle;
-    }
+	set_state_idle();
 }
 
 static void sample(void)
@@ -147,19 +164,30 @@ static void sample(void)
 
 	if( ! bus_active() )
 	{
-		gOwData[byte] |= bitmask;
+		ow::gOwData[byte] |= bitmask;
 	}
 	else
 	{
-		gOwData[byte] &= ~bitmask;
+		ow::gOwData[byte] &= ~bitmask;
 	}
 }
 
-static int bitval(void)
+static bool bitval(void)
 {
-    unsigned byte = sBitidx / 8;
-    unsigned bitmask = 1 << sBitidx % 8;
-    return gOwData[byte] & bitmask;
+    auto byte = sBitidx / 8;
+    auto bitmask = _BV(sBitidx % 8);
+    return ow::gOwData[byte] & bitmask;
+}
+
+void start_write_bit()
+{
+	bus_pull();
+	if(bitval()){
+		SCHEDULE_TIMEOUT(cDurWrite1Pulse);
+	}
+	else{
+		SCHEDULE_TIMEOUT(cDurWrite0Pulse);
+	}
 }
 
 static enum OwBitIoState write_bit(void)
@@ -175,37 +203,30 @@ static enum OwBitIoState write_bit(void)
          }
          else
          {
-            bus_pull();
-            sT0 = timer();
-            sBitIoState = eOwBitIoWaitSampleEvent;
+        	 start_write_bit();
          }
        }
        break;
       case eOwBitIoWaitSampleEvent:
        {
-          if( timeout( bitval()
-             ? cDurWrite1Pulse
-             : cDurWrite0Pulse ) )
-          {
-              if(sStrongPowerRequest == eOwStrongPowerKeepAfterWrite)
-              {
-                  bus_power_strong();
-                  sStrongPowerRequest = eOwStrongPower0;
-              }
-              else
-              {
-                  bus_release();
-              }
-              sBitIoState = eOwBitIoWaitSlotEnd;
-          }
+    	   if(sStrongPowerRequest == eOwStrongPowerKeepAfterWrite){
+    		   bus_power_strong();
+               sStrongPowerRequest = eOwStrongPower0;
+           }
+           else{
+               bus_release();
+           }
+           sBitIoState = eOwBitIoWaitSlotEnd;
+           if(bitval()){
+        	   SCHEDULE_TIMEOUT(cDurWrite1Relax);
+           }
+           else{
+        	   SCHEDULE_TIMEOUT(cDurWrite0Relax);
+           }
        }
        break;
       case eOwBitIoWaitSlotEnd:
-       {
-           if(timeout(cDurSlot)){
-               sBitIoState = eOwBitIoFinishedOk;
-           }
-       }
+       sBitIoState = eOwBitIoFinishedOk;
        break;
       default:
          sBitIoState = eOwBitIoFinishedError;
@@ -213,6 +234,13 @@ static enum OwBitIoState write_bit(void)
     }
 
     return sBitIoState;
+}
+
+void start_read_bit()
+{
+	sBitIoState = eOwBitReadPulse;
+	bus_pull();
+	SCHEDULE_TIMEOUT(cDurReadInitT);
 }
 
 static enum OwBitIoState read_bit(void)
@@ -228,34 +256,27 @@ static enum OwBitIoState read_bit(void)
 		 }
 		 else
 		 {
-			bus_pull();
-			sT0 = timer();
-			sBitIoState = eOwBitReadPulse;
+			start_read_bit();
 		 }
 	   }
 	   break;
       case eOwBitReadPulse:
        {
-          if(timeout(cDurReadInitT))
-          {
-              bus_release();
-              sBitIoState = eOwBitIoWaitSampleEvent;
-          }
+    	   bus_release();
+           sBitIoState = eOwBitIoWaitSampleEvent;
+           SCHEDULE_TIMEOUT(cDurReadSample);
        }
        break;
 	  case eOwBitIoWaitSampleEvent:
 	   {
-		   if(timeout(cDurReadSample))
-		   {
-			   sample();
-			   sBitIoState = eOwBitIoWaitSlotEnd;
-		   }
+		   sample();
+		   sBitIoState = eOwBitIoWaitSlotEnd;
+		   SCHEDULE_TIMEOUT(cDurSlot);
 	   }
 	   break;
 	  case eOwBitIoWaitSlotEnd:
 	   {
-		   if(timeout(cDurSlot))
-			   sBitIoState = eOwBitIoFinishedOk;
+		   sBitIoState = eOwBitIoFinishedOk;
 	   }
 	   break;
 	  default:
@@ -273,20 +294,25 @@ static void write_bits(void)
     switch(status)
     {
         case eOwBitIoFinishedError:
-            sState = eOwIdle;
+            ow::response(ow::eOwWriteBitsFailure);
+            bus_release();
+            set_state_idle();
           break;
         case eOwBitIoFinishedOk:
             ++sBitidx;
-            if(sBitidx >= gOwBitsCount)
+            if(sBitidx >= ow::gOwBitsCount)
             {
-                send_status(eOwWriteBitsOk);
-                sState = eOwIdle;
+                ow::response(ow::eOwWriteBitsOk);
+                set_state_idle();
+            }
+            else{
+            	start_write_bit();
+            	if(sStrongPowerRequest == eOwStrongPowerReq
+            		&& sBitidx == ow::gOwBitsCount-1)
+            		sStrongPowerRequest = eOwStrongPowerKeepAfterWrite;
             }
           break;
         default:
-            if(sStrongPowerRequest == eOwStrongPowerReq)
-                if(sBitidx == gOwBitsCount-1)
-                    sStrongPowerRequest = eOwStrongPowerKeepAfterWrite;
           break;
     }
 }
@@ -298,15 +324,20 @@ static void read_bits(void)
     switch(status)
     {
         case eOwBitIoFinishedError:
-            send_status(eOwReadBitsFailure);
-            sState = eOwIdle;
+            ow::response(ow::eOwReadBitsFailure);
+            bus_release();
+            set_state_idle();
           break;
         case eOwBitIoFinishedOk:
             ++sBitidx;
-            if(sBitidx >= gOwBitsCount)
+            if(sBitidx >= ow::gOwBitsCount)
             {
-                send_status_with_data(eOwReadBitsOk);
-                sState = eOwIdle;
+                ow::response(ow::eOwReadBitsOk);
+                set_state_idle();
+            }
+            else
+            {
+            	start_read_bit();
             }
           break;
         default:
@@ -314,33 +345,20 @@ static void read_bits(void)
     }
 }
 
-void ow_read_bits()
+void storeDirection(bool direction)
 {
-	sBitidx = 0;
-	sState = eOwReadBits;
+	ow::gOwData[1] = direction;
 }
 
-void ow_write_bits(int strong_power_req)
+bool getDirection()
 {
-    sBitidx = 0;
-    sStrongPowerRequest = strong_power_req ? eOwStrongPowerReq : eOwStrongPower0;
-    sState = eOwWriteBits;
+	return ow::gOwData[1];
 }
 
-static inline void storeDirection(int direction)
-{
-	gOwData[1] = direction;
-}
-
-static inline int getDirection()
-{
-	return gOwData[1];
-}
-
-static inline void setBit2(bool v)
+void setBit2(bool v)
 {
 	uint8_t mask = 1<<2;
-	gOwData[0] = v ? ( gOwData[0] | mask ) : (gOwData[0] & ~mask);
+	ow::gOwData[0] = v ? ( ow::gOwData[0] | mask ) : (ow::gOwData[0] & ~mask);
 }
 
 static void search()
@@ -355,27 +373,29 @@ static void search()
 		    switch(status)
 		    {
 		        case eOwBitIoFinishedError:
-		            send_status(eOwReadBitsFailure);
-		            sState = eOwIdle;
+		            ow::response(ow::eOwReadBitsFailure);
+		            set_state_idle();
+		            bus_release();
 		          break;
 		        case eOwBitIoFinishedOk:
 		        	sBitidx++;
-		        	if(sBitidx == 2)
-		        	{
-		        		unsigned v = gOwData[0] & 0x3;
-		        		if( v == 3 )
-		        		{
-		        			send_status(eOwSearchResult11);
-		        			sState = eOwIdle;
+		        	if(sBitidx == 2){
+		        		unsigned v = ow::gOwData[0] & 0x3;
+		        		if( v == 3 ){
+		        			ow::response(ow::eOwSearchResult11);
+		        			set_state_idle();
+		        			return;
 		        		}
-		        		else if(v)
-		        		{
+		        		else if(v){
 		        			setBit2(v==1);
 		        		}
-		        		else
-		        		{
+		        		else{
 		        			setBit2(getDirection());
 		        		}
+		        		start_write_bit();
+		        	}
+		        	else{
+		        		start_read_bit();
 		        	}
 		          break;
 		        default:
@@ -390,24 +410,24 @@ static void search()
 		    switch(status)
 		    {
 		        case eOwBitIoFinishedError:
-		            send_status(eOwWriteBitsFailure);
+		            ow::response(ow::eOwWriteBitsFailure);
 		            sState = eOwIdle;
 		          break;
 		        case eOwBitIoFinishedOk:
 		        	{
-		        		unsigned v = gOwData[0] & 0x3;
+		        		unsigned v = ow::gOwData[0] & 0x3;
 		        		switch(v){
 		        		case 0:
-		        			send_status(eOwSearchResult00);
+		        			ow::response(ow::eOwSearchResult00);
 		        			break;
 		        		case 1:
-		        			send_status(eOwSearchResult0);
+		        			ow::response(ow::eOwSearchResult0);
 		        			break;
 		        		case 2:
-		        			send_status(eOwSearchResult1);
+		        			ow::response(ow::eOwSearchResult1);
 		        			break;
 		        		default:
-		        			send_status(eOwSearchResult11);
+		        			ow::response(ow::eOwSearchResult11);
 		        			break;
 		        		}
 		                sState = eOwIdle;
@@ -421,31 +441,100 @@ static void search()
 	}
 }
 
-void ow_search(int direction)
+}
+
+namespace ow{
+
+void response(enum ResponseCode code)
 {
+	gResponseCode = code;
+}
+ResponseCode response()
+{
+	return gResponseCode;
+}
+
+void ow_read_bits(uint8_t count)
+{
+	if(sState != eOwIdle)
+	{
+		response(eRspError);
+		return;
+	}
+
+	response(eBusy);
+	gOwBitsCount = count;
+	cli();
+	sBitidx = 0;
+	sState = eOwReadBits;
+	start_read_bit();
+	TIFR0 |= _BV(TOV0);
+	TIMSK0 = _BV(TOIE0);
+	sei();
+}
+
+void ow_write_bits(uint8_t count, bool strong_power_req)
+{
+	if(sState != eOwIdle)
+	{
+		response(eRspError);
+		return;
+	}
+
+	response(eBusy);
+	gOwBitsCount = count;
+	cli();
+	sBitidx = 0;
+    sStrongPowerRequest = strong_power_req ? eOwStrongPowerReq : eOwStrongPower0;
+    sState = eOwWriteBits;
+	start_write_bit();
+	TIFR0 |= _BV(TOV0);
+	TIMSK0 = _BV(TOIE0);
+	sei();
+}
+
+void ow_search(bool direction)
+{
+	if(sState != eOwIdle)
+	{
+		response(eRspError);
+		return;
+	}
+
+	response(eBusy);
 	storeDirection(direction);
+	cli();
 	sBitidx = 0;
 	sState = eOwSearch;
+	start_read_bit();
+	TIFR0 |= _BV(TOV0);
+	TIMSK0 = _BV(TOIE0);
+	sei();
 }
 
 void ow_init(void)
 {
 	if(sState != eOwIdle)
 	{
-		send_status(eRspError);
+		response(eRspError);
 		return;
 	}
 
 	if(bus_active())
 	{
-		send_status(eOwBusFailure0);
+		response(eOwBusFailure0);
 		bus_release();
 		return;
 	}
 
+	response(eBusy);
+	cli();
+	SCHEDULE_TIMEOUT(cDurResetPulse);
+	TIFR0 |= _BV(TOV0);
+	TIMSK0 = _BV(TOIE0);
 	bus_pull();
-	sT0 = timer();
 	sState = eOwInitWaitResetPulseFinished;
+	sei();
 }
 
 void ow_sm_do(void)
@@ -463,9 +552,6 @@ void ow_sm_do(void)
 	case eOwInitWaitPresenceCleared:
 		wait_presence_cleared();
 		break;
-	case eOwInitWaitRecovery:
-	    wait_init_recovery();
-	    break;
 	case eOwReadBits:
 		read_bits();
 		break;
@@ -480,4 +566,8 @@ void ow_sm_do(void)
 	}
 }
 
+}
+
+ISR(TIMER0_OVF_vect){
+	ow::ow_sm_do();
 }

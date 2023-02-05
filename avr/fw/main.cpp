@@ -8,7 +8,15 @@
 #include "gpio.h"
 #include "log_debug.h"
 
-ISR(TIMER0_OVF_vect){
+uint32_t gCounter;
+uint8_t gEvents;
+namespace Event {
+enum {
+	timer = _BV(0)
+};}
+
+ISR(OVRIT_vect){
+	gEvents |= Event::timer;
 }
 
 constexpr uint8_t cFwStageInit1 = _BV(6);
@@ -67,29 +75,8 @@ uint8_t* gMobEndIdx;
 uint16_t gMobMarkedTx;
 
 namespace ow {
-unsigned timer(void)
-{
-	return 0;
-}
-
-void send_status(enum ResponseCode code)
-{
-
-}
-
-void send_status_with_data(enum ResponseCode code)
-{
-
-}
-
-void send_status_with_param(enum ResponseCode code)
-{
-
-}
-
 int gOwBitsCount;
 uint8_t gOwData[12];
-
 }
 
 constexpr uint8_t u8min(uint8_t a, uint8_t b){
@@ -135,8 +122,8 @@ void can_tx_svc(void) {
 
 void init()
 {
-	CANTCON = 99;
-	CANGIE |= _BV(ENRX)|_BV(ENTX);
+	CANTCON = 0;
+	CANGIE |= _BV(ENRX)|_BV(ENTX)|_BV(ENOVRT);
 	CANIE |= _BV(13) | _BV(14);
 	init_log_debug();
 }
@@ -354,8 +341,14 @@ void iterateOutputObjs(uint8_t mobidx)
 	}
 }
 
+void onTimer()
+{
+
+}
+
 void run()
 {
+	sei();
 	while(1){
 		if(CANGIT & _BV(CANIT))
 		{
@@ -426,6 +419,11 @@ void run()
 					clearMarkTxMob(mobidx);
 				}
 			}
+		}
+		if(gEvents & Event::timer){
+			gEvents &= ~Event::timer;
+			gCounter++;
+			onTimer();
 		}
 	}
 }
