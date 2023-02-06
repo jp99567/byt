@@ -26,7 +26,7 @@ parser.add_argument('msg', nargs='*', help='data for command')
 parser.add_argument('--simulator', action='store_true',  help='avr can node simulator')
 parser.add_argument('--sniffer', action='store_true')
 parser.add_argument('--ow_search', action='store_true')
-parser.add_argument('--ow_read_term_single', action='store_true')
+parser.add_argument('--ow_read_temp_single', action='store_true')
 
 
 args = parser.parse_args()

@@ -1,5 +1,6 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <util/delay_basic.h>
 
 #include "ow_sm.h"
 
@@ -97,8 +98,8 @@ template<uint8_t ClockDiv, uint8_t Ticks>
 void setT0Timeout()
 {
 	static_assert(Ticks > 0, "invalid ticks value");
-	TCCR0A = ClockDiv;
 	TCNT0 = Ticks;
+	TCCR0A = ClockDiv;
 }
 
 #define SCHEDULE_TIMEOUT(us) setT0Timeout<clockdiv((us)), ticks((us))>()
@@ -182,14 +183,28 @@ static bool bitval(void)
     return ow::gOwData[byte] & bitmask;
 }
 
+void bus_releasy_after_write()
+{
+	   if(sStrongPowerRequest == eOwStrongPowerKeepAfterWrite){
+		   bus_power_strong();
+		   sStrongPowerRequest = eOwStrongPower0;
+	   }
+	   else{
+		   bus_release();
+	   }
+}
+
 void start_write_bit()
 {
-	sBitIoState = eOwBitIoWaitSampleEvent;
 	bus_pull();
 	if(bitval()){
-		SCHEDULE_TIMEOUT(cDurWrite1Pulse);
+		_delay_loop_1(3);
+		bus_releasy_after_write();
+		sBitIoState = eOwBitIoWaitSlotEnd;
+		SCHEDULE_TIMEOUT(cDurWrite1Relax);
 	}
 	else{
+		sBitIoState = eOwBitIoWaitSampleEvent;
 		SCHEDULE_TIMEOUT(cDurWrite0Pulse);
 	}
 }
@@ -198,42 +213,15 @@ static enum OwBitIoState write_bit(void)
 {
     switch(sBitIoState)
     {
-      case eOwBitIoFinishedOk:
-      case eOwBitIoFinishedError:
-       {
-         if(bus_active())
-         {
-            sBitIoState = eOwBitIoFinishedError;
-         }
-         else
-         {
-        	 start_write_bit();
-         }
-       }
-       break;
-      case eOwBitIoWaitSampleEvent:
-       {
-    	   if(sStrongPowerRequest == eOwStrongPowerKeepAfterWrite){
-    		   bus_power_strong();
-               sStrongPowerRequest = eOwStrongPower0;
-           }
-           else{
-               bus_release();
-           }
-           sBitIoState = eOwBitIoWaitSlotEnd;
-           if(bitval()){
-        	   SCHEDULE_TIMEOUT(cDurWrite1Relax);
-           }
-           else{
-        	   SCHEDULE_TIMEOUT(cDurWrite0Relax);
-           }
-       }
-       break;
+      case eOwBitIoWaitSampleEvent: //case of write0 only
+        SCHEDULE_TIMEOUT(cDurWrite0Relax);
+        sBitIoState = eOwBitIoWaitSlotEnd;
+        break;
       case eOwBitIoWaitSlotEnd:
-       sBitIoState = eOwBitIoFinishedOk;
-       break;
+        sBitIoState = eOwBitIoFinishedOk;
+        break;
       default:
-         sBitIoState = eOwBitIoFinishedError;
+        sBitIoState = eOwBitIoFinishedError;
        break;
     }
 
@@ -251,19 +239,6 @@ static enum OwBitIoState read_bit(void)
 {
 	switch(sBitIoState)
 	{
-	  case eOwBitIoFinishedOk:
-	  case eOwBitIoFinishedError:
-	   {
-		 if(bus_active())
-		 {
-			sBitIoState = eOwBitIoFinishedError;
-		 }
-		 else
-		 {
-			start_read_bit();
-		 }
-	   }
-	   break;
       case eOwBitReadPulse:
        {
     	   bus_release();
@@ -310,10 +285,11 @@ static void do_write_bits(void)
                 set_state_idle();
             }
             else{
-            	start_write_bit();
             	if(sStrongPowerRequest == eOwStrongPowerReq
-            		&& sBitidx == ow::gOwBitsCount-1)
+            		&& sBitidx == ow::gOwBitsCount-1){
             		sStrongPowerRequest = eOwStrongPowerKeepAfterWrite;
+            	}
+            	start_write_bit();
             }
           break;
         default:
@@ -487,13 +463,13 @@ void write_bits(uint8_t count, bool strong_power_req)
 
 	response(eBusy);
 	gOwBitsCount = count;
-	cli();
 	sBitidx = 0;
     sStrongPowerRequest = strong_power_req ? eOwStrongPowerReq : eOwStrongPower0;
     sState = eOwWriteBits;
-	start_write_bit();
 	TIFR0 |= _BV(TOV0);
 	TIMSK0 = _BV(TOIE0);
+	cli();
+	start_write_bit();
 	sei();
 }
 
