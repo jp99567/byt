@@ -28,7 +28,6 @@ enum OwBitIoState
 {
     eOwBitIoFinishedOk,
     eOwBitIoFinishedError,
-	eOwBitReadPulse,
 	eOwBitIoWaitSampleEvent,
 	eOwBitIoWaitSlotEnd,
 };
@@ -108,13 +107,11 @@ constexpr unsigned cDurFallingEdge = 10;
 constexpr unsigned cDurResetPulse = 489;
 constexpr unsigned cDurWaitPresence = 90;
 constexpr unsigned cDurWaitPresenceCleared = cDurResetPulse-cDurWaitPresence;
-constexpr unsigned cDurReadInitT = 2;
 constexpr unsigned cDurReadSample = 20;
 constexpr unsigned cDurSlot = 60;
 constexpr unsigned cDurWrite0Pulse = 60;
-constexpr unsigned cDurWrite1Pulse = cDurReadInitT;
 constexpr unsigned cDurWrite0Relax = 80 - cDurWrite0Pulse;
-constexpr unsigned cDurWrite1Relax = 80 - cDurWrite1Pulse;
+constexpr unsigned cDurWrite1Relax = 80;
 
 static void set_state_idle()
 {
@@ -230,22 +227,17 @@ static enum OwBitIoState write_bit(void)
 
 void start_read_bit()
 {
-	sBitIoState = eOwBitReadPulse;
 	bus_pull();
-	SCHEDULE_TIMEOUT(cDurReadInitT);
+	_delay_loop_1(3);
+	bus_release();
+    sBitIoState = eOwBitIoWaitSampleEvent;
+    SCHEDULE_TIMEOUT(cDurReadSample);
 }
 
 static enum OwBitIoState read_bit(void)
 {
 	switch(sBitIoState)
 	{
-      case eOwBitReadPulse:
-       {
-    	   bus_release();
-           sBitIoState = eOwBitIoWaitSampleEvent;
-           SCHEDULE_TIMEOUT(cDurReadSample);
-       }
-       break;
 	  case eOwBitIoWaitSampleEvent:
 	   {
 		   sample();
