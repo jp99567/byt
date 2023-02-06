@@ -634,8 +634,8 @@ def owReadTempSingle():
 
 
 if args.ow_search:
-    owReadTempSingle()
+    owSearchRom()
 
 if args.ow_read_temp_single:
-    owSearchRom()
+    owReadTempSingle()
 
