@@ -107,7 +107,7 @@ constexpr unsigned cDurFallingEdge = 10;
 constexpr unsigned cDurResetPulse = 489;
 constexpr unsigned cDurWaitPresence = 90;
 constexpr unsigned cDurWaitPresenceCleared = cDurResetPulse-cDurWaitPresence;
-constexpr unsigned cDurReadSample = 20;
+constexpr unsigned cDurReadSample = 5;
 constexpr unsigned cDurSlot = 60;
 constexpr unsigned cDurWrite0Pulse = 60;
 constexpr unsigned cDurWrite0Relax = 80 - cDurWrite0Pulse;
@@ -158,12 +158,12 @@ static void wait_presence_cleared(void)
 	set_state_idle();
 }
 
-static void sample(void)
+static void sample(bool v)
 {
 	unsigned byte = sBitidx / 8;
 	unsigned bitmask = 1 << sBitidx % 8;
 
-	if( ! bus_active() )
+	if(v)
 	{
 		ow::gOwData[byte] |= bitmask;
 	}
@@ -194,8 +194,7 @@ void bus_releasy_after_write()
 void start_write_bit()
 {
 	bus_pull();
-	if(bitval()){
-		_delay_loop_1(3);
+	if(bitval()){ //~ 1us between
 		bus_releasy_after_write();
 		sBitIoState = eOwBitIoWaitSlotEnd;
 		SCHEDULE_TIMEOUT(cDurWrite1Relax);
@@ -212,6 +211,7 @@ static enum OwBitIoState write_bit(void)
     {
       case eOwBitIoWaitSampleEvent: //case of write0 only
         SCHEDULE_TIMEOUT(cDurWrite0Relax);
+        bus_releasy_after_write();
         sBitIoState = eOwBitIoWaitSlotEnd;
         break;
       case eOwBitIoWaitSlotEnd:
@@ -230,8 +230,8 @@ void start_read_bit()
 	bus_pull();
 	_delay_loop_1(3);
 	bus_release();
+	SCHEDULE_TIMEOUT(cDurReadSample);
     sBitIoState = eOwBitIoWaitSampleEvent;
-    SCHEDULE_TIMEOUT(cDurReadSample);
 }
 
 static enum OwBitIoState read_bit(void)
@@ -240,7 +240,8 @@ static enum OwBitIoState read_bit(void)
 	{
 	  case eOwBitIoWaitSampleEvent:
 	   {
-		   sample();
+		   auto v = ! bus_active();
+		   sample(v);
 		   sBitIoState = eOwBitIoWaitSlotEnd;
 		   SCHEDULE_TIMEOUT(cDurSlot);
 	   }
@@ -436,12 +437,12 @@ void read_bits(uint8_t count)
 
 	response(eBusy);
 	gOwBitsCount = count;
-	cli();
 	sBitidx = 0;
 	sState = eOwReadBits;
-	start_read_bit();
 	TIFR0 |= _BV(TOV0);
 	TIMSK0 = _BV(TOIE0);
+	cli();
+	start_read_bit();
 	sei();
 }
 
@@ -475,12 +476,12 @@ void search(bool direction)
 
 	response(eBusy);
 	storeDirection(direction);
-	cli();
 	sBitidx = 0;
 	sState = eOwSearch;
-	start_read_bit();
 	TIFR0 |= _BV(TOV0);
 	TIMSK0 = _BV(TOIE0);
+	cli();
+	start_read_bit();
 	sei();
 }
 
