@@ -3,7 +3,7 @@
 #include <avr/interrupt.h>
 #include <string.h>
 
-#include "ow.h"
+#include "ow_sm.h"
 #include "SvcProtocol_generated.h"
 #include "gpio.h"
 #include "log_debug.h"
@@ -88,11 +88,13 @@ uint8_t can_rx_svc()
 	if(CANSTMOB & _BV(RXOK)){
 		uint8_t id = CANPAGE >> 4;
 		if(id==13 || id<=14){
+			svc_msglen = CANCDMOB & 0x0F;
 			for(uint8_t i=0; i<svc_msglen; ++i)
 				svc_msg[i] = CANMSG;
 			CANSTMOB = 0;
 			CANCDMOB = ( 1 << CONMOB1) | ( 1 << IDE );
 			if(svc_msglen > 0){
+				DBG("rx ok: len:%u id:%u", svc_msglen, id);
 				return id;
 			}
 		}
@@ -111,7 +113,7 @@ void can_tx_svc(void) {
 
 	CANCDMOB = ( 1 << CONMOB0 ) | ( 1 << IDE ) | ( svc_msglen << DLC0 );
 	while ( ! ( CANSTMOB & ( 1 << TXOK ) ) );	// wait for TXOK flag set
-	CANCDMOB = 0x00;
+	//CANCDMOB = 0x00;
 	CANSTMOB = 0x00;
 }
 
@@ -301,6 +303,78 @@ void svc(bool broadcast) {
 		svc_msglen=1;
 	}
 		break;
+	case Svc::Protocol::CmdGetGitVersion:
+	{
+		constexpr uint32_t minutes2 = ((FW_BUID_EPOCH - Svc::fw_build_epoch_base) / 60) << 1;
+		static_assert(minutes2 < (1L << 24), "build time out of range");
+		static_assert(FW_GIT_IS_DIRTY < 2 && FW_GIT_IS_DIRTY >= 0, "invalid dirty flag");
+		*reinterpret_cast<uint32_t*>(&svc_msg[4]) = 0x00FFFFFF & (minutes2|FW_GIT_IS_DIRTY);
+		*reinterpret_cast<uint32_t*>(&svc_msg[1]) = FW_GIT_HASH_SHORT;
+		svc_msglen = 8;
+	}
+		break;
+	case Svc::Protocol::CmdOwInit:
+		ow::init();
+		break;
+	case Svc::Protocol::CmdOwGetReplyCode:
+		svc_msglen = 1;
+		svc_msg[svc_msglen++] = ow::response();
+		svc_msg[svc_msglen++] = ow::gOwBitsCount;
+		break;
+	case Svc::Protocol::CmdOwGetData:
+	{
+		auto index = svc_msglen > 1 ? svc_msg[1] : 0;
+		const auto size = (ow::gOwBitsCount+7)/8;
+		DBG("CmdOwGetData %u in, index:%u", size, index);
+		svc_msglen = 1;
+		if(index > size){
+			svc_msg[0] = Svc::Protocol::CmdInvalid;
+		}
+		else{
+			while(index < size && svc_msglen < 8){
+				svc_msg[svc_msglen++] = ow::gOwData[index++];
+			}
+		}
+	}
+		break;
+	case Svc::Protocol::CmdOwReadBits:
+	{
+		auto bitcount = svc_msg[1];
+		if(svc_msglen < 2 || bitcount > sizeof(ow::gOwData)*8){
+			svc_msg[0] = Svc::Protocol::CmdInvalid;
+		}
+		else{
+			ow::read_bits(bitcount);
+		}
+		svc_msglen = 1;
+	}
+		break;
+	case Svc::Protocol::CmdOwWriteBits:
+	{
+		auto bytecount = svc_msglen-2;
+		bool pwr_strong = svc_msg[1];
+		svc_msglen = 1;
+		if(bytecount > 0){
+			::memcpy(&ow::gOwData, &svc_msg[2], bytecount);
+			ow::write_bits(8*bytecount, pwr_strong);
+		}
+		else{
+			svc_msg[0] = Svc::Protocol::CmdInvalid;
+		}
+	}
+		break;
+	case Svc::Protocol::CmdOwSearch:
+	{
+		if(svc_msglen == 2){
+			bool direction = svc_msg[1];
+			ow::search(direction);
+		}
+		else{
+			svc_msg[0] = Svc::Protocol::CmdInvalid;
+		}
+		svc_msglen = 1;
+	}
+		break;
 	default:
 		svc_msg[1] = Svc::Protocol::CmdInvalid;
 		svc_msglen = broadcast ? 0 : 1;
@@ -338,7 +412,6 @@ void iterateOutputObjs(uint8_t mobidx)
 
 void onTimer()
 {
-
 }
 
 void run()

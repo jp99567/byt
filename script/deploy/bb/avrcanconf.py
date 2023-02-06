@@ -25,6 +25,8 @@ parser.add_argument('--exit_bootloader', action='store_true')
 parser.add_argument('msg', nargs='*', help='data for command')
 parser.add_argument('--simulator', action='store_true',  help='avr can node simulator')
 parser.add_argument('--sniffer', action='store_true')
+parser.add_argument('--ow_search', action='store_true')
+parser.add_argument('--ow_read_term_single', action='store_true')
 
 
 args = parser.parse_args()
@@ -47,6 +49,13 @@ class SvcProtocol(enum.IntEnum):
     CmdTestGetPORT = enum.auto()
     CmdTestSetPIN = enum.auto()
     CmdTestGetPIN = enum.auto()
+    CmdGetGitVersion = enum.auto()
+    CmdOwInit = enum.auto()
+    CmdOwReadBits = enum.auto()
+    CmdOwWriteBits = enum.auto()
+    CmdOwSearch = enum.auto()
+    CmdOwGetReplyCode = enum.auto()
+    CmdOwGetData = enum.auto()
     CmdStatus = ord('s')
     CmdInvalid = ord('X')
 
@@ -67,6 +76,15 @@ class OwResponseCode(enum.IntEnum):
     eOwSearchResult1 = enum.auto()
     eOwSearchResult11 = enum.auto()
     eOwSearchResult00 = enum.auto()
+
+
+class OwCmd(enum.Enum):
+    READ_ROM = 0x33
+    CONVERT = 0x44
+    MATCH_ROM = 0x55
+    READ_SCRATCHPAD = 0xBE
+    SKIP_ROM = 0xCC
+    SEARCH = 0xF0
 
 
 class NodeStage(enum.Enum):
@@ -446,7 +464,9 @@ if args.config:
 def generateCppHeader():
     head1 = '''# pragma once
 // GENERATED
-namespace Svc { namespace Protocol {
+namespace Svc {
+    constexpr uint32_t fw_build_epoch_base = 1675604744; // Ne  5. február 2023, 14:45:44 CET
+namespace Protocol {
     enum Cmd  {
 '''
     foot1 = ''' };
@@ -522,12 +542,100 @@ if args.sniffer:
                     rest = [f"{v:02X}" for v in data]
                     print(f"debug({nodeid},{minor}) {rest}")
 
-            elif data[0] in iter(SvcProtocol):
-                rest = [f"{v:02X}" for v in data[1:]]
-                print(f"({nodeid},{minor}) {SvcProtocol(data[0]).name} {rest}")
             else:
-                rest = [f"{v:02X}" for v in data]
-                print(f"({nodeid},{minor}) ? {rest}")
+                type = 'req'
+                if minor == 1: type = 'rsp'
+
+                if data[0] in iter(SvcProtocol):
+                    rest = [f"{v:02X}" for v in data[1:]]
+                    if SvcProtocol(data[0]) == SvcProtocol.CmdOwWriteBits:
+                        if type == 'req':
+                            if len(data) > 2:
+                                pwstr = data[1] != 0
+                                owdata = [f"{v:02X}" for v in data[2:]]
+                                rest = f"pwstr:{pwstr} len:{len(data)-2} {owdata}"
+                    elif SvcProtocol(data[0]) == SvcProtocol.CmdOwReadBits:
+                        if type == 'req':
+                            count = -1
+                            if len(data) > 1:
+                                count = data[1]
+                            rest = f"bitcount {count}"
+                    elif SvcProtocol(data[0]) == SvcProtocol.CmdOwGetReplyCode:
+                        if type == 'rsp':
+                            if len(data) > 2:
+                                rest = f"{OwResponseCode(data[1]).name} bitcount:{data[2]}"
+                    print(f"({nodeid},{minor}) {type} {SvcProtocol(data[0]).name} {rest}")
+                else:
+                    rest = [f"{v:02X}" for v in data]
+                    print(f"({nodeid},{minor}) ? {rest}")
         else:
             print(msg)
+
+
+def owSearchRom():
+    pass
+
+
+def owReadTempSingle():
+    t = NodeBus(openBus(), args.id)
+
+    def req(cmd, candata=None):
+        t.svcTransfer(cmd, candata)
+        trsp = t.svcTransfer(SvcProtocol.CmdOwGetReplyCode)
+        while OwResponseCode(trsp[1]) == OwResponseCode.eBusy:
+            trsp = t.svcTransfer(SvcProtocol.CmdOwGetReplyCode)
+        return trsp
+
+    resp = req(SvcProtocol.CmdOwInit)
+    if(OwResponseCode(resp[1]) != OwResponseCode.eOwPresenceOk):
+        print(f"ow init failed {OwResponseCode(resp[1]).name}")
+        raise "ow failed"
+
+    print(f"ow init ok {OwResponseCode(resp[1]).name}")
+
+    def skiprom():
+        rsp = req(SvcProtocol.CmdOwWriteBits, [0, OwCmd.SKIP_ROM.value])
+        if (OwResponseCode(rsp[1]) != OwResponseCode.eOwWriteBitsOk):
+            print(f"ow skiprom failed {OwResponseCode(rsp[1]).name}")
+            raise "ow failed"
+
+        print(f'ow skip rom ok {OwResponseCode(rsp[1]).name}')
+
+    skiprom()
+
+    resp = req(SvcProtocol.CmdOwWriteBits, [0, OwCmd.CONVERT.value])
+    if (OwResponseCode(resp[1]) != OwResponseCode.eOwWriteBitsOk):
+        print(f"ow failed {OwResponseCode(resp[1]).name}")
+        raise "ow failed"
+
+    print(f'ow convert ok {OwResponseCode(resp[1]).name}')
+
+    time.sleep(1)
+
+    skiprom()
+    resp = req(SvcProtocol.CmdOwWriteBits, [0, OwCmd.READ_ROM.value])
+    if (OwResponseCode(resp[1]) != OwResponseCode.eOwWriteBitsOk):
+        print(f"ow read rom failed {OwResponseCode(resp[1]).name} {resp}")
+        raise "ow read rome failed"
+    print(f'ow read rom ok {OwResponseCode(resp[1]).name}')
+
+    resp = req(SvcProtocol.CmdOwReadBits, [8*9])
+    if (OwResponseCode(resp[1]) != OwResponseCode.eOwReadBitsOk):
+        print(f"ow read out failed {OwResponseCode(resp[1]).name} {resp}")
+        raise "ow failed"
+
+    read_len = resp[2]
+    print(f"need read {read_len} bits")
+
+    data1 = t.svcTransfer(SvcProtocol.CmdOwGetData)
+    data2 = t.svcTransfer(SvcProtocol.CmdOwGetData, [7])
+
+    print(f"data {data1} {data2}")
+
+
+if args.ow_search:
+    owReadTempSingle()
+
+if args.ow_read_temp_single:
+    owSearchRom()
 

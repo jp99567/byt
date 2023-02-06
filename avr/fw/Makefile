@@ -2,7 +2,12 @@ PRG            = fw
 MCU_TARGET     = at90can32
 OPTIMIZE       = -O2
 
-DEFS           = 
+FW_GIT_HASH_SHORT := $(shell git rev-parse --short=8 HEAD)
+FW_BUID_EPOCH := $(shell date '+%s')
+$(shell git diff --quiet)
+FW_GIT_IS_DIRTY := $(.SHELLSTATUS)
+
+DEFS           = -DFW_GIT_HASH_SHORT=0x$(FW_GIT_HASH_SHORT) -DFW_GIT_IS_DIRTY=$(FW_GIT_IS_DIRTY) -DFW_BUID_EPOCH=$(FW_BUID_EPOCH)
 LIBS           =
 BOOTSTART = 0x0
 # You should not have to change anything below here.

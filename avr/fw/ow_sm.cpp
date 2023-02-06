@@ -63,7 +63,7 @@ void bus_power_strong(void)
 
 bool bus_active(void)
 {
-	return PINA & _BV(PA0);
+	return not(PINA & _BV(PA0));
 }
 
 ow::ResponseCode gResponseCode;
@@ -75,7 +75,7 @@ constexpr uint8_t clockdiv(const unsigned us)
 	if(us < 255)
 		return 0b010; //clkI/O/8 (From prescaler)
 	if(us / 8 < 255)
-		return 0b110; // clkI/O/64 (From prescaler)
+		return 0b011; // clkI/O/64 (From prescaler)
 	else{
 		return 0;
 	}
@@ -83,15 +83,14 @@ constexpr uint8_t clockdiv(const unsigned us)
 
 constexpr uint8_t ticks(unsigned us)
 {
+	uint8_t v = 0;
 	if(us*8 < 255)
-		return us * 8; //No prescaling
-	if(us < 255)
-		return us; //clkI/O/8 (From prescaler)
-	if(us / 8 < 255)
-		return us / 8; // clkI/O/64 (From prescaler)
-	else{
-		return 0;
-	}
+		v = us * 8; //No prescaling
+	else if(us < 255)
+		v = us; //clkI/O/8 (From prescaler)
+	else if(us / 8 < 255)
+		v = us / 8; // clkI/O/64 (From prescaler)
+	return 255 - v + 1;
 }
 
 template<uint8_t ClockDiv, uint8_t Ticks>
@@ -99,7 +98,7 @@ void setT0Timeout()
 {
 	static_assert(Ticks > 0, "invalid ticks value");
 	TCCR0A = ClockDiv;
-	TCNT0 = 255-Ticks+1;
+	TCNT0 = Ticks;
 }
 
 #define SCHEDULE_TIMEOUT(us) setT0Timeout<clockdiv((us)), ticks((us))>()
@@ -185,6 +184,7 @@ static bool bitval(void)
 
 void start_write_bit()
 {
+	sBitIoState = eOwBitIoWaitSampleEvent;
 	bus_pull();
 	if(bitval()){
 		SCHEDULE_TIMEOUT(cDurWrite1Pulse);
