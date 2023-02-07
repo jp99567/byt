@@ -572,20 +572,93 @@ if args.sniffer:
             print(msg)
 
 
+def dallas_crc8(data):
+    crc = 0
+    for c in data:
+        for i in range(0, 8):
+            b = (crc & 1) ^ (((int(c) & (1 << i))) >> i)
+            crc = (crc ^ (b * 0x118)) >> 1
+    return crc
+
+
+def owRequest(nodebus):
+    def req(cmd, candata=None):
+        nodebus.svcTransfer(cmd, candata)
+        trsp = nodebus.svcTransfer(SvcProtocol.CmdOwGetReplyCode)
+        while OwResponseCode(trsp[1]) == OwResponseCode.eBusy:
+            trsp = nodebus.svcTransfer(SvcProtocol.CmdOwGetReplyCode)
+        return trsp
+    return req
+
+
 def owSearchRom():
-    pass
+    t = NodeBus(openBus(), args.id)
+    req = owRequest(t)
+    resp = req(SvcProtocol.CmdOwInit)
+
+    last_branch = -1
+    sensors = list()
+    sensor = bytearray(8)
+    while True:
+        if OwResponseCode(resp[1]) != OwResponseCode.eOwPresenceOk:
+            if OwResponseCode(resp[1]) != OwResponseCode.eOwNoPresence:
+                print(OwResponseCode(resp[1]).name)
+                break
+            else:
+                print(f"ow init failed {OwResponseCode(resp[1]).name}")
+                raise "ow failed"
+
+        resp = req(SvcProtocol.CmdOwWriteBits, [0, OwCmd.SEARCH.value])
+        if OwResponseCode(resp[1]) != OwResponseCode.eOwWriteBitsOk:
+            print(f"ow start search failed {OwResponseCode(resp[1]).name} {resp}")
+            raise "ow start search failed"
+        print(f'ow search init ok {OwResponseCode(resp[1]).name}')
+
+        time.sleep(3)
+
+        last_zero = -1
+        for bitidx in range(8*8):
+            byte, bit = bitidx // 8, bitidx % 8
+            smer = False
+            expect_b00 = False
+            if bitidx == last_branch:
+                smer = True
+                expect_b00 = True
+            elif bitidx < last_branch:
+                smer = sensor[byte] & (1 << bit)
+
+            resp = req(SvcProtocol.CmdOwSearch, [int(smer)])
+            res = OwResponseCode(resp[1])
+            print(f"bit:{bitidx} {res.name}")
+            if expect_b00 and res != OwResponseCode.eOwSearchResult00:
+                raise 'unexpected eOwSearchResult00'
+
+            newval = smer
+            if res == OwResponseCode.eOwSearchResult00:
+                if not newval:
+                    last_zero = bitidx
+            elif res == OwResponseCode.eOwSearchResult11:
+                raise "search failed b11"
+            else:
+                newval = res == OwResponseCode.eOwSearchResult1
+
+            if newval:
+                sensor[byte] |= (1 << bit)
+            else:
+                sensor[byte] &= ~(1 << bit)
+        last_branch = last_zero
+
+        if dallas_crc8(sensor[:-1]) != sensor[-1]:
+            raise 'invalid CRC'
+
+        print(f"new sensor {sensor.hex()}")
+        if last_branch < 0:
+            break
 
 
 def owReadTempSingle():
     t = NodeBus(openBus(), args.id)
-
-    def req(cmd, candata=None):
-        t.svcTransfer(cmd, candata)
-        trsp = t.svcTransfer(SvcProtocol.CmdOwGetReplyCode)
-        while OwResponseCode(trsp[1]) == OwResponseCode.eBusy:
-            trsp = t.svcTransfer(SvcProtocol.CmdOwGetReplyCode)
-        return trsp
-
+    req = owRequest(t)
     resp = req(SvcProtocol.CmdOwInit)
     if(OwResponseCode(resp[1]) != OwResponseCode.eOwPresenceOk):
         print(f"ow init failed {OwResponseCode(resp[1]).name}")
@@ -603,7 +676,7 @@ def owReadTempSingle():
 
     skiprom()
 
-    resp = req(SvcProtocol.CmdOwWriteBits, [0, OwCmd.CONVERT.value])
+    resp = req(SvcProtocol.CmdOwWriteBits, [1, OwCmd.CONVERT.value])
     if (OwResponseCode(resp[1]) != OwResponseCode.eOwWriteBitsOk):
         print(f"ow failed {OwResponseCode(resp[1]).name}")
         raise "ow failed"
@@ -612,8 +685,13 @@ def owReadTempSingle():
 
     time.sleep(1)
 
+    resp = req(SvcProtocol.CmdOwInit)
+    if(OwResponseCode(resp[1]) != OwResponseCode.eOwPresenceOk):
+        print(f"ow init failed {OwResponseCode(resp[1]).name}")
+        raise "ow failed"
+
     skiprom()
-    resp = req(SvcProtocol.CmdOwWriteBits, [0, OwCmd.READ_ROM.value])
+    resp = req(SvcProtocol.CmdOwWriteBits, [0, OwCmd.READ_SCRATCHPAD.value])
     if (OwResponseCode(resp[1]) != OwResponseCode.eOwWriteBitsOk):
         print(f"ow read rom failed {OwResponseCode(resp[1]).name} {resp}")
         raise "ow read rome failed"
@@ -629,8 +707,13 @@ def owReadTempSingle():
 
     data1 = t.svcTransfer(SvcProtocol.CmdOwGetData)
     data2 = t.svcTransfer(SvcProtocol.CmdOwGetData, [7])
+    ow_scratchpad = data1[1:] + data2[1:]
 
-    print(f"data {data1} {data2}")
+    if dallas_crc8(ow_scratchpad[:-1]) != ow_scratchpad[-1]:
+        raise "CRC error"
+
+    v16, = struct.unpack('h', ow_scratchpad[:2])
+    print(f"{v16:02X} teplota: {v16/16}")
 
 
 if args.ow_search:
