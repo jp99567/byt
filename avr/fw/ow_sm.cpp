@@ -403,7 +403,7 @@ static void do_search()
 		        			ow::response(ow::eOwSearchResult11);
 		        			break;
 		        		}
-		                sState = eOwIdle;
+		                set_state_idle();
 		        	}
 		          break;
 		        default:

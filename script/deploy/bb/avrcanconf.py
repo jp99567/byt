@@ -597,7 +597,6 @@ def owSearchRom():
     resp = req(SvcProtocol.CmdOwInit)
 
     last_branch = -1
-    sensors = list()
     sensor = bytearray(8)
     while True:
         if OwResponseCode(resp[1]) != OwResponseCode.eOwPresenceOk:
@@ -640,7 +639,7 @@ def owSearchRom():
             elif res == OwResponseCode.eOwSearchResult11:
                 raise "search failed b11"
             else:
-                newval = res == OwResponseCode.eOwSearchResult1
+                newval = res == OwResponseCode.eOwSearchResult0
 
             if newval:
                 sensor[byte] |= (1 << bit)
