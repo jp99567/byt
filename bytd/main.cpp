@@ -6,6 +6,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <filesystem>
+#include <gpiod.hpp>
 
 #include "Log.h"
 #include "thread_util.h"
@@ -14,47 +15,10 @@
 #include "Elektromer.h"
 #include "Pru.h"
 #include "OpenTherm.h"
-#include "ICore.h"
 #include <boost/asio.hpp>
 #include "mqtt.h"
 #include "slowswi2cpwm.h"
-#include <gpiod.hpp>
-#include <yaml-cpp/yaml.h>
-
-class Facade : public ICore
-{
-};
-
-void dumpYaml(YAML::Node& node, int level=0);
-
-void dumpYaml(YAML::Node& node, int level)
-{
-    std::string offset(1+2*level, '-');
-    offset.append("YAML");
-    switch (node.Type()) {
-    case YAML::NodeType::value::Scalar:
-        LogINFO("{} Scalar: {}", offset, node.as<std::string>());
-        break;
-    case YAML::NodeType::value::Sequence:
-        LogINFO("{} seq{}:", offset, node.size());
-        for(auto it = node.begin(); it != node.end(); ++it) {
-          auto element = *it;
-          dumpYaml(element, level+1);
-        }
-        break;
-    case YAML::NodeType::value::Map:
-        LogINFO("{} map:", offset);
-        for(auto it = node.begin(); it != node.end(); ++it) {
-          LogINFO("{} map iterate {} {}:", offset, (int)(it->first.Type()), (int)(it->second.Type()) );
-          dumpYaml(it->first, level+1);
-          dumpYaml(it->second, level+1);
-        }
-        break;
-    default:
-        LogINFO("YAML null or undefined");
-        break;
-    }
-}
+#include "builder.h"
 
 class IDigiOut
 {
@@ -174,8 +138,8 @@ public:
             io_service.stop();
 		});
 
-        mqtt = std::make_shared<MqttClient>(io_service);
-        exporter = std::make_shared<ow::Exporter>();
+        //mqtt = std::make_shared<MqttClient>(io_service);
+        //exporter = std::make_shared<ow::Exporter>();
     }
 
     void on1sec()
@@ -198,18 +162,9 @@ public:
 		std::mutex cvlock;
 		std::condition_variable cv_running;
 
-        YAML::Node config = YAML::LoadFile("config.yaml");
-        dumpYaml(config);
-
-        auto node = config["BBOw"];
-        std::vector<std::tuple<std::string, std::string>> tsensors;
-        for(auto it = node.begin(); it != node.end(); ++it){
-            auto name = it->first.as<std::string>();
-            auto romcode = (it->second)["owRomCode"].as<std::string>();
-            LogINFO("yaml configured sensor {} {}", name, "a");
-            tsensors.emplace_back(std::make_tuple(name, romcode));
-        }
-
+        Builder builder;
+        auto tsensors = builder.build();
+        builder.buildCan();
         auto pru = std::make_shared<Pru>();
         openTherm = std::make_shared<OpenTherm>(pru, *mqtt);
         meranie = std::make_shared<MeranieTeploty>(pru, std::move(tsensors), *mqtt);

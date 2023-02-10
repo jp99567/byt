@@ -59,7 +59,7 @@ NodeCAN:
       id: 8
       OwT:
         voda: { addr: [ 0x119, 0 ], owRomCode: ToDo }
-        podlahovka: { addr: [ 0x119, 3 ], owRomCode: ToDo }
+        podlahovka: { addr: [ 0x119, 2 ], owRomCode: ToDo }
       SensorionCO2: { addr: 0x11A }
       Vlhkomer: { addr: 0x11B }
 

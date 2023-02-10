@@ -6,6 +6,13 @@
 
 namespace can {
 
+class ICanBus
+{
+public:
+    virtual bool send() = 0;
+    virtual ~ICanBus{}
+};
+
 using Id11 = uint16_t;
 using Data = uint8_t[8];
 struct Msg
@@ -42,19 +49,65 @@ public:
 struct OutputItem : IOutputItem
 {
     std::size_t idx;
-    void update(OutputMsg& msg) override
+    std::shared_ptr<IOutputControl> busOutControl;
+
+    void send()
     {
-        //ToDo
+        busOutControl->update(idx, *this);
     }
 };
 
-class DataControl : public IOutputControl
+struct DigOutItem : IOutputItem
+{
+    uint8_t mask;
+    unsigned offset;
+    void set()
+    {
+
+    }
+    void update(OutputMsg& msg) override
+    {
+
+    }
+};
+
+class OutputControl : public IOutputControl
 {
     void update(std::size_t idx, IOutputItem& item) override
     {
-        item.update(outputs.at(idx));
+        auto& msg = outputs.at(idx);
+        item.update(msg);
+        msg.needUpdate = true;
+        if(canbus.send(msg)){
+            msg.needUpdate = false;
+        }
     }
 
+    void writeReady()
+    {
+        for(auto& msg : outputs)
+        {
+            if(msg.needUpdate)
+            {
+                if(canbus.send(msg)){
+                    msg.needUpdate = false;
+                }
+                else{
+                    return;
+                }
+            }
+        }
+    }
+
+
+private:
+    std::vector<OutputMsg> outputs;
+    ICanBus& canbus;
+};
+
+class InputControl
+{
+public:
     void onRecvMsg(Msg& msg)
     {
         auto it = inputs.find(msg.addr());
@@ -65,7 +118,6 @@ class DataControl : public IOutputControl
 
 private:
     std::map<Id11, std::unique_ptr<IInputItem>> inputs;
-    std::vector<OutputMsg> outputs;
 };
 
 }
