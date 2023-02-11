@@ -2,6 +2,7 @@
 #include <memory>
 
 #include "Log.h"
+#include "candata.h"
 
 Builder::Builder() : config(YAML::LoadFile("config.yaml"))
 {
@@ -9,6 +10,10 @@ Builder::Builder() : config(YAML::LoadFile("config.yaml"))
 
 struct CanNodeInfo
 {
+    explicit CanNodeInfo(std::string name, unsigned id) :name(name), id(id)
+    {
+        LogINFO("Node can {} {}", name, id);
+    }
     std::string name;
     unsigned id;
 };
@@ -18,11 +23,14 @@ void Builder::buildCan()
     auto node = config["NodeCAN"];
     std::vector<std::shared_ptr<CanNodeInfo>> nodes;
 
+    std::vector<can::OutputMsg> outputObjects;
+    std::vector<can::Id> outputIdentifiers;
+
     for(auto it = node.begin(); it != node.end(); ++it){
-        auto name = it->first.as<std::string>();
+        auto nodeName = it->first.as<std::string>();
         auto nodeId = (it->second)["id"].as<unsigned>();
-        LogINFO("yaml configured node {} {}", name, nodeId);
-        nodes.emplace_back(std::make_shared<CanNodeInfo>(CanNodeInfo({name, nodeId})));
+        LogINFO("yaml configured node {} {}", nodeName, nodeId);
+        nodes.emplace_back(std::make_shared<CanNodeInfo>(nodeName, nodeId));
         if(it->second["OwT"]){
             auto owts = it->second["OwT"];
             for(auto it = owts.begin(); it != owts.end(); ++it){

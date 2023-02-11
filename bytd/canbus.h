@@ -8,6 +8,7 @@ class CanBus
 public:
     CanBus();
     ~CanBus();
+private:
     void read(can_frame& frame) const;
     void write(const can_frame& frame) const;
 };

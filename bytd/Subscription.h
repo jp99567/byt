@@ -3,7 +3,7 @@
 #include <functional>
 #include <memory>
 
-namespace util{
+namespace event {
 
 template<typename TResult = void, typename... TArgs>
 class ISubscription

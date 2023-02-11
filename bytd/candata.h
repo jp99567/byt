@@ -3,39 +3,57 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <exception>
+#include <linux/can.h>
+#include <cstring>
+
+#include "IIo.h"
 
 namespace can {
 
 class ICanBus
 {
 public:
-    virtual bool send() = 0;
-    virtual ~ICanBus{}
+    virtual bool send(const can_frame& msg) = 0;
+    virtual ~ICanBus(){}
 };
 
-using Id11 = uint16_t;
-using Data = uint8_t[8];
-struct Msg
+using Id = canid_t;
+using Data = decltype(can_frame::data);
+
+struct Frame
 {
-    Id11 addr() const;
-    Data data;
+    Frame(Id id, std::size_t len)
+    {
+        if(len > sizeof(frame.data))
+            throw std::out_of_range("can::Frame dlc invalid");
+        frame.can_id = id;
+        frame.can_dlc = len;
+        ::memset(frame.data, 0, len);
+    }
+
+    Id addr() const
+    {
+        return frame.can_id;
+    }
+    can_frame frame;
 };
 
 struct OutputMsg
 {
-    Id11 addr;
     bool needUpdate = false;
+    Frame msg;
 };
 
 struct IInputItem
 {
-    virtual void update(const Data& data) = 0;
+    virtual void update(const Data& data, std::size_t len) = 0;
     virtual ~IInputItem(){}
 };
 
 struct IOutputItem
 {
-    virtual void update(OutputMsg& msg) = 0;
+    virtual void update(Data& data) = 0;
     virtual ~IOutputItem(){}
 };
 
@@ -51,54 +69,31 @@ struct OutputItem : IOutputItem
     std::size_t idx;
     std::shared_ptr<IOutputControl> busOutControl;
 
-    void send()
-    {
-        busOutControl->update(idx, *this);
-    }
+    void send();
 };
 
-struct DigOutItem : IOutputItem
+struct DigOutItem : OutputItem
 {
     uint8_t mask;
     unsigned offset;
-    void set()
-    {
+    bool value = false;
 
-    }
-    void update(OutputMsg& msg) override
-    {
+    void set(bool v);
+    void update(Data& data) override;
+};
 
-    }
+class DigiInItem : public IInputItem
+{
+    uint8_t mask;
+    unsigned offset;
+    DigInput input;
+    void update(const Data& data, std::size_t len) override;
 };
 
 class OutputControl : public IOutputControl
 {
-    void update(std::size_t idx, IOutputItem& item) override
-    {
-        auto& msg = outputs.at(idx);
-        item.update(msg);
-        msg.needUpdate = true;
-        if(canbus.send(msg)){
-            msg.needUpdate = false;
-        }
-    }
-
-    void writeReady()
-    {
-        for(auto& msg : outputs)
-        {
-            if(msg.needUpdate)
-            {
-                if(canbus.send(msg)){
-                    msg.needUpdate = false;
-                }
-                else{
-                    return;
-                }
-            }
-        }
-    }
-
+    void update(std::size_t idx, IOutputItem& item) override;
+    void writeReady();
 
 private:
     std::vector<OutputMsg> outputs;
@@ -108,16 +103,26 @@ private:
 class InputControl
 {
 public:
-    void onRecvMsg(Msg& msg)
-    {
-        auto it = inputs.find(msg.addr());
-        if( it != std::cbegin(inputs)) {
-            it->second->update(msg.data);
-        }
-    }
+    void onRecvMsg(Frame& msg);
 
 private:
-    std::map<Id11, std::unique_ptr<IInputItem>> inputs;
+    std::map<Id, std::unique_ptr<IInputItem>> inputs;
 };
 
 }
+
+class CanDigiOut : public IDigiOut
+{
+    can::DigOutItem item;
+public:
+    operator bool() const override
+    {
+        return item.value;
+    }
+    bool operator()(bool value) override
+    {
+        item.set(value);
+        return value;
+    }
+};
+

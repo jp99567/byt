@@ -19,14 +19,7 @@
 #include "mqtt.h"
 #include "slowswi2cpwm.h"
 #include "builder.h"
-
-class IDigiOut
-{
-public:
-    virtual operator bool() const = 0;
-    virtual bool operator()(bool value) = 0;
-    virtual ~IDigiOut(){}
-};
+#include "IIo.h"
 
 class BBDigiOut : public IDigiOut
 {
