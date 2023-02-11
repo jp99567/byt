@@ -6,7 +6,7 @@
 #include <atomic>
 #include <algorithm>
 
-namespace util{
+namespace event {
 
 class IObserverConnection
 {
@@ -93,14 +93,8 @@ public:
 
     void notify(Args... args)
     {
-        std::vector<ISubscrPtr> tmp;
-        {
-            std::lock_guard<std::mutex> lock(mObservers->lock);
-            for(auto& obs : mObservers->observers)
-                tmp.push_back(obs->clone());
-        }
-
-        for(auto& obs : tmp)
+        std::lock_guard<std::mutex> lock(mObservers->lock);
+        for(auto& obs : mObservers->observers)
             obs->raise(args...);
     }
 
