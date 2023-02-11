@@ -44,7 +44,7 @@ struct Frame
 
     bool isValid() const { return data != invalid; }
 
-    static constexpr uint32_t invalid = 0x7FFFFFFF;
+    static constexpr uint32_t invalid = 0x7FFF7BAD;
     uint32_t data = invalid;
 };
 
