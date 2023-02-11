@@ -85,14 +85,14 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                         if(v != status){
                             publish_status(v);
                             status = v;
-                            LogINFO("ot transfer id0 req:{} rsp:{:b} {} ", frameToStr(opentherm::Frame(txv)), status, frameToStr(opentherm::Frame(status)));
+                            LogDBG("ot transfer id0 req:{} rsp:{:b} {} ", frameToStr(opentherm::Frame(txv)), status, frameToStr(opentherm::Frame(status)));
                         }
                     }
                     if(asyncReq.isValid()){
                         Frame arsp = transmit(asyncReq.data);
                         if(arsp.isValid()){
                             auto rspstr = frameToStr(arsp);
-                            LogINFO("ot req:{} repsonse:{}", frameToStr(asyncReq), rspstr);
+                            LogDBG("ot req:{} repsonse:{}", frameToStr(asyncReq), rspstr);
                             rspstr = "otTransfer " + rspstr;
                             this->mqtt.publish(mqtt::rbResponse, rspstr, false);
                         }
@@ -109,7 +109,7 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                         auto v = floatFromf88(rsp&0xFFFF);
                         if(v != ch){
                             ch = v;
-                            LogINFO("ot transfer id1 {}", ch);
+                            LogDBG("ot transfer id1 {}", ch);
                         }
                     }
                 }
@@ -124,7 +124,7 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                         auto v = floatFromf88(rsp&0xFFFF);
                         if(v != dhw){
                             dhw = v;
-                            LogINFO("ot transfer id56 {}", dhw);
+                            LogDBG("ot transfer id56 {}", dhw);
                         }
                     }
                 }
@@ -136,7 +136,7 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                         if(v!=rddhw){
                             rddhw = v;
                             auto fv = floatFromf88(rsp.getV());
-                            LogINFO("id{} cur ch:{}", rsp.getId(), fv);
+                            LogDBG("id{} cur ch:{}", rsp.getId(), fv);
                             this->mqtt.publish("rb/stat/ot/tCH", fv);
                         }
                     }
@@ -149,7 +149,7 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                         if(v!=rdch){
                             rdch = v;
                             auto fv = floatFromf88(rsp.getV());
-                            LogINFO("id{} cur dhw:{}", rsp.getId(), fv);
+                            LogDBG("id{} cur dhw:{}", rsp.getId(), fv);
                             this->mqtt.publish("rb/stat/ot/tDHW", fv);
                         }
                     }
