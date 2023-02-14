@@ -4,6 +4,11 @@ set -e
 
 config-pin -f config-pin.txt
 
+if ip link show can1|grep -q 'state DOWN'; then
+	ip link set can1 type can bitrate 100000
+	ip link set up can1
+fi
+
 RPROC_CTRL_FILE='/sys/class/remoteproc/remoteproc1/state'
 while [[ ! -f $RPROC_CTRL_FILE ]]; do
 	echo waiting for $RPROC_CTRL_FILE
