@@ -7,6 +7,6 @@ class Builder
 public:
     Builder();
     void buildCan();
-    std::vector<std::tuple<std::string, std::string>> build() const;
+    std::vector<std::tuple<std::string, std::string>> buildBBoW() const;
 };
 

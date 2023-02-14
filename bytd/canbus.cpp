@@ -47,6 +47,8 @@ CanBus::~CanBus()
 
 void CanBus::read(can_frame &frame) const
 {
+    if(socket == -1)
+        return;
     auto len = ::read(socket, &frame, sizeof(struct can_frame));
     if( len < (int)sizeof(struct can_frame)) {
         LogSYSDIE("CAN read");
@@ -55,6 +57,8 @@ void CanBus::read(can_frame &frame) const
 
 void CanBus::write(const can_frame &frame) const
 {
+    if(socket == -1)
+        return;
     auto len = ::write(socket, &frame, sizeof(struct can_frame));
     if( len < (int)sizeof(struct can_frame)) {
         LogSYSDIE("CAN write");

@@ -25,11 +25,16 @@ struct Frame
 {
     Frame(Id id, std::size_t len)
     {
+        frame.can_id = id;
+        setSize(len);
+        ::memset(frame.data, 0, len);
+    }
+
+    void setSize(std::size_t len)
+    {
         if(len > sizeof(frame.data))
             throw std::out_of_range("can::Frame dlc invalid");
-        frame.can_id = id;
         frame.can_dlc = len;
-        ::memset(frame.data, 0, len);
     }
 
     Id addr() const
@@ -41,6 +46,7 @@ struct Frame
 
 struct OutputMsg
 {
+    OutputMsg(Id id, std::size_t len):msg(id, len){}
     bool needUpdate = false;
     Frame msg;
 };
@@ -124,5 +130,6 @@ public:
         item.set(value);
         return value;
     }
+    can::DigOutItem& getCanItem(){return item;}
 };
 

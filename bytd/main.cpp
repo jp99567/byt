@@ -156,7 +156,7 @@ public:
 		std::condition_variable cv_running;
 
         Builder builder;
-        auto tsensors = builder.build();
+        auto tsensors = builder.buildBBoW();
         builder.buildCan();
         auto pru = std::make_shared<Pru>();
         openTherm = std::make_shared<OpenTherm>(pru, *mqtt);
