@@ -25,6 +25,7 @@ parser.add_argument('--exit_bootloader', action='store_true')
 parser.add_argument('msg', nargs='*', help='data for command')
 parser.add_argument('--simulator', action='store_true',  help='avr can node simulator')
 parser.add_argument('--sniffer', action='store_true')
+parser.add_argument('--test_gpios', action='store_true')
 parser.add_argument('--ow_search', action='store_true')
 parser.add_argument('--ow_read_temp_single', action='store_true')
 
@@ -594,11 +595,11 @@ def owRequest(nodebus):
 def owSearchRom():
     t = NodeBus(openBus(), args.id)
     req = owRequest(t)
-    resp = req(SvcProtocol.CmdOwInit)
 
     last_branch = -1
     sensor = bytearray(8)
     while True:
+        resp = req(SvcProtocol.CmdOwInit)
         if OwResponseCode(resp[1]) != OwResponseCode.eOwPresenceOk:
             if OwResponseCode(resp[1]) != OwResponseCode.eOwNoPresence:
                 print(OwResponseCode(resp[1]).name)
@@ -628,7 +629,7 @@ def owSearchRom():
 
             resp = req(SvcProtocol.CmdOwSearch, [int(smer)])
             res = OwResponseCode(resp[1])
-            print(f"bit:{bitidx} {res.name}")
+            #print(f"bit:{bitidx} {res.name}")
             if expect_b00 and res != OwResponseCode.eOwSearchResult00:
                 raise 'unexpected eOwSearchResult00'
 
@@ -721,3 +722,108 @@ if args.ow_search:
 if args.ow_read_temp_single:
     owReadTempSingle()
 
+
+def pinId2Str(id):
+    if 0 <= id < 6*8+5:
+        byte = id // 8
+        bit = id % 8
+        p = ord('A')+byte
+        return 'P'+chr(p)+f"{bit}"
+    raise "pin id out fo range"
+
+
+def pinStr2Id(str):
+    if len(str) != 3 or str[0] != 'P':
+        raise f"invalid pin {str}"
+
+    byte = ord(str[1]) - ord('A')
+    bit = int(str[2])
+    id = 8*byte + bit
+    if 0 <= id < 6*8 + 5:
+        return id
+    raise f"pin {str} out fo range"
+
+def setByteArrayBit(data, id, value):
+    byte = id // 8
+    mask = 1 << (id % 8)
+    if value:
+        data[byte] |= mask
+    else:
+        data[byte] &= ~mask
+
+def test_gpios():
+    Okej = True
+    def sayPort(desc, data):
+        out = [f'{v:08b}' for v in data]
+        print(f"{desc}: {out}")
+
+    trans = NodeBus(openBus(), args.id)
+
+    def setIoData(portcmd, data):
+        rsp = trans.svcTransfer(portcmd, data)
+        if SvcProtocol(rsp[0]) != portcmd:
+            raise f"returned {SvcProtocol(rsp[0]).name}"
+
+    def getIoData(portcmd):
+        rsp = trans.svcTransfer(portcmd)
+        if SvcProtocol(rsp[0]) != portcmd or len(rsp) != 8:
+            raise f"returned get port command {SvcProtocol(rsp[0]).name} {len(rsp)}"
+        return rsp[1:]
+
+    ddr = getIoData(SvcProtocol.CmdTestGetDDR)
+    port = getIoData(SvcProtocol.CmdTestGetPORT)
+    sayPort('DDR', ddr)
+    sayPort('PORT', port)
+
+    pinlist = list(range(0, pinStr2Id('PG4')+1))
+    pinlist.remove(pinStr2Id('PD5'))
+    pinlist.remove(pinStr2Id('PD6'))
+
+    expectedPin = bytearray(7)
+
+    def compareBits(actual, expected):
+        for i in pinlist:
+            byte = i // 8
+            mask = 1 << (i % 8)
+            if not ((actual[byte] & mask) == (expected[byte] & mask)):
+                return False
+        return True
+
+    #pull up
+    for i in pinlist:
+        setByteArrayBit(port, i, True)
+        setByteArrayBit(expectedPin, i, True)
+
+    setIoData(SvcProtocol.CmdTestSetPORT, port)
+
+    pin = getIoData(SvcProtocol.CmdTestGetPIN)
+    sayPort('PIN', pin)
+    if not compareBits(pin, expectedPin):
+        Okej = False
+        print(f"error afer pull up")
+
+    for i in pinlist:
+        setByteArrayBit(port, i, False)
+        setByteArrayBit(expectedPin, i, False)
+        setByteArrayBit(ddr, i, True)
+        setIoData(SvcProtocol.CmdTestSetPORT, port)
+        setIoData(SvcProtocol.CmdTestSetDDR, ddr)
+        pin = getIoData(SvcProtocol.CmdTestGetPIN)
+        sayPort(f'test PIN {i} {pinId2Str(i)}', pin)
+        if not compareBits(pin, expectedPin):
+            Okej = False
+            print(f"error at {i} {pinId2Str(i)}")
+        setByteArrayBit(port, i, True)
+        setByteArrayBit(expectedPin, i, True)
+        setByteArrayBit(ddr, i, False)
+        setIoData(SvcProtocol.CmdTestSetDDR, ddr)
+        setIoData(SvcProtocol.CmdTestSetPORT, port)
+
+    if not Okej:
+        print(f'node{args.id} Gpio test FAILED check for shorts')
+        raise 'FAILED'
+    print(f'node{args.id} Gpio test OK')
+
+
+if args.test_gpios:
+    test_gpios()

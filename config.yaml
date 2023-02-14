@@ -104,3 +104,9 @@ BBOw:
     # OTIN pru0_in14 P8_16
     # OTOUT pru0_out14 P8_12
 
+#   1. žltý - +24V
+#   2. čierny - GND
+#   3. červený - CANH
+#   4. biely - CANL
+
+# GpioTest passed: 3,5,10,4,7
