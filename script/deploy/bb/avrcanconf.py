@@ -761,8 +761,11 @@ if args.ow_read_all:
     for sens in sensors:
         owMatchRom(req, t, sens)
         ow_scratchpad = owReadScratchPad(req, t)
-        v16, = struct.unpack('h', ow_scratchpad[:2])
-        print(f"{sens.hex()} teplota: {v16 / 16}deg (0x{v16:04X})")
+        v16, tH, tL, conf, = struct.unpack('hBBB', ow_scratchpad[:5])
+        factor = 1/16
+        if conf == 0xFF : factor = 1/2
+        print(f"{sens.hex()} teplota: {v16 * factor}deg  (0x{v16:04X} tH:0x{tH:02X} tL:0x{tL:02X} conf:0b{conf:08b})")
+
 
 def pinId2Str(id):
     if 0 <= id < 6*8+5:
