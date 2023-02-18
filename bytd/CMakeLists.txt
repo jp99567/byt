@@ -1,5 +1,5 @@
 
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.21)
 project(bytd)
 
 find_package(Threads REQUIRED)
