@@ -20,6 +20,7 @@
 #include "slowswi2cpwm.h"
 #include "builder.h"
 #include "IIo.h"
+#include "Pumpa.h"
 
 class BBDigiOut : public IDigiOut
 {
@@ -50,62 +51,6 @@ public:
     }
 
     ~BBDigiOut(){}
-};
-
-class Pumpa
-{
-    constexpr static int maxPlamenOff = 6;
-    std::unique_ptr<IDigiOut> out;
-    int plamenOffCount = -1;
-    std::shared_ptr<MqttClient> mqtt;
-
-public:
-    explicit Pumpa(std::unique_ptr<IDigiOut> digiout, std::shared_ptr<MqttClient> mqtt)
-        :out(std::move(digiout))
-        ,mqtt(mqtt)
-    {
-        (*out)(false);
-    }
-
-    void start()
-    {
-        LogINFO("Pumpa start {}", plamenOffCount);
-        setPumpa(true);
-        plamenOffCount = 0;
-    }
-
-    void stop()
-    {
-        LogINFO("Pumpa stop {}", plamenOffCount);
-        setPumpa(false);
-        plamenOffCount = -1;
-    }
-
-    void onPlamenOff()
-    {
-        if(plamenOffCount >= 0){
-            LogINFO("Pumpa onPlamenOff {}", plamenOffCount);
-            if(++plamenOffCount > maxPlamenOff){
-                stop();
-                LogINFO("pumpa automatic Off");
-            }
-        }
-    }
-
-    ~Pumpa()
-    {
-        (*out)(false);
-    }
-
-private:
-    void setPumpa(bool value)
-    {
-        if( value != *out)
-        {
-            (*out)(value);
-            mqtt->publish("rb/stat/pumpa", (int)value);
-        }
-    }
 };
 
 class AppContainer
