@@ -123,20 +123,6 @@ public:
 
 			do{
                 std::this_thread::sleep_for(std::chrono::seconds(1));
-				{
-                    const auto path = std::filesystem::path("/run/bytd/setpoint_dhw");
-                    if(std::filesystem::exists(path)){
-                        std::ifstream f(path);
-                        f >> openTherm->dhwSetpoint;
-                    }
-				}
-				{
-                    const auto path = std::filesystem::path("/run/bytd/setpoint_ch");
-                    if(std::filesystem::exists(path)){
-                        std::ifstream f(path);
-                        f >> openTherm->chSetpoint;
-                    }
-				}
                 meranie->meas();
 			}
 			while(running);
