@@ -57,7 +57,6 @@ using DigIN_Obj = Dig_Obj;
 
 struct OwT_Obj : Base_Obj
 {
-	int16_t value;
 };
 
 static uint8_t gDigIN_count;
@@ -217,7 +216,8 @@ void svc(bool broadcast) {
 		auto& obj = gOwT_Obj[svc_msg[1]];
 		obj.mobIdx = svc_msg[2];
 		obj.iodataIdx = svc_msg[3];
-		obj.value = ow::cInvalidValue;
+		auto& curValue = *reinterpret_cast<int16_t*>(&gIOData[obj.iodataIdx]);
+		curValue = ow::cInvalidValue;
 		svc_msglen = 1;
 	}
 		break;
@@ -607,12 +607,14 @@ enum class State {
 	ow_converting,
 	ow_initing_before_read,
 	ow_matching_rom,
-	ow_reading_scratchpad
+	ow_reading_scratchpad,
+	ow_relaxing
 };
 
 auto gState = State::idling;
 uint8_t gT0;
 uint8_t gOwCurSensorIdx;
+uint16_t gTmpOwMobMarkedTx;
 
 void measure_ow_temp_sm()
 {
@@ -642,6 +644,7 @@ void measure_ow_temp_sm()
 		auto timeout = ClockTimer65MS::durMs(850);
 		if(ClockTimer65MS::isTimeout(gT0, timeout)){
 			gOwCurSensorIdx = 0;
+			gTmpOwMobMarkedTx = 0;
 			ow::init();
 			gState = State::ow_initing_before_read;
 		}
@@ -678,13 +681,15 @@ void measure_ow_temp_sm()
 			for(uint8_t i=0; i<sizeof(*spad)-1; ++i){
 				crc = ow::calc_crc(ow::gOwData[i], crc);
 			}
-			auto value = ow::cInvalidValue;
+			auto newValue = ow::cInvalidValue;
 			if(crc == spad->crc){
-				value = spad->temperature;
+				newValue = spad->temperature;
 			}
 			auto& obj = gOwT_Obj[gOwCurSensorIdx++];
-			if(obj.value != value){
-				obj.value = value;
+			auto& curValue = *reinterpret_cast<int16_t*>(&gIOData[obj.iodataIdx]);
+			if(curValue != newValue){
+				curValue = newValue;
+				gTmpOwMobMarkedTx |= _BV(obj.mobIdx);
 			}
 
 			if(gOwCurSensorIdx < gOwT_count){
@@ -692,9 +697,21 @@ void measure_ow_temp_sm()
 				gState = State::ow_initing_before_read;
 			}
 			else{
+				gState = State::ow_relaxing;
+				gMobMarkedTx |= gTmpOwMobMarkedTx;
+			}
+		  }
+		  break;
+		case State::ow_relaxing:
+		{
+			auto timeout = ClockTimer65MS::durMs(1000);
+			if(ClockTimer65MS::isTimeout(gT0, timeout)){
 				gState = State::idling;
 			}
 		}
-	}
+			break;
+		default:
+			break;
+		}
 }
 }
