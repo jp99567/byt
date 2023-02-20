@@ -88,7 +88,7 @@ uint8_t can_rx_svc()
 	CANPAGE = CANHPMOB;
 	if(CANSTMOB & _BV(RXOK)){
 		uint8_t id = CANPAGE >> 4;
-		if(id==13 || id<=14){
+		if(id==13 || id==14){
 			svc_msglen = CANCDMOB & 0x0F;
 			for(uint8_t i=0; i<svc_msglen; ++i)
 				svc_msg[i] = CANMSG;
@@ -316,7 +316,7 @@ void svc(bool broadcast) {
 		constexpr uint32_t minutes2 = ((FW_BUID_EPOCH - Svc::fw_build_epoch_base) / 60) << 1;
 		static_assert(minutes2 < (1L << 24), "build time out of range");
 		static_assert(FW_GIT_IS_DIRTY < 2 && FW_GIT_IS_DIRTY >= 0, "invalid dirty flag");
-		*reinterpret_cast<uint32_t*>(&svc_msg[4]) = 0x00FFFFFF & (minutes2|FW_GIT_IS_DIRTY);
+		*reinterpret_cast<uint32_t*>(&svc_msg[4]) = ((minutes2|FW_GIT_IS_DIRTY) << 8);
 		*reinterpret_cast<uint32_t*>(&svc_msg[1]) = FW_GIT_HASH_SHORT;
 		svc_msglen = 8;
 	}
@@ -418,49 +418,57 @@ void iterateOutputObjs(uint8_t mobidx)
 	}
 }
 
-void onTimer()
+void onTimer16s7()
 {
+}
+
+void onTimer4ms096()
+{
+
+}
+
+constexpr bool isSvcRx(uint8_t mobid)
+{
+	return mobid==13 || mobid==14;
 }
 
 void run()
 {
 	DBG("running %02X %02X mcusr:%02X cant:%u", CANGIT, gEvents, MCUCR, CANTIM);
 	sei();
+
+	uint8_t prevCANTIML_5b = CANTIML & 0xF8;
+
 	while(1){
 		if(CANGIT & _BV(CANIT))
 		{
+			uint8_t mobidx = CANHPMOB >> 4;
+			CANPAGE = CANHPMOB;
+			if( isSvcRx(mobidx))
 			{
 				auto id = can_rx_svc();
 				if(id)
 					svc(id==14);
 			}
 
-			uint8_t mobidx=0;
-			while(mobidx < gMobFirstTx){ //iterate rx mobs
-				if(CANSIT & _BV(mobidx)){
-					CANPAGE = ( mobidx << MOBNB0 );
-					if(CANSTMOB & _BV(RXOK)){
-						const uint8_t beginIdx = mobidx > 0
-								? gMobEndIdx[mobidx-1] : 0;
-						const uint8_t endIdx = gMobEndIdx[mobidx];
-						auto idx = beginIdx;
-						auto dlc = CANCDMOB & 0x0F;
-						while((idx < endIdx) && ((idx-beginIdx) < dlc))
-							gIOData[idx++] = CANMSG;
-						CANSTMOB = 0;
-						CANCDMOB = ( 1 << CONMOB1 ) | ( (endIdx-beginIdx) << DLC0 );
-						iterateOutputObjs(mobidx++);
-						continue;
-					}
+			if(mobidx < gMobFirstTx){ //iterate rx mobs
+				if(CANSTMOB & _BV(RXOK)){
+					const uint8_t beginIdx = mobidx > 0
+							? gMobEndIdx[mobidx-1] : 0;
+					const uint8_t endIdx = gMobEndIdx[mobidx];
+					auto idx = beginIdx;
+					auto dlc = CANCDMOB & 0x0F;
+					while((idx < endIdx) && ((idx-beginIdx) < dlc))
+						gIOData[idx++] = CANMSG;
 					CANSTMOB = 0;
+					CANCDMOB = ( 1 << CONMOB1 ) | ( (endIdx-beginIdx) << DLC0 );
+					iterateOutputObjs(mobidx++);
 				}
-				++mobidx;
+				CANSTMOB = 0;
 			}
-			while(mobidx < gMobCount){ //iterate and clear tx mobs
+			if(mobidx < gMobCount){ //iterate and clear tx mobs
 				if(CANSIT & _BV(mobidx)){
-					CANPAGE = ( mobidx << MOBNB0 );
 					if(CANSTMOB){
-						CANCDMOB = 0x00;
 						CANSTMOB = 0x00;
 					}
 				}
@@ -500,7 +508,13 @@ void run()
 		if(gEvents & Event::timer){
 			gEvents &= ~Event::timer;
 			gCounter++;
-			onTimer();
+			onTimer16s7();
+		}
+
+		uint8_t curCANTIML_5b = CANTIML & 0xF8;
+		if(curCANTIML_5b != prevCANTIML_5b){
+			prevCANTIML_5b = curCANTIML_5b;
+			onTimer4ms096();
 		}
 	}
 }
@@ -600,11 +614,6 @@ auto gState = State::idling;
 uint8_t gT0;
 uint8_t gOwCurSensorIdx;
 
-void start_read()
-{
-
-}
-
 void measure_ow_temp_sm()
 {
 	switch(gState){
@@ -630,7 +639,7 @@ void measure_ow_temp_sm()
 		break;
 	case State::ow_converting:
 	{
-		auto timeout = ClockTimer65MS::durMs(750);
+		auto timeout = ClockTimer65MS::durMs(850);
 		if(ClockTimer65MS::isTimeout(gT0, timeout)){
 			gOwCurSensorIdx = 0;
 			ow::init();
@@ -676,6 +685,14 @@ void measure_ow_temp_sm()
 			auto& obj = gOwT_Obj[gOwCurSensorIdx++];
 			if(obj.value != value){
 				obj.value = value;
+			}
+
+			if(gOwCurSensorIdx < gOwT_count){
+				ow::init();
+				gState = State::ow_initing_before_read;
+			}
+			else{
+				gState = State::idling;
 			}
 		}
 	}

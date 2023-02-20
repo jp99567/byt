@@ -11,6 +11,7 @@ import yaml
 import enum
 from struct import pack
 from copy import deepcopy
+import datetime
 
 parser = argparse.ArgumentParser(description='avr can bus nodes configuration')
 parser.add_argument('--candev', default='vcan0')
@@ -24,7 +25,7 @@ parser.add_argument('--generate', action='store_true', help='header file for can
 parser.add_argument('--cmd', help='svc command send to node')
 parser.add_argument('--exit_bootloader', action='store_true')
 parser.add_argument('msg', nargs='*', help='data for command')
-parser.add_argument('--simulator', action='store_true',  help='avr can node simulator')
+parser.add_argument('--simulator', action='store_true', help='avr can node simulator')
 parser.add_argument('--sniffer', action='store_true')
 parser.add_argument('--test_gpios', action='store_true')
 parser.add_argument('--ow_search', action='store_true')
@@ -35,6 +36,7 @@ args = parser.parse_args()
 canid_bcast = 0xEC33F000 >> 3
 canid_bcast_mask = ((1 << 20) - 1) << 9
 
+fw_build_epoch_base = 1675604744   # 5.feb 20231 14:45:44 CET
 
 class SvcProtocol(enum.IntEnum):
     CmdSetAllocCounts = enum.auto()
@@ -528,13 +530,14 @@ if args.simulator:
         print(msg)
         if msg.data[0] == SvcProtocol.CmdStatus:
             sendBlocking(bus, can.Message(arbitration_id=msg.arbitration_id + 1, is_extended_id=True,
-                                 data=[msg.data[0], 0, 0, stage]))
+                                          data=[msg.data[0], 0, 0, stage]))
             continue
         elif msg.data[0] == SvcProtocol.CmdSetStage:
             stage = msg.data[1]
         sendBlocking(bus, can.Message(arbitration_id=msg.arbitration_id + 1, is_extended_id=True, data=[msg.data[0]]))
 
-if args.sniffer:
+
+def sniff():
     bus = openBus()
     while True:
         msg = bus.recv()
@@ -562,7 +565,7 @@ if args.sniffer:
                             if len(data) > 2:
                                 pwstr = data[1] != 0
                                 owdata = [f"{v:02X}" for v in data[2:]]
-                                rest = f"pwstr:{pwstr} len:{len(data)-2} {owdata}"
+                                rest = f"pwstr:{pwstr} len:{len(data) - 2} {owdata}"
                     elif SvcProtocol(data[0]) == SvcProtocol.CmdOwReadBits:
                         if type == 'req':
                             count = -1
@@ -573,12 +576,27 @@ if args.sniffer:
                         if type == 'rsp':
                             if len(data) > 2:
                                 rest = f"{OwResponseCode(data[1]).name} bitcount:{data[2]}"
+                    elif SvcProtocol(data[0]) == SvcProtocol.CmdGetGitVersion and type == 'rsp':
+                        if len(data) == 8:
+                            data.append(0)
+                            git_ver32bit, build_time = struct.unpack('II', bytearray(data[1:]))
+                            dirty = build_time & 1 == 1
+                            build_epoch = fw_build_epoch_base + (build_time >> 1)*60
+                            build_datetime = datetime.datetime.fromtimestamp(build_epoch)
+                            rest = f'build time:{build_datetime} git version:{git_ver32bit:08x}'
+                            if dirty:
+                                rest += '-DIRTY'
+
                     print(f"({nodeid},{minor}) {type} {SvcProtocol(data[0]).name} {rest}")
                 else:
                     rest = [f"{v:02X}" for v in data]
                     print(f"({nodeid},{minor}) ? {rest}")
         else:
             print(msg)
+
+
+if args.sniffer:
+    sniff()
 
 
 def dallas_crc8(data):
@@ -597,6 +615,7 @@ def owRequest(nodebus):
         while OwResponseCode(trsp[1]) == OwResponseCode.eBusy:
             trsp = nodebus.svcTransfer(SvcProtocol.CmdOwGetReplyCode)
         return trsp
+
     return req
 
 
@@ -622,7 +641,7 @@ def owSearchRom(req):
         time.sleep(3)
 
         last_zero = -1
-        for bitidx in range(8*8):
+        for bitidx in range(8 * 8):
             byte, bit = bitidx // 8, bitidx % 8
             smer = False
             expect_b00 = False
@@ -634,7 +653,7 @@ def owSearchRom(req):
 
             resp = req(SvcProtocol.CmdOwSearch, [int(smer)])
             res = OwResponseCode(resp[1])
-            #print(f"bit:{bitidx} {res.name}")
+            # print(f"bit:{bitidx} {res.name}")
             if expect_b00 and res != OwResponseCode.eOwSearchResult00:
                 raise 'unexpected eOwSearchResult00'
 
@@ -673,7 +692,7 @@ def owSkiprom(req):
 
 def owConvert(req):
     resp = req(SvcProtocol.CmdOwInit)
-    if(OwResponseCode(resp[1]) != OwResponseCode.eOwPresenceOk):
+    if (OwResponseCode(resp[1]) != OwResponseCode.eOwPresenceOk):
         print(f"ow init failed {OwResponseCode(resp[1]).name}")
         raise "ow failed"
     print(f"ow init ok {OwResponseCode(resp[1]).name}")
@@ -714,21 +733,20 @@ def owReadTempSingle():
     owConvert(req)
 
     resp = req(SvcProtocol.CmdOwInit)
-    if(OwResponseCode(resp[1]) != OwResponseCode.eOwPresenceOk):
+    if (OwResponseCode(resp[1]) != OwResponseCode.eOwPresenceOk):
         print(f"ow init failed {OwResponseCode(resp[1]).name}")
         raise "ow failed"
 
     owSkiprom(req)
     ow_scratchpad = owReadScratchPad(req, t)
     v16, = struct.unpack('h', ow_scratchpad[:2])
-    print(f"{v16:02X} teplota: {v16/16}")
+    print(f"{v16:02X} teplota: {v16 / 16}")
 
 
 if args.ow_search:
     t = NodeBus(openBus(), args.id)
     req = owRequest(t)
     owSearchRom(req)
-
 
 if args.ow_read_temp_single:
     owReadTempSingle()
@@ -737,9 +755,10 @@ if args.ow_read_temp_single:
 def owReadTempAll():
     pass
 
+
 def owMatchRom(req, t, sens):
     resp = req(SvcProtocol.CmdOwInit)
-    if(OwResponseCode(resp[1]) != OwResponseCode.eOwPresenceOk):
+    if (OwResponseCode(resp[1]) != OwResponseCode.eOwPresenceOk):
         print(f"ow init failed {OwResponseCode(resp[1]).name}")
         raise "ow failed"
 
@@ -749,12 +768,12 @@ def owMatchRom(req, t, sens):
         raise "ow failed"
 
     ba1 = sens[:6]
-    resp = req(SvcProtocol.CmdOwWriteBits, [0, *ba1,])
+    resp = req(SvcProtocol.CmdOwWriteBits, [0, *ba1, ])
     if (OwResponseCode(resp[1]) != OwResponseCode.eOwWriteBitsOk):
         print(f"ow write down failed {OwResponseCode(resp[1]).name} {resp}")
         raise "ow failed"
     ba2 = sens[6:]
-    resp = req(SvcProtocol.CmdOwWriteBits, [0, *ba2,])
+    resp = req(SvcProtocol.CmdOwWriteBits, [0, *ba2, ])
     if (OwResponseCode(resp[1]) != OwResponseCode.eOwWriteBitsOk):
         print(f"ow write down failed {OwResponseCode(resp[1]).name} {resp}")
         raise "ow failed"
@@ -769,17 +788,17 @@ if args.ow_read_all:
         owMatchRom(req, t, sens)
         ow_scratchpad = owReadScratchPad(req, t)
         v16, tH, tL, conf, = struct.unpack('hBBB', ow_scratchpad[:5])
-        factor = 1/16
-        if conf == 0xFF : factor = 1/2
+        factor = 1 / 16
+        if conf == 0xFF: factor = 1 / 2
         print(f"{sens.hex()} teplota: {v16 * factor}deg  (0x{v16:04X} tH:0x{tH:02X} tL:0x{tL:02X} conf:0b{conf:08b})")
 
 
 def pinId2Str(id):
-    if 0 <= id < 6*8+5:
+    if 0 <= id < 6 * 8 + 5:
         byte = id // 8
         bit = id % 8
-        p = ord('A')+byte
-        return 'P'+chr(p)+f"{bit}"
+        p = ord('A') + byte
+        return 'P' + chr(p) + f"{bit}"
     raise "pin id out fo range"
 
 
@@ -789,10 +808,11 @@ def pinStr2Id(str):
 
     byte = ord(str[1]) - ord('A')
     bit = int(str[2])
-    id = 8*byte + bit
-    if 0 <= id < 6*8 + 5:
+    id = 8 * byte + bit
+    if 0 <= id < 6 * 8 + 5:
         return id
     raise f"pin {str} out fo range"
+
 
 def setByteArrayBit(data, id, value):
     byte = id // 8
@@ -802,8 +822,10 @@ def setByteArrayBit(data, id, value):
     else:
         data[byte] &= ~mask
 
+
 def test_gpios():
     Okej = True
+
     def sayPort(desc, data):
         out = [f'{v:08b}' for v in data]
         print(f"{desc}: {out}")
@@ -826,7 +848,7 @@ def test_gpios():
     sayPort('DDR', ddr)
     sayPort('PORT', port)
 
-    pinlist = list(range(0, pinStr2Id('PG4')+1))
+    pinlist = list(range(0, pinStr2Id('PG4') + 1))
     pinlist.remove(pinStr2Id('PD5'))
     pinlist.remove(pinStr2Id('PD6'))
 
@@ -840,7 +862,7 @@ def test_gpios():
                 return False
         return True
 
-    #pull up
+    # pull up
     for i in pinlist:
         setByteArrayBit(port, i, True)
         setByteArrayBit(expectedPin, i, True)
