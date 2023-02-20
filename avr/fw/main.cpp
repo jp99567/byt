@@ -57,7 +57,7 @@ using DigIN_Obj = Dig_Obj;
 
 struct OwT_Obj : Base_Obj
 {
-	ow::RomCode rc;
+	int16_t value;
 };
 
 static uint8_t gDigIN_count;
@@ -70,6 +70,7 @@ static uint8_t gMobCount;
 DigIN_Obj* gDigIN_Obj;
 DigOUT_Obj* gDigOUT_Obj;
 OwT_Obj* gOwT_Obj;
+ow::RomData* gOwTempSensors;
 uint8_t* gIOData;
 uint8_t* gMobEndIdx;
 uint16_t gMobMarkedTx;
@@ -119,7 +120,7 @@ void can_tx_svc(void) {
 
 void init()
 {
-	CANTCON = 0;
+	CANTCON = 255;
 	CANGIE |= _BV(ENRX)|_BV(ENTX)|_BV(ENOVRT);
 	CANIE |= _BV(13) | _BV(14);
 	init_log_debug();
@@ -216,14 +217,21 @@ void svc(bool broadcast) {
 		auto& obj = gOwT_Obj[svc_msg[1]];
 		obj.mobIdx = svc_msg[2];
 		obj.iodataIdx = svc_msg[3];
+		obj.value = ow::cInvalidValue;
 		svc_msglen = 1;
 	}
 		break;
 	case Svc::Protocol::CmdSetOwObjRomCode:
 	{
-		auto& obj = gOwT_Obj[svc_msg[1]];
-		obj.rc = *reinterpret_cast<const ow::RomCode*>(&svc_msg[2]);
-		svc_msglen = 1;
+		auto& obj = gOwTempSensors[svc_msg[1]];
+		::memcpy(obj.serial, &svc_msg[2], 6);
+		obj.family = 0x28;
+		obj.crc = 0;
+		for(uint8_t i=0; i<sizeof(ow::RomCode); ++i){
+			obj.crc = ow::calc_crc(*reinterpret_cast<const uint8_t*>(&obj), obj.crc);
+		}
+		svc_msg[1] = obj.crc;
+		svc_msglen = 2;
 	}
 		break;
 	case Svc::Protocol::CmdSetDigINObjParams:
@@ -511,21 +519,34 @@ int main() {
 		}
 	}
 
-	DigIN_Obj allocDigIN_Obj[gDigIN_count];
-	gDigIN_Obj = allocDigIN_Obj;
+	uint16_t allocSize =
+			gIOData_count
+		  + gMobCount
+		  + gDigIN_count * sizeof(DigIN_Obj)
+		  + gDigOUT_count * sizeof(DigOUT_Obj)
+		  + gOwT_count * sizeof(OwT_Obj)
+		  + ((gOwT_count > 1) ? gOwT_count*sizeof(ow::RomData) : 0);
 
-	DigOUT_Obj allocDigOUT_Obj[gDigOUT_count];
-	gDigOUT_Obj = allocDigOUT_Obj;
+	uint8_t allocGData[allocSize];
+	uint8_t* ptr = allocGData;
 
-	OwT_Obj allocOwT_Obj[gOwT_count];
-	gOwT_Obj = allocOwT_Obj;
-
-	uint8_t allocIOData[gIOData_count];
-	gIOData = allocIOData;
+	gIOData = ptr;
+	ptr += gIOData_count;
 	::memset(gIOData, 0, gIOData_count);
 
-	uint8_t allocMobEndIdx[gMobCount];
-	gMobEndIdx = allocMobEndIdx;
+	gMobEndIdx = ptr;
+	ptr += gMobCount;
+
+	gDigIN_Obj = (DigIN_Obj*)ptr;
+	ptr += gDigIN_count * sizeof(DigIN_Obj);
+
+	gDigOUT_Obj = (DigOUT_Obj*)ptr;
+	ptr += gDigOUT_count * sizeof(DigOUT_Obj);
+
+	gOwT_Obj = (OwT_Obj*)ptr;
+	ptr += gDigOUT_count * sizeof(OwT_Obj);
+
+	gOwTempSensors = (ow::RomData*)ptr;
 
 	while(gFwStage == cFwStageInit2){
 		auto id = can_rx_svc();
@@ -542,3 +563,121 @@ int main() {
 	return 0;
 }
 
+struct ClockTimer255US {
+};
+
+struct ClockTimer65MS
+{
+	static uint8_t now()
+	{
+		return CANTIMH;
+	}
+
+	static constexpr uint8_t durMs(unsigned ms)
+	{
+
+		return (ms*1000)/(256L*256L);
+	}
+
+	static bool isTimeout(uint8_t t0, uint8_t dur)
+	{
+		return t0 + dur < now();
+	}
+};
+
+namespace meas{
+enum class State {
+	idling,
+	ow_initing_before_convert,
+	ow_requesting_conver,
+	ow_converting,
+	ow_initing_before_read,
+	ow_matching_rom,
+	ow_reading_scratchpad
+};
+
+auto gState = State::idling;
+uint8_t gT0;
+uint8_t gOwCurSensorIdx;
+
+void start_read()
+{
+
+}
+
+void measure_ow_temp_sm()
+{
+	switch(gState){
+	case State::idling:
+		if(gOwT_count){
+			ow::init();
+			gState = State::ow_initing_before_convert;
+		}
+		break;
+	case State::ow_initing_before_convert:
+		if(ow::response() == ow::ResponseCode::eOwPresenceOk){
+			ow::gOwData[0] = (uint8_t)ow::Cmd::SKIP_ROM;
+			ow::gOwData[1] = (uint8_t)ow::Cmd::CONVERT;
+			ow::write_bits(2*8, true);
+			gState = State::ow_requesting_conver;
+		}
+		break;
+	case State::ow_requesting_conver:
+		if(ow::response() == ow::ResponseCode::eOwWriteBitsOk){
+			gState = State::ow_converting;
+			gT0 = ClockTimer65MS::now();
+		}
+		break;
+	case State::ow_converting:
+	{
+		auto timeout = ClockTimer65MS::durMs(750);
+		if(ClockTimer65MS::isTimeout(gT0, timeout)){
+			gOwCurSensorIdx = 0;
+			ow::init();
+			gState = State::ow_initing_before_read;
+		}
+	}
+		break;
+	case State::ow_initing_before_read:
+		if(ow::response() == ow::ResponseCode::eOwPresenceOk){
+			uint8_t cnt = 0;
+			if(gOwT_count > 1){
+				ow::gOwData[cnt++] = (uint8_t)ow::Cmd::MATCH_ROM;
+				const uint8_t* rcdata = (const uint8_t*)&gOwTempSensors[gOwCurSensorIdx];
+				const uint8_t* rcdata_end = rcdata + sizeof(ow::RomData);
+				while(rcdata < rcdata_end)
+					ow::gOwData[cnt++] = *rcdata++;
+			}
+			else{
+				ow::gOwData[cnt++] = (uint8_t)ow::Cmd::SKIP_ROM;
+			}
+			ow::gOwData[cnt++] = (uint8_t)ow::Cmd::READ_SCRATCHPAD;
+			ow::write_bits(cnt*8);
+			gState = State::ow_matching_rom;
+		}
+		break;
+	case State::ow_matching_rom:
+		if(ow::response() == ow::ResponseCode::eOwWriteBitsOk){
+			ow::read_bits(sizeof(ow::ThermScratchpad)*8);
+			gState = State::ow_reading_scratchpad;
+		}
+		break;
+	case State::ow_reading_scratchpad:
+		if(ow::response() == ow::ResponseCode::eOwReadBitsOk){
+			auto spad = reinterpret_cast<const ow::ThermScratchpad*>(ow::gOwData);
+			uint8_t crc = 0;
+			for(uint8_t i=0; i<sizeof(*spad)-1; ++i){
+				crc = ow::calc_crc(ow::gOwData[i], crc);
+			}
+			auto value = ow::cInvalidValue;
+			if(crc == spad->crc){
+				value = spad->temperature;
+			}
+			auto& obj = gOwT_Obj[gOwCurSensorIdx++];
+			if(obj.value != value){
+				obj.value = value;
+			}
+		}
+	}
+}
+}

@@ -263,9 +263,15 @@ class ClassOwtInfo(ClassInfo):
             byte = self.node[i]['addr'][1] + mobSize[canid]['start']
             nodebus.svcTransfer(SvcProtocol.CmdSetOwObjParams, [idx, mobidx, byte])
             if len(self.node.keys()) > 1:
-                rc = self.node[i]['owRomCode']
+                rc = bytearray.fromhex(self.node[i]['owRomCode'])
                 print(f"ToDo send romcode {rc}")
-                nodebus.svcTransfer(SvcProtocol.CmdSetOwObjRomCode, [idx, 0])
+                if len(rc) != 8:
+                    raise f'Invalid rc length {rc}'
+                rsp = nodebus.svcTransfer(SvcProtocol.CmdSetOwObjRomCode, [idx, *rc[1:7]])
+                if SvcProtocol(rsp[0]) != SvcProtocol.CmdSetOwObjRomCode:
+                    raise f'Invalid response {rc} {rsp[1]}'
+                if rsp[1] != rc[7]:
+                    raise f'Inwalid crc {rc} {rsp[1]}'
             idx += 1
 
 
@@ -488,7 +494,8 @@ namespace Protocol {
 
     head2 = '''# pragma once
 // GENERATED
-namespace ow { 
+namespace ow {
+   constexpr int16_t cInvalidValue = -21931; 
    enum ResponseCode {
 '''
     write_header(head1, SvcProtocol, foot1)
