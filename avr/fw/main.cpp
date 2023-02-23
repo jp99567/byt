@@ -232,7 +232,7 @@ void svc(bool broadcast) {
 		obj.family = 0x28;
 		obj.crc = 0;
 		for(uint8_t i=0; i<sizeof(ow::RomCode); ++i){
-			obj.crc = ow::calc_crc(*reinterpret_cast<const uint8_t*>(&obj), obj.crc);
+			obj.crc = ow::calc_crc(reinterpret_cast<const uint8_t*>(&obj)[i], obj.crc);
 		}
 		svc_msg[1] = obj.crc;
 		svc_msglen = 2;
@@ -562,7 +562,7 @@ int main() {
 	ptr += gDigOUT_count * sizeof(DigOUT_Obj);
 
 	gOwT_Obj = (OwT_Obj*)ptr;
-	ptr += gDigOUT_count * sizeof(OwT_Obj);
+	ptr += gOwT_count * sizeof(OwT_Obj);
 
 	gOwTempSensors = (ow::RomData*)ptr;
 
@@ -591,15 +591,19 @@ struct ClockTimer65MS
 		return CANTIMH;
 	}
 
-	static constexpr uint8_t durMs(unsigned ms)
+	template<unsigned ms>
+	static constexpr uint8_t durMs()
 	{
-
-		return (ms*1000)/(256L*256L);
+		constexpr float rv = ((float)ms*1000)/(256L*256L);
+		static_assert(rv<255, "Invalid timeout moc velky");
+		static_assert(rv>0, "Invalid timeout moc maly");
+		return rv;
 	}
 
 	static bool isTimeout(uint8_t t0, uint8_t dur)
 	{
-		return t0 + dur < now();
+		uint8_t dt = now() - t0;
+		return dt > dur;
 	}
 };
 
@@ -615,11 +619,28 @@ enum class State {
 	ow_relaxing
 };
 
+static auto gState = State::idling;
+static uint8_t gT0;
+static uint8_t gOwCurSensorIdx;
+
+void ow_error()
+{
+	DBG("ow_error %u", ow::response());
+	auto newValue = ow::cInvalidValue;
+	if(not (gOwCurSensorIdx < gOwT_count))
+		gOwCurSensorIdx = 0;
+	auto& obj = gOwT_Obj[gOwCurSensorIdx];
+	auto& curValue = *reinterpret_cast<int16_t*>(&gIOData[obj.iodataIdx]);
+	if(curValue != newValue){
+		curValue = newValue;
+		markMobTx(obj.mobIdx);
+	}
+	gT0 = ClockTimer65MS::now();
+	gState = State::ow_relaxing;
+}
+
 void measure_ow_temp_sm()
 {
-	static auto gState = State::idling;
-	static uint8_t gT0;
-	static uint8_t gOwCurSensorIdx;
 	static uint16_t gTmpOwMobMarkedTx;
 
 	switch(gState){
@@ -636,16 +657,22 @@ void measure_ow_temp_sm()
 			ow::write_bits(2*8, true);
 			gState = State::ow_requesting_conver;
 		}
+		else if(ow::response() != ow::ResponseCode::eBusy){
+			ow_error();
+		}
 		break;
 	case State::ow_requesting_conver:
 		if(ow::response() == ow::ResponseCode::eOwWriteBitsOk){
 			gState = State::ow_converting;
 			gT0 = ClockTimer65MS::now();
 		}
+		else if(ow::response() != ow::ResponseCode::eBusy){
+			ow_error();
+		}
 		break;
 	case State::ow_converting:
 	{
-		auto timeout = ClockTimer65MS::durMs(850);
+		auto timeout = ClockTimer65MS::durMs<850>();
 		if(ClockTimer65MS::isTimeout(gT0, timeout)){
 			gOwCurSensorIdx = 0;
 			gTmpOwMobMarkedTx = 0;
@@ -671,11 +698,17 @@ void measure_ow_temp_sm()
 			ow::write_bits(cnt*8);
 			gState = State::ow_matching_rom;
 		}
+		else if(ow::response() != ow::ResponseCode::eBusy){
+			ow_error();
+		}
 		break;
 	case State::ow_matching_rom:
 		if(ow::response() == ow::ResponseCode::eOwWriteBitsOk){
 			ow::read_bits(sizeof(ow::ThermScratchpad)*8);
 			gState = State::ow_reading_scratchpad;
+		}
+		else if(ow::response() != ow::ResponseCode::eBusy){
+			ow_error();
 		}
 		break;
 	case State::ow_reading_scratchpad:
@@ -705,10 +738,13 @@ void measure_ow_temp_sm()
 				gMobMarkedTx |= gTmpOwMobMarkedTx;
 			}
 		  }
+		  else if(ow::response() != ow::ResponseCode::eBusy){
+			  ow_error();
+		  }
 		  break;
 		case State::ow_relaxing:
 		{
-			auto timeout = ClockTimer65MS::durMs(1000);
+			auto timeout = ClockTimer65MS::durMs<1000>();
 			if(ClockTimer65MS::isTimeout(gT0, timeout)){
 				gState = State::idling;
 			}

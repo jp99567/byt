@@ -266,7 +266,6 @@ class ClassOwtInfo(ClassInfo):
             nodebus.svcTransfer(SvcProtocol.CmdSetOwObjParams, [idx, mobidx, byte])
             if len(self.node.keys()) > 1:
                 rc = bytearray.fromhex(self.node[i]['owRomCode'])
-                print(f"ToDo send romcode {rc}")
                 if len(rc) != 8:
                     raise f'Invalid rc length {rc}'
                 rsp = nodebus.svcTransfer(SvcProtocol.CmdSetOwObjRomCode, [idx, *rc[1:7]])
