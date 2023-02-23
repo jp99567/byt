@@ -79,6 +79,10 @@ int gOwBitsCount;
 uint8_t gOwData[12];
 }
 
+namespace meas{
+void measure_ow_temp_sm();
+}
+
 static uint8_t svc_msg[8] __attribute__ ((section (".noinit")));
 static uint8_t svc_msglen __attribute__ ((section (".noinit")));
 
@@ -424,7 +428,7 @@ void onTimer16s7()
 
 void onTimer4ms096()
 {
-
+	meas::measure_ow_temp_sm();
 }
 
 constexpr bool isSvcRx(uint8_t mobid)
@@ -611,13 +615,13 @@ enum class State {
 	ow_relaxing
 };
 
-auto gState = State::idling;
-uint8_t gT0;
-uint8_t gOwCurSensorIdx;
-uint16_t gTmpOwMobMarkedTx;
-
 void measure_ow_temp_sm()
 {
+	static auto gState = State::idling;
+	static uint8_t gT0;
+	static uint8_t gOwCurSensorIdx;
+	static uint16_t gTmpOwMobMarkedTx;
+
 	switch(gState){
 	case State::idling:
 		if(gOwT_count){
