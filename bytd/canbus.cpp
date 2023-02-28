@@ -104,6 +104,14 @@ bool CanBus::write(const can_frame &frame)
         frame_wr = frame;
         auto len = ::write(socket, &frame_wr, sizeof(struct can_frame));
         if( len < (int)sizeof(struct can_frame)) {
+            if(len == -1){
+                switch(errno){
+                case EAGAIN:
+                    return false;
+                default:
+                    break;
+                }
+            }
             LogSYSDIE("CAN write");
         }
         return true;
