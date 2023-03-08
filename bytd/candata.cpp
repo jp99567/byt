@@ -19,7 +19,8 @@ void InputControl::onRecvMsg(Frame &msg)
 {
     auto it = inputs.find(msg.addr());
     if( it != std::cbegin(inputs)) {
-        it->second->update(msg.frame.data, msg.frame.can_dlc);
+        for(auto& item : it->second)
+            item->update(msg.frame.data, msg.frame.can_dlc);
     }
 }
 

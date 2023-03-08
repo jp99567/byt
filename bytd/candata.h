@@ -120,7 +120,7 @@ public:
     void onRecvMsg(Frame& msg);
 
 private:
-    std::map<Id, std::unique_ptr<IInputItem>> inputs;
+    std::map<Id, std::vector<std::unique_ptr<IInputItem>>> inputs;
 };
 
 }
