@@ -27,7 +27,16 @@ void PruRxMsg::rx(Buf buf)
    		}
    		this->buf = std::move(buf);
    	}
-   	cv.notify_one();
+    cv.notify_one();
+}
+
+void PruRxMsg::checkClear()
+{
+    std::lock_guard<std::mutex> guard(lck);
+    if(not this->buf.empty()){
+        LogERR("unexpected PruRxMsg drop buf");
+        buf.clear();
+    }
 }
 
 
@@ -111,7 +120,8 @@ Pru::~Pru() {
     if(tmpfd >= 0){
         fd = -1;
     }
-    ::pthread_kill(thrd.native_handle(), SIGINT);
+    const int32_t cmd = pru::Commands::eCmdOwInit;
+    ::write(tmpfd, (const uint8_t*)&cmd, sizeof(cmd)); //unblock blocking read
 	thrd.join();
     ::close(tmpfd);
 }

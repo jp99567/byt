@@ -322,6 +322,7 @@ bool OwThermNet::convert()
 
 bool OwThermNet::presence()
 {
+    rxMsg->checkClear();
     int32_t cmd = pru::Commands::eCmdOwInit;
     pru->send((uint8_t*)&cmd, sizeof(cmd));
 

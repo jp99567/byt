@@ -202,6 +202,7 @@ void OpenTherm::publish_status(uint16_t newstat)
 
 uint32_t OpenTherm::transmit(uint32_t frame)
 {
+    rxMsg->checkClear();
     using opentherm::Frame;
 	uint32_t data[2] = { pru::eCmdOtTransmit, parity(frame) };
 	pru->send((uint8_t*)&data, sizeof(data));

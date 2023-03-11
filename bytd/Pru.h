@@ -34,6 +34,8 @@ public:
 
     void rx(Buf buf);
 
+    void checkClear();
+
 private:
 	Buf buf;
 };
