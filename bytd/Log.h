@@ -37,7 +37,7 @@ public:
 	LogExit(std::string msg) : msg(std::move(msg)){}
 	~LogExit()
 	{
-		Log::instance().get()->debug("exit:{}", msg);
+        Log::instance().get()->info("exit:{}", msg);
 	}
 };
 

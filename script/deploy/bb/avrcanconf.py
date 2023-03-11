@@ -674,7 +674,7 @@ def owSearchRom(req):
         if dallas_crc8(sensor[:-1]) != sensor[-1]:
             raise 'invalid CRC'
 
-        print(f"new sensor {sensor.hex()}")
+        print(f"found romcode: {sensor.hex()}")
         sensors.append(deepcopy(sensor))
         if last_branch < 0:
             break

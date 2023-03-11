@@ -14,12 +14,12 @@ public:
     CanBus();
     ~CanBus();
     bool send(const can_frame& frame);
-    std::function<void(const can_frame& frame)> onRecv;
-    std::function<void()> wrReady;
     void setOnRecv(std::function<void(const can_frame& frame)> cbk);
     void setWrReadyCbk(std::function<void()> cbk);
 private:
     bool read(can_frame& frame);
     bool write(const can_frame& frame);
+    std::function<void(const can_frame& frame)> onRecv;
+    std::function<void()> wrReady;
 };
 
