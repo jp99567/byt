@@ -53,7 +53,14 @@ struct DigOUT_Obj : Dig_Obj
 	}
 };
 
-using DigIN_Obj = Dig_Obj;
+struct DigIN_Obj : Dig_Obj
+{
+	void setParams(const uint8_t* msg)
+	{
+		Dig_Obj::setParams(msg);
+		setDigOut(pin, true); // pull up
+	}
+};
 
 struct OwT_Obj : Base_Obj
 {
