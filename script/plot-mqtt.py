@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import math
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,28 +8,37 @@ import datetime
 import paho.mqtt.client as mqtt
 import argparse
 
+
 parser = argparse.ArgumentParser(description='plot mqtt values over time')
 parser.add_argument('--ymin', type=float, help='origin bottom limit of axis Y')
 parser.add_argument('--ymax', type=float, help='origin top limit of axis Y')
-parser.add_argument('--file', help='line oriented text file with list of topics')
-parser.add_argument('--div', type=float, help='time values divisor', default=60)
-parser.add_argument('--dur', type=float, help='duration - x axis length', default=120)
+#ToDoparser.add_argument('--file', help='line oriented text file with list of topics')
+parser.add_argument('--div', type=float, help='time [seconds] values divisor', default=60)
+parser.add_argument('--dur', type=float, help='x axis range [0:dur] or [dur:0] if negative', default=-120)
 parser.add_argument('topics', nargs='+')
 args = parser.parse_args()
 
 time_t0 = datetime.datetime.now()
 items = args.topics
-
-if args.file is not None:
-    print("file: {args.file} ToDo")
+div = args.div
 
 print(items)
 
-div = args.div
+
+def xlabel(div):
+    if div == 1:
+        return 'seconds'
+    elif div == 60:
+        return 'minutes'
+    elif div == 3600:
+        return 'hours'
+    else:
+        return f"{div}secs"
+
+
 class Showit:
 
     tmax = args.dur
-    tOrigin = -1
     ymin = None
     ymax = None
 
@@ -37,7 +47,11 @@ class Showit:
         plt.ion()
         fig, ax = plt.subplots()
 
-        ax.set_xlim(-self.tmax, 0)
+        if self.tmax < 0:
+            ax.set_xlim(self.tmax, 0)
+        else:
+            ax.set_xlim(0, self.tmax)
+
         ymininit, ymaxinit = 0, 100
         if args.ymin is not None:
             ymininit = args.ymin
@@ -47,8 +61,8 @@ class Showit:
             self.ymax = ymaxinit
 
         ax.set_ylim(ymininit, ymaxinit)
-        ax.set_xlabel('h')
-        ax.set_ylabel('teplota')
+        ax.set_xlabel(xlabel(div))
+        ax.set_ylabel('')
         ax.grid(True)
 
         e = np.empty((0, n))
@@ -57,19 +71,18 @@ class Showit:
         self.data = []
         for i, line in enumerate(self.lines):
             line.set_label(items[i])
-            self.data.append(np.empty((0,2)))
+            self.data.append(np.empty((0, 2)))
         self.fig = fig
         self.ax = ax
 
     def show(self, idx, t, y):
-        xmin = -self.tmax
-        if self.tOrigin == -1:
-            self.tOrigin = t
+        tmin = 0
+        if self.tmax < 0:
+            tmin = t + self.tmax
 
         self.data[idx] = np.append(self.data[idx], [[t, y]], axis=0)
 
-        tmin = t - self.tmax
-        if self.data[idx].T[0,0] < tmin:
+        if self.data[idx].T[0, 0] < tmin:
             cutidx = 0
             for i, v in enumerate(self.data[idx].T[0]):
                 if v < tmin:
@@ -79,11 +92,14 @@ class Showit:
             self.data[idx] = self.data[idx][cutidx+1:]
 
         for i in range(len(self.lines)):
-            trel = np.empty(self.data[i].T[0].size)
-            for j in range(len(trel)):
-                trel[j] = self.data[i].T[0,j]-t
-            self.lines[i].set_xdata(trel)
             self.lines[i].set_ydata(self.data[i].T[1])
+            if self.tmax < 0:
+                trel = np.empty(self.data[i].T[0].size)
+                for j in range(len(trel)):
+                    trel[j] = self.data[i].T[0,j]-t
+                self.lines[i].set_xdata(trel)
+            else:
+                self.lines[i].set_xdata(self.data[i].T[0])
 
         if self.ymax is None:
             self.ymax = y+1
@@ -112,14 +128,24 @@ def on_disconnect(client, userdata, rc):
 
 shw = Showit(items)
 
+
 def on_message(client, userdata, msg):
     current_time = datetime.datetime.now()
     dt = current_time - time_t0
-    h = dt.total_seconds()/div
-    print(f"mqtt update {h} {msg.topic}({items.index(msg.topic)}): {msg.payload.decode('utf8')}")
-    shw.show(items.index(msg.topic), h, float(msg.payload.decode('utf8')))
+    t = dt.total_seconds()/div
+    data = msg.payload.decode('utf8')
+    print(f"mqtt update {t} {msg.topic}({items.index(msg.topic)}): {data}")
+    v = float(data)
+    if not math.isnan(v):
+        shw.show(items.index(msg.topic), t, v)
+    if args.dur > 0 and t > args.dur:
+        client.disconnect()
+        return
 
-client = mqtt.Client("mqtt-test5")
+
+client_id = f"mqtt-plot.{os.getpid()}"
+client = mqtt.Client(client_id)
+print(f'mqtt client id: {client_id}')
 client.on_connect = on_connect
 client.on_message = on_message
 client.on_disconnect = on_disconnect
