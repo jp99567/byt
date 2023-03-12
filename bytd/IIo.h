@@ -12,12 +12,14 @@ public:
 
 struct DigInput
 {
+    const std::string name;
     bool value = false;
     event::Event<bool> Changed;
 };
 
-struct TemperatureSensor
+struct SensorInput
 {
-    float value;
+    const std::string name;
+    float value = std::numeric_limits<float>::quiet_NaN();
     event::Event<float> Changed;
 };

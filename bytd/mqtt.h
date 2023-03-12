@@ -27,8 +27,8 @@ class MqttClient : public mosqpp::mosquittopp
     std::atomic_bool mqtt_pending_write = false;
     bool connecting = false;
 public:
-    MqttClient(boost::asio::io_service& io_context);
-    ~MqttClient();
+    explicit MqttClient(boost::asio::io_service& io_context);
+    ~MqttClient() override;
     void do_misc();
     void publish(const std::string& topic, const double value, bool retain = true);
     void publish(const std::string& topic, const int value, bool retain = true);

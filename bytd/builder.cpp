@@ -40,13 +40,23 @@ struct OutObjManager
     }
 };
 
+void insertInputItem(can::CanInputItemsMap& inputsMap, can::Id canAddr, std::unique_ptr<can::IInputItem> item)
+{
+    std::vector<std::unique_ptr<can::IInputItem>> vec;
+    auto rv = inputsMap.try_emplace(canAddr, std::move(vec));
+    rv.first->second.emplace_back(std::move(item));
+}
+
 void Builder::buildCan()
 {
     auto node = config["NodeCAN"];
     std::vector<std::shared_ptr<CanNodeInfo>> nodes;
     std::vector<std::unique_ptr<IDigiOut>> digiOutputs;
+    std::vector<std::reference_wrapper<DigInput>> digInputs;
+    std::vector<std::reference_wrapper<SensorInput>> sensors;
 
     OutObjManager outObj;
+    can::CanInputItemsMap inputsMap;
 
 
     for(auto it = node.begin(); it != node.end(); ++it){
@@ -60,6 +70,12 @@ void Builder::buildCan()
                 auto name = it->first.as<std::string>();
                 auto canAddr = (it->second)["addr"][0].as<can::Id>();
                 auto offset = (it->second)["addr"][1].as<unsigned>();
+                float convFactor = 16;
+                if((it->second)["type"] && (it->second)["type"].as<std::string>() == "DS18S20")
+                    convFactor = 2;
+                auto sensor = std::make_unique<can::OwTempItem>(name, offset, convFactor);
+                sensors.emplace_back(*sensor);
+                insertInputItem(inputsMap, canAddr, std::move(sensor));
                 LogINFO("ow sensor {} {:X} {}", name, canAddr, offset);
             }
         }
@@ -71,6 +87,9 @@ void Builder::buildCan()
                 auto offset = (it->second)["addr"][1].as<unsigned>();
                 auto mask = 1 << (it->second)["addr"][2].as<unsigned>();
                 LogINFO("dig IN {} {:X} {}, {:08b}", name, canAddr, offset, mask);
+                auto input = std::make_unique<can::DigiInItem>(name, mask, offset);
+                digInputs.emplace_back(*input);
+                insertInputItem(inputsMap, canAddr, std::make_unique<can::DigiInItem>(name, mask, offset));
             }
         }
         if(it->second["DigOUT"]){
@@ -92,6 +111,8 @@ void Builder::buildCan()
             }
         }
     }
+
+    can::InputControl canInputControl(std::move(inputsMap));
 
 }
 

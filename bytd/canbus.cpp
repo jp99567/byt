@@ -1,7 +1,6 @@
 #include "canbus.h"
 
 #include "Log.h"
-
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -10,15 +9,18 @@
 #include <sys/socket.h>
 #include <linux/can.h>
 #include <linux/can/raw.h>
+#include <boost/asio/buffer.hpp>
 
-CanBus::CanBus()
-    :onRecv([](const can_frame&){})
+
+CanBus::CanBus(boost::asio::io_service& io_context)
+    :canStream(io_context)
+    ,onRecv([](const can_frame&){})
     ,wrReady([]{})
 {
     struct sockaddr_can addr;
     struct ifreq ifr;
 
-    socket = ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
+    auto socket = ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
     if(socket < 0) {
         LogSYSDIE("CAN Socket");
     }
@@ -37,14 +39,15 @@ CanBus::CanBus()
     if( rv == -1){
         LogSYSDIE("CAN Socket ioctl");
     }
+
+    boost::asio::posix::stream_descriptor canStream(io_context);
+    canStream.assign(socket);
+    canStream.non_blocking(true);
+    read();
 }
 
 CanBus::~CanBus()
 {
-    auto rv = ::close(socket);
-    if( rv == -1){
-        LogSYSDIE("CAN Socket close");
-    }
 }
 
 void CanBus::setOnRecv(std::function<void (const can_frame &)> cbk)
@@ -68,53 +71,68 @@ bool operator==(const can_frame &a, const can_frame &b)
     return false;
 }
 
-bool CanBus::read(can_frame &frame)
+void CanBus::read()
 {
-    if(socket == -1)
-        return false;
-    auto len = ::read(socket, &frame, sizeof(struct can_frame));
-    if( len < (int)sizeof(struct can_frame)) {
-        LogSYSDIE("CAN read");
-    }
-    bool isWrReady = false;
-    {
-        std::lock_guard<std::mutex> ulck(lock);
-        if(pending){
-            if(frame == frame_wr){
-                pending = false;
-                isWrReady = true;
-            }
+    canStream.async_read_some(boost::asio::buffer(&frame_rd, sizeof(frame_rd)), [this](const boost::system::error_code& ec, std::size_t bytes_transferred){
+        if(!ec || bytes_transferred != sizeof(frame_rd)){
+            LogERR("can read ({}){}", ec.value(), ec.message());
         }
-    }
-    if(isWrReady){
-        wrReady();
-        return false;
-    }
-    onRecv(frame);
-    return true;
+        else{
+            bool isWrReady = false;
+            {
+                std::lock_guard<std::mutex> ulck(lock);
+                if(pending){
+                    if(frame_rd == frame_wr){
+                        pending = false;
+                        isWrReady = true;
+                    }
+                }
+            }
+            if(isWrReady){
+                LogDBG("can write read back ok");
+                wrReady();
+            }
+            else{
+                LogDBG("can async read ok");
+                onRecv(frame_rd);
+            }
+            read();
+        }
+    });
 }
 
-bool CanBus::write(const can_frame &frame)
+bool CanBus::send(const can_frame &frame)
 {
-    if(socket == -1)
-        return false;
     std::lock_guard<std::mutex> ulck(lock);
     if( not pending){
         pending = true;
         frame_wr = frame;
-        auto len = ::write(socket, &frame_wr, sizeof(struct can_frame));
-        if( len < (int)sizeof(struct can_frame)) {
-            if(len == -1){
-                switch(errno){
-                case EAGAIN:
-                    return false;
-                default:
-                    break;
-                }
+        canStream.async_write_some(boost::asio::buffer(&frame_wr, sizeof(frame_wr)), [this](const boost::system::error_code& ec, std::size_t bytes_transferred){
+            if(!ec || bytes_transferred != sizeof(frame_rd)){
+                LogERR("can write ({}){}", ec.value(), ec.message());
             }
-            LogSYSDIE("CAN write");
-        }
+            else{
+                LogDBG("can async write handler ok");
+            }
+        });
         return true;
     }
     return false;
 }
+
+int testapp()
+{
+    boost::asio::io_service io_context;
+    CanBus bus(io_context);
+    bus.setOnRecv([](const can_frame& frame){
+        LogINFO("recv can frame {:X} {}", frame.can_id, frame.data);
+    });
+    return 0;
+}
+
+#ifdef TESTAPP
+int main()
+{
+    return testapp();
+}
+#endif

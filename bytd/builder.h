@@ -1,5 +1,6 @@
 #pragma once
 #include <yaml-cpp/yaml.h>
+#include "canbus.h"
 
 class Builder
 {
@@ -9,4 +10,3 @@ public:
     void buildCan();
     std::vector<std::tuple<std::string, std::string>> buildBBoW() const;
 };
-

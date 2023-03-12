@@ -88,11 +88,21 @@ struct DigOutItem : OutputItem
     void update(Data& data) override;
 };
 
-class DigiInItem : public IInputItem
+struct DigiInItem : public IInputItem, DigInput
 {
+    explicit DigiInItem(std::string name, uint8_t mask, unsigned offset): DigInput({name}), mask(mask), offset(offset){}
+    DigiInItem(DigiInItem& other) = delete;
     uint8_t mask;
     unsigned offset;
-    DigInput input;
+    void update(const Data& data, std::size_t len) override;
+};
+
+struct OwTempItem : public IInputItem, SensorInput
+{
+    explicit OwTempItem(std::string name, unsigned offset, float convFactor): SensorInput({name}), factor(convFactor), offset(offset){}
+    OwTempItem(OwTempItem& other) = delete;
+    const float factor;
+    unsigned offset;
     void update(const Data& data, std::size_t len) override;
 };
 
@@ -107,13 +117,15 @@ private:
     ICanBus& canbus;
 };
 
+using CanInputItemsMap = std::map<Id, std::vector<std::unique_ptr<IInputItem>>>;
 class InputControl
 {
 public:
+    explicit InputControl(CanInputItemsMap&& inputsMap):inputs(std::move(inputsMap)){}
     void onRecvMsg(Frame& msg);
 
 private:
-    std::map<Id, std::vector<std::unique_ptr<IInputItem>>> inputs;
+    CanInputItemsMap inputs;
 };
 
 }

@@ -22,6 +22,7 @@ void AppContainer::doRequest(std::string msg)
 AppContainer::AppContainer()
     :signals(io_service, SIGINT, SIGTERM)
     ,t1sec(io_service, std::chrono::seconds(1))
+    ,canBus(io_service)
 {
     signals.async_wait([this](auto error, auto signum){
         LogINFO("signal {}",signum);

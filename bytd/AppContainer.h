@@ -17,12 +17,14 @@
 #include "slowswi2cpwm.h"
 #include "Pumpa.h"
 #include <gpiod.hpp>
+#include "canbus.h"
 
 class AppContainer
 {
     boost::asio::io_service io_service;
     boost::asio::signal_set signals;
     boost::asio::steady_timer t1sec;
+    CanBus canBus;
     ow::ExporterSptr exporter;
     std::shared_ptr<MeranieTeploty> meranie;
     std::shared_ptr<OpenTherm> openTherm;

@@ -1,4 +1,5 @@
 #include "candata.h"
+#include "../avr/fw/OwResponseCode_generated.h"
 
 namespace {
 template<typename T>
@@ -71,8 +72,24 @@ void OutputItem::send()
 void DigiInItem::update(const Data &data, std::size_t len)
 {
     if( offset < len){
-        input.value = data[offset] & mask;
-        input.Changed.notify(input.value);
+        value = data[offset] & mask;
+        Changed.notify(value);
+    }
+}
+
+void OwTempItem::update(const Data &data, std::size_t len)
+{
+    int16_t owval;
+    if( offset+sizeof(owval) < len){
+        owval = *reinterpret_cast<const int16_t*>(&data[offset]);
+        auto newVal = std::numeric_limits<float>::quiet_NaN();
+        if(owval != ow::cInvalidValue ){
+            newVal = owval / factor;
+        }
+        if(value != newVal){
+            value = newVal;
+            Changed.notify(value);
+        }
     }
 }
 
