@@ -152,19 +152,26 @@ std::unique_ptr<IDigiOut> getDigOutputByName(std::map<std::string, std::unique_p
     return rv;
 }
 
-std::map<const std::string, OnOffDevice> Builder::buildOnOffDevices()
-{
-    std::map<const std::string, OnOffDevice> items;
 
-    auto svetloKupelneOut = getDigOutputByName(digiOutputs, "svetloKupelna");
-    auto it = items.emplace("SvetloKupelna", OnOffDevice(std::move(svetloKupelneOut)));
-    auto& input = getDigInputByName(digInputs, "buttonKupelna1U");
+OnOffDeviceList Builder::buildOnOffDevices()
+{
+    buildDevice("SvetloKupelna", "svetloKupelna", "buttonKupelna1U");
+    buildDevice("SvetloSpalna", "svetloSpalna", "buttonKupelna1D");
+    buildDevice("SvetloChodbicka", "svetloChodbicka", "buttonKupelna2U");
+    buildDevice("SvetloStol", "svetloStol", "buttonKupelna2D");
+
+    return std::move(devicesOnOff);
+}
+
+void Builder::buildDevice(std::string name, std::string outputName, std::string inputName)
+{
+    auto out = getDigOutputByName(digiOutputs, outputName);
+    auto it = devicesOnOff.emplace(std::string(OnOffDevice::mqttPathPrefix).append(name), std::make_unique<OnOffDevice>(std::move(out), name, mqtt));
+    auto& input = getDigInputByName(digInputs, inputName);
     input.Changed.subscribe(event::subscr([&dev=it.first->second](bool on){
         LogDBG("check {}", on);
         if(not on){
-            dev.toggle();
+            dev->toggle();
         }
     }));
-
-    return items;
 }

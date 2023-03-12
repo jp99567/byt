@@ -5,6 +5,10 @@
 #include "mqtt.h"
 #include "IIo.h"
 
+/*** ToDo ******
+ * tMAX = 720seconds
+ * boiler Tmax = 50deg
+ ****************/
 class Pumpa
 {
     constexpr static int maxPlamenOff = 6;

@@ -26,8 +26,16 @@ void InputControl::onRecvMsg(const can_frame& msg)
     }
 }
 
+OutputControl::OutputControl(CanBus &bus):canbus(bus)
+{
+    canbus.setWrReadyCbk([this]{
+        writeReady();
+    });
+}
+
 void OutputControl::update(std::size_t idx, IOutputItem &item)
 {
+    LogDBG("OutputControl::update {}", idx);
     auto& outObj = outputs.at(idx);
     item.update(outObj.msg.frame.data);
     outObj.needUpdate = true;

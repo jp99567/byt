@@ -35,6 +35,11 @@ CanBus::CanBus(boost::asio::io_service& io_context)
     addr.can_family = AF_CAN;
     addr.can_ifindex = ifr.ifr_ifindex;
 
+    int recv_own_msgs = 1; /* 0 = disabled (default), 1 = enabled */
+    if(-1 == ::setsockopt(socket, SOL_CAN_RAW, CAN_RAW_RECV_OWN_MSGS, &recv_own_msgs, sizeof(recv_own_msgs))){
+        LogSYSDIE("CAN Socket setsockopt CAN_RAW_RECV_OWN_MSGS");
+    }
+
     rv = ::bind(socket, (struct sockaddr *)&addr, sizeof(addr));
     if( rv == -1){
         LogSYSDIE("CAN Socket ioctl");
@@ -106,7 +111,7 @@ bool CanBus::send(const can_frame &frame)
     if( not pending){
         pending = true;
         frame_wr = frame;
-        canStream.async_write_some(boost::asio::buffer(&frame_wr, sizeof(frame_wr)), [this](const boost::system::error_code& ec, std::size_t bytes_transferred){
+        canStream.async_write_some(boost::asio::buffer(&frame_wr, sizeof(frame_wr)), [](const boost::system::error_code& ec, std::size_t bytes_transferred){
             if(ec || bytes_transferred != sizeof(frame_rd)){
                 LogERR("can write ({}){}", ec.value(), ec.message());
             }

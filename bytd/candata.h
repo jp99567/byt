@@ -116,7 +116,7 @@ struct OwTempItem : public IInputItem, SensorInput
 class OutputControl : public IOutputControl
 {
 public:
-    explicit OutputControl(CanBus& bus):canbus(bus){}
+    explicit OutputControl(CanBus& bus);
     void update(std::size_t idx, IOutputItem& item) override;
     void writeReady();
     void setOutputs(std::vector<OutputMsg> outputs);
