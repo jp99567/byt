@@ -16,12 +16,12 @@ void set_bits(T& dest_reg, const T mask, bool setNotClear)
 
 namespace can {
 
-void InputControl::onRecvMsg(Frame &msg)
+void InputControl::onRecvMsg(const can_frame& msg)
 {
-    auto it = inputs.find(msg.addr());
+    auto it = inputs.find(msg.can_id);
     if( it != std::cbegin(inputs)) {
         for(auto& item : it->second)
-            item->update(msg.frame.data, msg.frame.can_dlc);
+            item->update(msg.data, msg.can_dlc);
     }
 }
 
@@ -49,6 +49,11 @@ void OutputControl::writeReady()
             }
         }
     }
+}
+
+void OutputControl::setOutputs(std::vector<OutputMsg> outputs)
+{
+    this->outputs = std::move(outputs);
 }
 
 void DigOutItem::set(bool v)

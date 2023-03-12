@@ -6,28 +6,28 @@
 #include <exception>
 #include <linux/can.h>
 #include <cstring>
-
+#include "canbus.h"
 #include "IIo.h"
 
 namespace can {
-
-class ICanBus
-{
-public:
-    virtual bool send(const can_frame& msg) = 0;
-    virtual ~ICanBus(){}
-};
 
 using Id = canid_t;
 using Data = decltype(can_frame::data);
 
 struct Frame
 {
-    Frame(Id id, std::size_t len)
+    explicit Frame(Id id, std::size_t len)
     {
         frame.can_id = id;
         setSize(len);
         ::memset(frame.data, 0, len);
+    }
+
+    explicit Frame(const can_frame& other)
+    {
+        frame.can_id = other.can_id;
+        frame.can_dlc = other.can_dlc;
+        std::copy_n(std::cbegin(other.data), frame.can_dlc, std::begin(frame.data));
     }
 
     void setSize(std::size_t len)
@@ -108,13 +108,15 @@ struct OwTempItem : public IInputItem, SensorInput
 
 class OutputControl : public IOutputControl
 {
+public:
+    explicit OutputControl(CanBus& bus):canbus(bus){}
     void update(std::size_t idx, IOutputItem& item) override;
     void writeReady();
-    explicit OutputControl(ICanBus& canbus):canbus(canbus){}
+    void setOutputs(std::vector<OutputMsg> outputs);
 private:
 
     std::vector<OutputMsg> outputs;
-    ICanBus& canbus;
+    CanBus& canbus;
 };
 
 using CanInputItemsMap = std::map<Id, std::vector<std::unique_ptr<IInputItem>>>;
@@ -122,7 +124,7 @@ class InputControl
 {
 public:
     explicit InputControl(CanInputItemsMap&& inputsMap):inputs(std::move(inputsMap)){}
-    void onRecvMsg(Frame& msg);
+    void onRecvMsg(const can_frame& msg);
 
 private:
     CanInputItemsMap inputs;

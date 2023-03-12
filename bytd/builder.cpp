@@ -18,7 +18,7 @@ struct CanNodeInfo
     unsigned id;
 };
 
-struct OutObjManager
+struct CanOutObjManager
 {
     std::vector<can::OutputMsg> outputObjects;
 
@@ -47,7 +47,7 @@ void insertInputItem(can::CanInputItemsMap& inputsMap, can::Id canAddr, std::uni
     rv.first->second.emplace_back(std::move(item));
 }
 
-void Builder::buildCan()
+void Builder::buildCan(CanBus &canbus)
 {
     auto node = config["NodeCAN"];
     std::vector<std::shared_ptr<CanNodeInfo>> nodes;
@@ -55,8 +55,10 @@ void Builder::buildCan()
     std::vector<std::reference_wrapper<DigInput>> digInputs;
     std::vector<std::reference_wrapper<SensorInput>> sensors;
 
-    OutObjManager outObj;
+    CanOutObjManager outObj;
     can::CanInputItemsMap inputsMap;
+
+    auto outputControl = std::make_shared<can::OutputControl>(canbus);
 
 
     for(auto it = node.begin(); it != node.end(); ++it){
@@ -106,13 +108,17 @@ void Builder::buildCan()
                 item.offset = offset;
                 item.mask = mask;
                 item.idx = idx;
-                item.busOutControl = nullptr;//ToDo
+                item.busOutControl = outputControl;
                 digiOutputs.emplace_back(std::move(digiOut));
             }
         }
     }
 
+    outputControl->setOutputs(std::move(outObj.outputObjects));
     can::InputControl canInputControl(std::move(inputsMap));
+    canbus.setOnRecv([&canInputControl](const can_frame& msg){
+        canInputControl.onRecvMsg(msg);
+    });
 
 }
 

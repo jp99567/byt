@@ -26,7 +26,7 @@ class AppContainer
     boost::asio::steady_timer t1sec;
     CanBus canBus;
     ow::ExporterSptr exporter;
-    std::shared_ptr<MeranieTeploty> meranie;
+    std::unique_ptr<MeranieTeploty> meranie;
     std::shared_ptr<OpenTherm> openTherm;
     std::shared_ptr<MqttClient> mqtt;
     std::unique_ptr<slowswi2cpwm> slovpwm;

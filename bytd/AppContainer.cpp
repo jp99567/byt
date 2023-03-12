@@ -35,16 +35,14 @@ AppContainer::AppContainer()
 
 void AppContainer::run()
 {
-    bool running = true;
-    std::mutex cvlock;
-    std::condition_variable cv_running;
-
-    Builder builder;
-    auto tsensors = builder.buildBBoW();
-    builder.buildCan();
     auto pru = std::make_shared<Pru>();
+    {
+        Builder builder;
+        auto tsensors = builder.buildBBoW();
+        builder.buildCan(canBus);
+        meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
+    }
     openTherm = std::make_shared<OpenTherm>(pru, *mqtt);
-    meranie = std::make_shared<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
     slovpwm = std::make_unique<slowswi2cpwm>();
     Elektromer elektomer(*mqtt);
 
@@ -56,16 +54,6 @@ void AppContainer::run()
             pumpa->onPlamenOff();
         }
     };
-
-    std::thread meastempthread([this,&running,&cv_running,&cvlock]{
-        thread_util::set_thread_name("bytd-meranie");
-
-        do{
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            meranie->meas();
-        }
-        while(running);
-    });
 
     mqtt->OnMsgRecv = [this](auto topic, auto msg){
         if(topic.substr(0,8) != "rb/ctrl/")
@@ -144,18 +132,12 @@ void AppContainer::run()
     ::sd_notify(0, "READY=1");
     io_service.run();
     LogINFO("io service exited");
-
-    {
-        std::unique_lock<std::mutex> guard(cvlock);
-        running = false;
-        cv_running.notify_all();
-    }
-    meastempthread.join();
 }
 
 void AppContainer::on1sec()
 {
     mqtt->do_misc();
+    meranie->meas();
 }
 
 void AppContainer::sched_1sect()
