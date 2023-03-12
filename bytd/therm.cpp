@@ -22,19 +22,16 @@ MeranieTeploty::~MeranieTeploty()
 {
 }
 
-MeranieTeploty::MeranieTeploty(std::shared_ptr<Pru> pru, std::vector<std::tuple<std::string, std::string>> reqsensors, MqttClient& mqtt)
-    :mqtt(mqtt)
+MeranieTeploty::MeranieTeploty(std::shared_ptr<Pru> pru, ow::SensorList reqsensors, MqttClient& mqtt)
+    :sensors(std::move(reqsensors))
+    ,mqtt(mqtt)
 {
     std::set<ow::RomCode> predefined;
 
-    for(const auto& reqsens : reqsensors){
-        ow::RomCode rc;
-        ow::RomCode::fromStr(rc, std::get<1>(reqsens));
-        auto name = std::get<0>(reqsens);
-        if(!predefined.insert(rc).second){
-            LogDIE("duplicates:{} {}", name, (std::string)rc);
+    for(const auto& reqsens : sensors){
+        if(!predefined.insert(reqsens->romcode).second){
+            LogDIE("duplicates:{} {}", reqsens->name, (std::string)reqsens->romcode);
         }
-        sensors.emplace_back(rc, std::move(name));
     }
 
     if(predefined.empty()){
@@ -87,22 +84,21 @@ void MeranieTeploty::meas()
     therm->convert();
     std::this_thread::sleep_for(std::chrono::milliseconds(750));
     for(auto& sensor : sensors){
-        auto v = therm->measure(sensor.romcode);
+        auto v = therm->measure(sensor->romcode);
 
-        if(sensor.update(v)){
-            mqtt.publish(std::string("rb/stat/ow/").append(sensor.name), std::to_string(v));
+        if(sensor->update(v)){
+            mqtt.publish(std::string("rb/stat/ow/").append(sensor->name), std::to_string(v));
         }
     }
 }
 
+namespace ow {
 bool Sensor::update(float v)
 {
-    if(v==curVal)
+    if(v==value)
         return false;
-    curVal = v;
-
-    if(not std::isnan(v))
-        lastValid = v;
-
+    value = v;
+    Changed(value);
     return true;
+}
 }

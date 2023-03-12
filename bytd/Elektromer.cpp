@@ -74,6 +74,7 @@ Elektromer::Elektromer(MqttClient& mqtt)
 
 Elektromer::~Elektromer()
 {
+    LogDBG("~Elektromer");
 }
 
 Impulzy::Impulzy(std::string chipname, unsigned int line)
@@ -86,6 +87,7 @@ Impulzy::~Impulzy()
 {
     active = false;
     t.join();
+    LogINFO("~Impulzy joined");
 }
 
 void Impulzy::svc_init()

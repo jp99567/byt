@@ -14,8 +14,8 @@
 
 CanBus::CanBus(boost::asio::io_service& io_context)
     :canStream(io_context)
-    ,onRecv([](const can_frame&){})
-    ,wrReady([]{})
+    ,onRecv([](const can_frame& msg){LogERR("can recv:{:X} not connected callback", msg.can_id);})
+    ,wrReady([]{LogERR("can write ready - not connected callback");})
 {
     struct sockaddr_can addr;
     struct ifreq ifr;
@@ -25,7 +25,7 @@ CanBus::CanBus(boost::asio::io_service& io_context)
         LogSYSDIE("CAN Socket");
     }
 
-    strcpy(ifr.ifr_name, "vcan0" );
+    strcpy(ifr.ifr_name, "can1" );
     auto rv = ::ioctl(socket, SIOCGIFINDEX, &ifr);
     if( rv == -1){
         LogSYSDIE("CAN Socket ioctl");
@@ -40,7 +40,6 @@ CanBus::CanBus(boost::asio::io_service& io_context)
         LogSYSDIE("CAN Socket ioctl");
     }
 
-    boost::asio::posix::stream_descriptor canStream(io_context);
     canStream.assign(socket);
     canStream.non_blocking(true);
     read();
@@ -74,8 +73,8 @@ bool operator==(const can_frame &a, const can_frame &b)
 void CanBus::read()
 {
     canStream.async_read_some(boost::asio::buffer(&frame_rd, sizeof(frame_rd)), [this](const boost::system::error_code& ec, std::size_t bytes_transferred){
-        if(!ec || bytes_transferred != sizeof(frame_rd)){
-            LogERR("can read ({}){}", ec.value(), ec.message());
+        if(ec || bytes_transferred != sizeof(frame_rd)){
+            LogERR("can read ({}){} size:{}/{}", ec.value(), ec.message(), bytes_transferred, sizeof(frame_rd));
         }
         else{
             bool isWrReady = false;
@@ -108,7 +107,7 @@ bool CanBus::send(const can_frame &frame)
         pending = true;
         frame_wr = frame;
         canStream.async_write_some(boost::asio::buffer(&frame_wr, sizeof(frame_wr)), [this](const boost::system::error_code& ec, std::size_t bytes_transferred){
-            if(!ec || bytes_transferred != sizeof(frame_rd)){
+            if(ec || bytes_transferred != sizeof(frame_rd)){
                 LogERR("can write ({}){}", ec.value(), ec.message());
             }
             else{

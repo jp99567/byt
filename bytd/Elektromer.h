@@ -25,7 +25,7 @@ protected:
     void svc_init();
     std::string threadName = "bytd-noname";
 private:
-    virtual void event(EventType) = 0;
+    virtual void event(EventType){};
     std::string chipName;
     unsigned chipLine = 0;
 };

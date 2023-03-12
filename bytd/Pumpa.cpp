@@ -37,6 +37,7 @@ void Pumpa::onPlamenOff()
 Pumpa::~Pumpa()
 {
     (*out)(false);
+    LogDBG("~Pumpa");
 }
 
 void Pumpa::setPumpa(bool value)

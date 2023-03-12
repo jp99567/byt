@@ -1,5 +1,6 @@
 #include "candata.h"
 #include "../avr/fw/OwResponseCode_generated.h"
+#include "Log.h"
 
 namespace {
 template<typename T>
@@ -19,7 +20,7 @@ namespace can {
 void InputControl::onRecvMsg(const can_frame& msg)
 {
     auto it = inputs.find(msg.can_id);
-    if( it != std::cbegin(inputs)) {
+    if( it != std::cend(inputs)) {
         for(auto& item : it->second)
             item->update(msg.data, msg.can_dlc);
     }
@@ -77,15 +78,19 @@ void OutputItem::send()
 void DigiInItem::update(const Data &data, std::size_t len)
 {
     if( offset < len){
-        value = data[offset] & mask;
-        Changed.notify(value);
+        bool newVal = data[offset] & mask;
+        if(newVal != value){
+            value = newVal;
+            LogDBG("can::DigiInItem {} {}", name, value);
+            Changed.notify(value);
+        }
     }
 }
 
 void OwTempItem::update(const Data &data, std::size_t len)
 {
     int16_t owval;
-    if( offset+sizeof(owval) < len){
+    if( offset+sizeof(owval) <= len){
         owval = *reinterpret_cast<const int16_t*>(&data[offset]);
         auto newVal = std::numeric_limits<float>::quiet_NaN();
         if(owval != ow::cInvalidValue ){
@@ -93,7 +98,9 @@ void OwTempItem::update(const Data &data, std::size_t len)
         }
         if(value != newVal){
             value = newVal;
+            LogDBG("can::OwTempItem {} {}", name, value);
             Changed.notify(value);
+            mqtt->publish(std::string("rb/stat/ow/").append(name), value);
         }
     }
 }

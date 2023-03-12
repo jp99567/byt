@@ -8,6 +8,7 @@
 #include <cstring>
 #include "canbus.h"
 #include "IIo.h"
+#include "mqtt.h"
 
 namespace can {
 
@@ -99,10 +100,16 @@ struct DigiInItem : public IInputItem, DigInput
 
 struct OwTempItem : public IInputItem, SensorInput
 {
-    explicit OwTempItem(std::string name, unsigned offset, float convFactor): SensorInput({name}), factor(convFactor), offset(offset){}
+    explicit OwTempItem(std::string name, unsigned offset, float convFactor, std::shared_ptr<MqttClient> mqtt)
+        : SensorInput({name})
+        , factor(convFactor)
+        , offset(offset)
+        , mqtt(mqtt)
+    {}
     OwTempItem(OwTempItem& other) = delete;
     const float factor;
     unsigned offset;
+    std::shared_ptr<MqttClient> mqtt;
     void update(const Data& data, std::size_t len) override;
 };
 

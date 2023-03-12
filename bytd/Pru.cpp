@@ -124,4 +124,5 @@ Pru::~Pru() {
     ::write(tmpfd, (const uint8_t*)&cmd, sizeof(cmd)); //unblock blocking read
 	thrd.join();
     ::close(tmpfd);
+    LogDBG("~Pru");
 }

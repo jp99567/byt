@@ -26,6 +26,11 @@ struct RomCode
 	uint8_t serial[6] = {0};
 	uint8_t crc = 0;
 
+    RomCode(){}
+    explicit RomCode(const std::string& str)
+    {
+        *this = str;
+    }
 	bool operator<(const RomCode& other) const;
 	bool operator==(const RomCode& other) const;
 	operator std::string() const;

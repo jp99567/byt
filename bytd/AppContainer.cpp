@@ -29,19 +29,21 @@ AppContainer::AppContainer()
         io_service.stop();
     });
 
-    //mqtt = std::make_shared<MqttClient>(io_service);
+    mqtt = std::make_shared<MqttClient>(io_service);
     //exporter = std::make_shared<ow::Exporter>();
 }
 
 void AppContainer::run()
 {
     auto pru = std::make_shared<Pru>();
-    {
-        Builder builder;
-        auto tsensors = builder.buildBBoW();
-        builder.buildCan(canBus);
-        meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
-    }
+    std::unique_ptr<can::InputControl> canInputControl;
+    auto builder = std::make_unique<Builder>(mqtt);
+    auto tsensors = builder->buildBBoW();
+    canInputControl = builder->buildCan(canBus);
+    auto devicesOnOff = builder->buildOnOffDevices();
+    builder = nullptr;
+    meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
+
     openTherm = std::make_shared<OpenTherm>(pru, *mqtt);
     slovpwm = std::make_unique<slowswi2cpwm>();
     Elektromer elektomer(*mqtt);

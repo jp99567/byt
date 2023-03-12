@@ -4,7 +4,9 @@
 #include "Log.h"
 #include "candata.h"
 
-Builder::Builder() : config(YAML::LoadFile("config.yaml"))
+Builder::Builder(std::shared_ptr<MqttClient> mqtt)
+    : config(YAML::LoadFile("test1.yaml"))
+    , mqtt(mqtt)
 {
 }
 
@@ -47,13 +49,10 @@ void insertInputItem(can::CanInputItemsMap& inputsMap, can::Id canAddr, std::uni
     rv.first->second.emplace_back(std::move(item));
 }
 
-void Builder::buildCan(CanBus &canbus)
+std::unique_ptr<can::InputControl> Builder::buildCan(CanBus &canbus)
 {
     auto node = config["NodeCAN"];
     std::vector<std::shared_ptr<CanNodeInfo>> nodes;
-    std::vector<std::unique_ptr<IDigiOut>> digiOutputs;
-    std::vector<std::reference_wrapper<DigInput>> digInputs;
-    std::vector<std::reference_wrapper<SensorInput>> sensors;
 
     CanOutObjManager outObj;
     can::CanInputItemsMap inputsMap;
@@ -75,7 +74,7 @@ void Builder::buildCan(CanBus &canbus)
                 float convFactor = 16;
                 if((it->second)["type"] && (it->second)["type"].as<std::string>() == "DS18S20")
                     convFactor = 2;
-                auto sensor = std::make_unique<can::OwTempItem>(name, offset, convFactor);
+                auto sensor = std::make_unique<can::OwTempItem>(name, offset, convFactor, mqtt);
                 sensors.emplace_back(*sensor);
                 insertInputItem(inputsMap, canAddr, std::move(sensor));
                 LogINFO("ow sensor {} {:X} {}", name, canAddr, offset);
@@ -91,7 +90,7 @@ void Builder::buildCan(CanBus &canbus)
                 LogINFO("dig IN {} {:X} {}, {:08b}", name, canAddr, offset, mask);
                 auto input = std::make_unique<can::DigiInItem>(name, mask, offset);
                 digInputs.emplace_back(*input);
-                insertInputItem(inputsMap, canAddr, std::make_unique<can::DigiInItem>(name, mask, offset));
+                insertInputItem(inputsMap, canAddr, std::move(input));
             }
         }
         if(it->second["DigOUT"]){
@@ -109,28 +108,63 @@ void Builder::buildCan(CanBus &canbus)
                 item.mask = mask;
                 item.idx = idx;
                 item.busOutControl = outputControl;
-                digiOutputs.emplace_back(std::move(digiOut));
+                digiOutputs.emplace(name, std::move(digiOut));
             }
         }
     }
 
     outputControl->setOutputs(std::move(outObj.outputObjects));
-    can::InputControl canInputControl(std::move(inputsMap));
-    canbus.setOnRecv([&canInputControl](const can_frame& msg){
-        canInputControl.onRecvMsg(msg);
+    auto canInputControl = std::make_unique<can::InputControl>(std::move(inputsMap));
+    canbus.setOnRecv([p = canInputControl.get()](const can_frame& msg){
+        p->onRecvMsg(msg);
     });
-
+    return canInputControl;
 }
 
-std::vector<std::tuple<std::string, std::string>> Builder::buildBBoW() const
+ow::SensorList Builder::buildBBoW()
 {
     auto node = config["BBOw"];
-    std::vector<std::tuple<std::string, std::string>> tsensors;
+    ow::SensorList tsensors;
     for(auto it = node.begin(); it != node.end(); ++it){
         auto name = it->first.as<std::string>();
         auto romcode = (it->second)["owRomCode"].as<std::string>();
         LogINFO("yaml configured sensor {} {}", name, "a");
-        tsensors.emplace_back(std::make_tuple(name, romcode));
+        tsensors.emplace_back(std::make_unique<ow::Sensor>(ow::RomCode(romcode), name));
+        sensors.emplace_back(*tsensors.back());
     }
     return tsensors;
+}
+
+DigInput& getDigInputByName(std::vector<std::reference_wrapper<DigInput>>& digInputs, std::string name)
+{
+    for(auto& in : digInputs){
+        if(in.get().name == name)
+            return in;
+    }
+    throw std::runtime_error("getDigInputByName no such name");
+}
+
+std::unique_ptr<IDigiOut> getDigOutputByName(std::map<std::string, std::unique_ptr<IDigiOut>>& digiOutputs, std::string name)
+{
+    auto it = digiOutputs.find(name);
+    auto rv = std::move(it->second);
+    digiOutputs.erase(it);
+    return rv;
+}
+
+std::map<const std::string, OnOffDevice> Builder::buildOnOffDevices()
+{
+    std::map<const std::string, OnOffDevice> items;
+
+    auto svetloKupelneOut = getDigOutputByName(digiOutputs, "svetloKupelna");
+    auto it = items.emplace("SvetloKupelna", OnOffDevice(std::move(svetloKupelneOut)));
+    auto& input = getDigInputByName(digInputs, "buttonKupelna1U");
+    input.Changed.subscribe(event::subscr([&dev=it.first->second](bool on){
+        LogDBG("check {}", on);
+        if(not on){
+            dev.toggle();
+        }
+    }));
+
+    return items;
 }
