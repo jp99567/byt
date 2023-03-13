@@ -18,6 +18,7 @@ CMakeLists.txt.user*
 **/build-*
 **/.kdev4
 *.kdev4
+*_generated.h
 bytif/gen-*
 
 #eclipse
