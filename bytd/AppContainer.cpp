@@ -41,28 +41,28 @@ AppContainer::AppContainer()
 
 void AppContainer::run()
 {
-    auto pru = std::make_shared<Pru>();
+    //auto pru = std::make_shared<Pru>();
     std::unique_ptr<can::InputControl> canInputControl;
     auto builder = std::make_unique<Builder>(mqtt);
     auto tsensors = builder->buildBBoW();
     canInputControl = builder->buildCan(canBus);
     auto devicesOnOff = builder->buildOnOffDevices();
     builder = nullptr;
-    meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
+    //meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
 
-    openTherm = std::make_shared<OpenTherm>(pru, *mqtt);
-    slovpwm = std::make_unique<slowswi2cpwm>();
-    Elektromer elektomer(*mqtt);
+    //openTherm = std::make_shared<OpenTherm>(pru, *mqtt);
+    //slovpwm = std::make_unique<slowswi2cpwm>();
+    //Elektromer elektomer(*mqtt);
 
-    gpiochip3 = std::make_shared<gpiod::chip>("3");
-    pumpa = std::make_unique<Pumpa>(std::make_unique<BBDigiOut>(*gpiochip3, 21), mqtt);
-
+    //gpiochip3 = std::make_shared<gpiod::chip>("3");
+    //pumpa = std::make_unique<Pumpa>(std::make_unique<BBDigiOut>(*gpiochip3, 21), mqtt);
+/*
     openTherm->Flame = [this](bool flameOn){
         if(!flameOn){
             pumpa->onPlamenOff();
         }
     };
-
+*/
     mqtt->OnMsgRecv = [this, &devicesOnOff](auto topic, auto msg){
         if(topic.substr(0,8) != "rb/ctrl/")
             return;
@@ -151,7 +151,7 @@ void AppContainer::run()
 void AppContainer::on1sec()
 {
     mqtt->do_misc();
-    meranie->meas();
+ //   meranie->meas();
 }
 
 void AppContainer::sched_1sect()

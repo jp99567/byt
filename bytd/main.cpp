@@ -8,8 +8,8 @@ int main()
   MqttWrapper libmMosquitto;
 
   if(not ::getenv("TERM")){
-      Util::Log::instance().get()->set_pattern("[%S.%e][%L] %v");
-      Util::Log::instance().get()->set_level(spdlog::level::info);
+      //Util::Log::instance().get()->set_pattern("[%S.%e][%L] %v");
+      //Util::Log::instance().get()->set_level(spdlog::level::info);
   }
 
   try

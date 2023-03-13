@@ -25,7 +25,7 @@ CanBus::CanBus(boost::asio::io_service& io_context)
         LogSYSDIE("CAN Socket");
     }
 
-    strcpy(ifr.ifr_name, "can1" );
+    strcpy(ifr.ifr_name, "vcan0" );
     auto rv = ::ioctl(socket, SIOCGIFINDEX, &ifr);
     if( rv == -1){
         LogSYSDIE("CAN Socket ioctl");
