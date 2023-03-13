@@ -32,7 +32,7 @@ struct CanOutObjManager
 
         if(it == std::cend(outputObjects)){
             outputObjects.emplace_back(addr, maxsize);
-            return outputObjects.size();
+            return outputObjects.size()-1;
         }
         else{
             if(it->msg.frame.can_dlc < maxsize)
@@ -94,8 +94,8 @@ std::unique_ptr<can::InputControl> Builder::buildCan(CanBus &canbus)
             }
         }
         if(it->second["DigOUT"]){
-            auto digiIn = it->second["DigOUT"];
-            for(auto it = digiIn.begin(); it != digiIn.end(); ++it){
+            auto digiOutNode = it->second["DigOUT"];
+            for(auto it = digiOutNode.begin(); it != digiOutNode.end(); ++it){
                 auto name = it->first.as<std::string>();
                 auto canAddr = (it->second)["addr"][0].as<unsigned>();
                 auto offset = (it->second)["addr"][1].as<unsigned>();

@@ -15,13 +15,14 @@ void OnOffDevice::toggle()
     mqtt->publish(mqttPath, (int)newVal);
 }
 
-void OnOffDevice::set(bool on)
+void OnOffDevice::set(bool on, bool by_mqtt)
 {
     LogDBG("OnOffDevice::set check {} {}", on, (bool)*out);
     if(on != (bool)*out){
         (*out)(on);
         LogDBG("OnOffDevice::set {}", on);
-        mqtt->publish(mqttPath, (int)on);
+        if(not by_mqtt)
+            mqtt->publish(mqttPath, (int)on);
     }
 }
 

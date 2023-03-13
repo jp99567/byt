@@ -72,7 +72,7 @@ void AppContainer::run()
         auto devIt = devicesOnOff.find(topic);
         if(devIt != std::cend(devicesOnOff)){
             auto v = std::stod(msg);
-            devIt->second->set(v);
+            devIt->second->set(v, true);
         }
         else if(topic == "rb/ctrl/ot/setpoint/ch"){
             auto v = std::stof(msg);

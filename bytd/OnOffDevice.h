@@ -10,7 +10,7 @@ class OnOffDevice
 public:
     explicit OnOffDevice(std::unique_ptr<IDigiOut> out, std::string name, std::shared_ptr<MqttClient> mqtt);
     void toggle();
-    void set(bool on=true);
+    void set(bool on, bool by_mqtt = false);
     bool get() const;
     static constexpr auto mqttPathPrefix = "rb/ctrl/dev/";
 private:
