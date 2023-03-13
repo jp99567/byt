@@ -25,5 +25,5 @@ public:
     [[nodiscard]] OnOffDeviceList buildOnOffDevices();
 
 private:
-    void buildDevice(std::string name, std::string outputName, std::string inputName);
+    void buildDevice(std::string name, std::string outputName, std::string inputName = std::string());
 };

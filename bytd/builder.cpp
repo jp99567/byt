@@ -147,6 +147,9 @@ DigInput& getDigInputByName(std::vector<std::reference_wrapper<DigInput>>& digIn
 std::unique_ptr<IDigiOut> getDigOutputByName(std::map<std::string, std::unique_ptr<IDigiOut>>& digiOutputs, std::string name)
 {
     auto it = digiOutputs.find(name);
+    if(it == std::cend(digiOutputs)){
+        throw std::runtime_error(std::string("no such DigOutput ").append(name));
+    }
     auto rv = std::move(it->second);
     digiOutputs.erase(it);
     return rv;
@@ -159,6 +162,8 @@ OnOffDeviceList Builder::buildOnOffDevices()
     buildDevice("SvetloSpalna", "svetloSpalna", "buttonKupelna1D");
     buildDevice("SvetloChodbicka", "svetloChodbicka", "buttonKupelna2U");
     buildDevice("SvetloStol", "svetloStol", "buttonKupelna2D");
+    buildDevice("SvetloStena", "svetloStena");
+    buildDevice("SvetloObyvka", "svetloObyvka");
 
     return std::move(devicesOnOff);
 }
@@ -167,11 +172,13 @@ void Builder::buildDevice(std::string name, std::string outputName, std::string 
 {
     auto out = getDigOutputByName(digiOutputs, outputName);
     auto it = devicesOnOff.emplace(std::string(OnOffDevice::mqttPathPrefix).append(name), std::make_unique<OnOffDevice>(std::move(out), name, mqtt));
-    auto& input = getDigInputByName(digInputs, inputName);
-    input.Changed.subscribe(event::subscr([&dev=it.first->second](bool on){
-        LogDBG("check {}", on);
-        if(not on){
-            dev->toggle();
-        }
-    }));
+    if(not inputName.empty()){
+        auto& input = getDigInputByName(digInputs, inputName);
+        input.Changed.subscribe(event::subscr([&dev=it.first->second](bool on){
+            LogDBG("check {}", on);
+            if(not on){
+                dev->toggle();
+            }
+        }));
+    }
 }

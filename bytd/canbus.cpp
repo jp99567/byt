@@ -93,7 +93,7 @@ void CanBus::read()
                 }
             }
             if(isWrReady){
-                LogDBG("can write read back ok");
+                LogDBG("can write read back {:X} ok", frame_rd.can_id);
                 wrReady();
             }
             else{
@@ -111,6 +111,7 @@ bool CanBus::send(const can_frame &frame)
     if( not pending){
         pending = true;
         frame_wr = frame;
+        LogDBG("can async write {:X}", frame_wr.can_id);
         canStream.async_write_some(boost::asio::buffer(&frame_wr, sizeof(frame_wr)), [](const boost::system::error_code& ec, std::size_t bytes_transferred){
             if(ec || bytes_transferred != sizeof(frame_rd)){
                 LogERR("can write ({}){}", ec.value(), ec.message());

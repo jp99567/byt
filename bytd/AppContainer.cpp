@@ -9,6 +9,7 @@
 
 void AppContainer::doRequest(std::string msg)
 {
+    LogINFO("AppContainer::doRequest {}", msg);
     std::istringstream ss(msg);
     std::string cmd;
     ss >> cmd;
@@ -16,6 +17,11 @@ void AppContainer::doRequest(std::string msg)
         std::string sreq;
         ss >> sreq;
         openTherm->asyncTransferRequest(std::stoi(sreq, nullptr,0));
+    }
+    else if(cmd == "setLogLevel"){
+        std::string level;
+        ss >> level;
+        Util::Log::instance().get()->set_level(spdlog::level::from_str(level));
     }
 }
 
