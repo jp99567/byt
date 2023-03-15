@@ -148,6 +148,7 @@ void AppContainer::run()
         while(running.load())
                 meranie->meas();
     });
+    canBus.send(can::mkMsgSetAllStageOperating().frame);
     ::sd_notify(0, "READY=1");
     io_service.run();
     LogINFO("io service exited");

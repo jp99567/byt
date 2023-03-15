@@ -45,6 +45,8 @@ struct Frame
     can_frame frame;
 };
 
+Frame mkMsgSetAllStageOperating();
+
 struct OutputMsg
 {
     OutputMsg(Id id, std::size_t len):msg(id, len){}

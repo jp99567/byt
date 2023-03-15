@@ -1,5 +1,6 @@
 #include "candata.h"
 #include "../avr/fw/OwResponseCode_generated.h"
+#include "../avr/fw/SvcProtocol_generated.h"
 #include "Log.h"
 
 namespace {
@@ -16,6 +17,17 @@ void set_bits(T& dest_reg, const T mask, bool setNotClear)
 }
 
 namespace can {
+
+constexpr Id broadcastSvcId = 0x1D867E00;
+
+Frame mkMsgSetAllStageOperating()
+{
+    Frame msg(broadcastSvcId, 2);
+    constexpr uint8_t stage3run = 0b11000000;
+    msg.frame.data[0] = Svc::Protocol::CmdSetStage;
+    msg.frame.data[2] = stage3run;
+    return msg;
+}
 
 void InputControl::onRecvMsg(const can_frame& msg)
 {
