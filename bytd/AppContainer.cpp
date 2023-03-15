@@ -48,7 +48,7 @@ void AppContainer::run()
     canInputControl = builder->buildCan(canBus);
     auto devicesOnOff = builder->buildOnOffDevices();
     builder = nullptr;
-    meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
+    auto meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
 
     openTherm = std::make_shared<OpenTherm>(pru, *mqtt);
     slovpwm = std::make_unique<slowswi2cpwm>();
@@ -143,15 +143,20 @@ void AppContainer::run()
 
     sched_1sect();
 
+    std::atomic_bool running = true;
+    std::thread meas_thread([&meranie, &running]{
+        while(running.load())
+                meranie->meas();
+    });
     ::sd_notify(0, "READY=1");
     io_service.run();
     LogINFO("io service exited");
+    running.store(true);
 }
 
 void AppContainer::on1sec()
 {
     mqtt->do_misc();
-    meranie->meas();
 }
 
 void AppContainer::sched_1sect()
