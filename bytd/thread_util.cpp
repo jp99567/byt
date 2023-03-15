@@ -40,7 +40,13 @@ void set_sig_handler()
 	std::signal(SIGTERM, sig_hdl);
 	std::signal(SIGALRM, [](int sig){
 		LogERR("alarm");
-	});
+    });
+}
+
+void set_hi_prio()
+{
+    struct sched_param param = {sched_get_priority_max(SCHED_RR)};
+    ::pthread_setschedparam(pthread_self(), SCHED_RR, &param);
 }
 
 }

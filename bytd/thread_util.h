@@ -18,6 +18,7 @@ extern bool shutdown_req;
 void sigblock(bool block, bool block_alarm);
 void set_thread_name(const char *name);
 void set_sig_handler();
+void set_hi_prio();
 
 }
 
