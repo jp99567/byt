@@ -145,8 +145,11 @@ void AppContainer::run()
 
     std::atomic_bool running = true;
     std::thread meas_thread([&meranie, &running]{
-        while(running.load())
+        while(running.load()){
+                auto t0 = std::chrono::steady_clock::now();
                 meranie->meas();
+                std::this_thread::sleep_until(t0 + std::chrono::seconds(1));
+        }
     });
     canBus.send(can::mkMsgSetAllStageOperating().frame);
     ::sd_notify(0, "READY=1");
