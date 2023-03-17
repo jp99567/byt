@@ -1,12 +1,12 @@
 #include "Vypinace.h"
-#include "Log.h"
+//#include "Log.h"
 
-VypinacDuo::VypinacDuo()
+VypinacDuoSimple::VypinacDuoSimple()
 {
-    combo.fill(VypinacDuo::None);
+    combo.fill(State::None);
 }
 
-void VypinacDuo::pressed(Button id, bool on)
+void VypinacDuoSimple::pressed(Button id, bool on)
 {
     if(on){
         if( id == Button::LD || id == Button::LU ){
@@ -73,22 +73,78 @@ void VypinacSingle::onTimer()
     }
 }
 
-#include <iostream>
-#include <thread>
-#include <boost/asio/posix/stream_descriptor.hpp>
-#include <boost/asio/read_until.hpp>
-#include <boost/asio/streambuf.hpp>
-
-struct TestApp
+VypinacDuoWithLongPress::VypinacDuoWithLongPress(boost::asio::io_service &io_context)
+    :timer(io_context)
 {
-    boost::asio::io_service io_context;
-    VypinacDuo vypinac;
-    boost::asio::streambuf buf;
-    boost::asio::posix::stream_descriptor input;
-    std::string line, last;
+    combo.fill(State::None);
+}
 
-    TestApp()
-        :input(io_context, ::dup(STDIN_FILENO))
+void VypinacDuoWithLongPress::pressed(Button id, bool on)
+{
+    if(on){
+        if(std::all_of(std::cbegin(combo), std::cend(combo), [](auto b){ return b == State::None;})){
+            timer.expires_at(std::chrono::steady_clock::now() + std::chrono::milliseconds(500));
+            timer.async_wait([this](boost::system::error_code ec){
+                longPress = !ec;
+                onTimer();
+            });
+        }
+
+        if( id == Button::LD || id == Button::LU ){
+            combo[Combo::L] = id == Button::LD ? State::D : State::U;
+        }
+        else{
+            combo[Combo::R] = id == Button::RD ? State::D : State::U;
+        }
+    }
+    else{
+        timer.cancel();
+    }
+}
+
+void VypinacDuoWithLongPress::onTimer()
+{
+    if(std::all_of(std::cbegin(combo), std::cend(combo), [](auto b){ return b != State::None;})){
+        if(combo[Combo::L] == State::U && combo[Combo::R] == State::U){
+            if(longPress) ClickedLongBothU.notify(); else ClickedBothU.notify();}
+        else if(combo[Combo::L] == State::D && combo[Combo::R] == State::D){
+            if(longPress) ClickedLongBothD.notify(); else ClickedBothD.notify();}
+        else if(combo[Combo::L] == State::D && combo[Combo::R] == State::U){
+            if(longPress) ClickedLongDIagonalRULD.notify(); else ClickedDIagonalRULD.notify();}
+        else if(combo[Combo::L] == State::U && combo[Combo::R] == State::D){
+            if(longPress) ClickedLongDIagonalLURD.notify(); else ClickedDIagonalLURD.notify();}
+    }
+    else if(std::any_of(std::cbegin(combo), std::cend(combo), [](auto b){ return b != State::None;})){
+        if(combo[Combo::L] == State::U){
+            if(longPress) ClickedLongLU.notify(); else ClickedLU.notify();}
+        else if(combo[Combo::L] == State::D){
+            if(longPress) ClickedLongLD.notify(); else ClickedLD.notify();}
+        else if(combo[Combo::R] == State::U){
+            if(longPress) ClickedLongRU.notify(); else ClickedRU.notify();}
+        else if(combo[Combo::R] == State::D){
+            if(longPress) ClickedLongRD.notify(); else ClickedRD.notify();}
+    }
+    combo.fill(State::None);
+}
+
+/*
+#include <iostream>
+//#include <thread>
+//#include <boost/asio/posix/stream_descriptor.hpp>
+//#include <boost/asio/read_until.hpp>
+//#include <boost/asio/streambuf.hpp>//
+
+//struct TestApp
+//{
+//    boost::asio::io_service io_context;
+//    VypinacDuoWithLongPress vypinac;
+//    boost::asio::streambuf buf;
+//    boost::asio::posix::stream_descriptor input;
+//    std::string line, last;//
+
+//    TestApp()
+//        :vypinac(io_context)
+        ,input(io_context, ::dup(STDIN_FILENO))
     {
         vypinac.ClickedLD.subscribe(event::subscr([]{
             LogINFO("EVENT LD");
@@ -113,6 +169,30 @@ struct TestApp
         }));
         vypinac.ClickedDIagonalLURD.subscribe(event::subscr([]{
             LogINFO("EVENT DIagonalLURD");
+        }));
+        vypinac.ClickedLongLD.subscribe(event::subscr([]{
+            LogINFO("EVENT LD Long");
+        }));
+        vypinac.ClickedLongLU.subscribe(event::subscr([]{
+            LogINFO("EVENT LU Long");
+        }));
+        vypinac.ClickedLongRD.subscribe(event::subscr([]{
+            LogINFO("EVENT RD Long");
+        }));
+        vypinac.ClickedLongRU.subscribe(event::subscr([]{
+            LogINFO("EVENT RU Long");
+        }));
+        vypinac.ClickedLongBothU.subscribe(event::subscr([]{
+            LogINFO("EVENT BothU Long");
+        }));
+        vypinac.ClickedLongBothD.subscribe(event::subscr([]{
+            LogINFO("EVENT BothD Long");
+        }));
+        vypinac.ClickedLongDIagonalRULD.subscribe(event::subscr([]{
+            LogINFO("EVENT DIagonalRULD Long");
+        }));
+        vypinac.ClickedLongDIagonalLURD.subscribe(event::subscr([]{
+            LogINFO("EVENT DIagonalLURD Long");
         }));
     }
     int run_testapp();
@@ -151,28 +231,28 @@ void TestApp::do_line()
                 io_context.stop();
             }
             else if(line == "key press   31 "){
-                vypinac.pressed(VypinacDuo::LU, true);
+                vypinac.pressed(VypinacDuoSimple::LU, true);
             }
             else if(line == "key release 31 "){
-                vypinac.pressed(VypinacDuo::LU, false);
+                vypinac.pressed(VypinacDuoSimple::LU, false);
             }
             if(line == "key press   32 "){
-                vypinac.pressed(VypinacDuo::RU, true);
+                vypinac.pressed(VypinacDuoSimple::RU, true);
             }
             else if(line == "key release 32 "){
-                vypinac.pressed(VypinacDuo::RU, false);
+                vypinac.pressed(VypinacDuoSimple::RU, false);
             }
             if(line == "key press   45 "){
-                vypinac.pressed(VypinacDuo::LD, true);
+                vypinac.pressed(VypinacDuoSimple::LD, true);
             }
             else if(line == "key release 45 "){
-                vypinac.pressed(VypinacDuo::LD, false);
+                vypinac.pressed(VypinacDuoSimple::LD, false);
             }
             if(line == "key press   46 "){
-                vypinac.pressed(VypinacDuo::RD, true);
+                vypinac.pressed(VypinacDuoSimple::RD, true);
             }
             else if(line == "key release 46 "){
-                vypinac.pressed(VypinacDuo::RD, false);
+                vypinac.pressed(VypinacDuoSimple::RD, false);
             }
         }
 }
@@ -182,3 +262,4 @@ int main(){
     return TestApp().run_testapp();
 }
 #endif
+*/
