@@ -3,6 +3,7 @@
 
 #include "Log.h"
 #include "candata.h"
+#include "Event.h"
 
 Builder::Builder(std::shared_ptr<MqttClient> mqtt)
     : config(YAML::LoadFile("test1.yaml"))
@@ -158,14 +159,40 @@ std::unique_ptr<IDigiOut> getDigOutputByName(std::map<std::string, std::unique_p
 
 OnOffDeviceList Builder::buildOnOffDevices()
 {
-    buildDevice("SvetloKupelna", "svetloKupelna", "buttonKupelna1U");
-    buildDevice("SvetloSpalna", "svetloSpalna", "buttonKupelna1D");
-    buildDevice("SvetloChodbicka", "svetloChodbicka", "buttonKupelna2U");
-    buildDevice("SvetloStol", "svetloStol", "buttonKupelna2D");
-    buildDevice("SvetloStena", "svetloStena");
-    buildDevice("SvetloObyvka", "svetloObyvka");
-
     return std::move(devicesOnOff);
+}
+
+void assignVypinavButton(VypinacDuo& vypinac, VypinacDuo::Button id, DigInput& input)
+{
+    input.Changed.subscribe(event::subscr([&vypinac, id](bool on){
+        vypinac.pressed(id, on);
+    }));
+}
+
+VypinaceDuoList Builder::vypinace(boost::asio::io_service &io_context)
+{
+    auto vypinacKupelka = std::make_unique<VypinacDuoWithLongPress>(io_context);
+
+    assignVypinavButton(*vypinacKupelka, VypinacDuo::Button::LU, getDigInputByName(digInputs, "buttonKupelna1U"));
+    assignVypinavButton(*vypinacKupelka, VypinacDuo::Button::LD, getDigInputByName(digInputs, "buttonKupelna1D"));
+    assignVypinavButton(*vypinacKupelka, VypinacDuo::Button::RU, getDigInputByName(digInputs, "buttonKupelna2U"));
+    assignVypinavButton(*vypinacKupelka, VypinacDuo::Button::RD, getDigInputByName(digInputs, "buttonKupelna2D"));
+
+    buildDevice("SvetloKupelna", "svetloKupelna", vypinacKupelka->ClickedLU);
+    buildDevice("SvetloSpalna", "svetloSpalna", vypinacKupelka->ClickedLD);
+    buildDevice("SvetloChodbicka", "svetloChodbicka", vypinacKupelka->ClickedRU);
+    buildDevice("SvetloStol", "svetloStol", vypinacKupelka->ClickedRD);
+    buildDevice("SvetloStena", "svetloStena", vypinacKupelka->ClickedLongRD);
+    buildDevice("SvetloObyvka", "svetloObyvka", vypinacKupelka->ClickedLongRU);
+
+    vypinacKupelka->ClickedBothD.subscribe(event::subscr([this]{
+        for(auto& dev : devicesOnOff){
+            dev.second->set(false);
+        }
+    }));
+
+    vypinaceDuo.emplace_back(std::move(vypinacKupelka));
+    return std::move(vypinaceDuo);
 }
 
 void Builder::buildDevice(std::string name, std::string outputName, std::string inputName)
@@ -181,4 +208,11 @@ void Builder::buildDevice(std::string name, std::string outputName, std::string 
             }
         }));
     }
+}
+
+void Builder::buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent)
+{
+    auto out = getDigOutputByName(digiOutputs, outputName);
+    auto it = devicesOnOff.emplace(std::string(OnOffDevice::mqttPathPrefix).append(name), std::make_unique<OnOffDevice>(std::move(out), name, mqtt));
+    controlEvent.subscribe(event::subscr([&dev=it.first->second](){ dev->toggle(); }));
 }

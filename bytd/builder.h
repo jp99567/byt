@@ -1,13 +1,17 @@
 #pragma once
 #include <yaml-cpp/yaml.h>
 #include <map>
+#include <boost/asio/io_service.hpp>
+
 #include "canbus.h"
 #include "candata.h"
 #include "OnOffDevice.h"
 #include "mqtt.h"
 #include "therm.h"
+#include "Vypinace.h"
 
 using OnOffDeviceList = std::map<const std::string, std::unique_ptr<OnOffDevice>>;
+using VypinaceDuoList = std::vector<std::unique_ptr<VypinacDuo>>;
 
 class Builder
 {
@@ -17,13 +21,16 @@ class Builder
     std::vector<std::reference_wrapper<DigInput>> digInputs;
     std::vector<std::reference_wrapper<SensorInput>> sensors;
     OnOffDeviceList devicesOnOff;
+    VypinaceDuoList vypinaceDuo;
 
 public:
     Builder(std::shared_ptr<MqttClient> mqtt);
     [[nodiscard]] std::unique_ptr<can::InputControl> buildCan(CanBus& canbus);
     [[nodiscard]] ow::SensorList buildBBoW();
     [[nodiscard]] OnOffDeviceList buildOnOffDevices();
+    VypinaceDuoList vypinace(boost::asio::io_service& io_context);
 
 private:
     void buildDevice(std::string name, std::string outputName, std::string inputName = std::string());
+    void buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent);
 };

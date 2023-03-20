@@ -18,6 +18,8 @@ public:
     event::Event<> ClickedBothD;
     event::Event<> ClickedDIagonalRULD;
     event::Event<> ClickedDIagonalLURD;
+    virtual void pressed(Button id, bool on) = 0;
+    virtual ~VypinacDuo(){}
 protected:
     std::array<State, 2> combo;
 };
@@ -26,7 +28,7 @@ class VypinacDuoSimple : public VypinacDuo
 {
 public:
     explicit VypinacDuoSimple();
-    void pressed(Button id, bool on);
+    void pressed(Button id, bool on) override;
 };
 
 class VypinacSingle
@@ -51,7 +53,7 @@ class VypinacDuoWithLongPress : public VypinacDuo
 {
 public:
     explicit VypinacDuoWithLongPress(boost::asio::io_service& io_context);
-    void pressed(Button id, bool on);
+    void pressed(Button id, bool on) override;
     event::Event<> ClickedLongRU;
     event::Event<> ClickedLongRD;
     event::Event<> ClickedLongLU;

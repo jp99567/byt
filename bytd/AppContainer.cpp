@@ -46,6 +46,7 @@ void AppContainer::run()
     auto builder = std::make_unique<Builder>(mqtt);
     auto tsensors = builder->buildBBoW();
     canInputControl = builder->buildCan(canBus);
+    auto vypinaceDuo = builder->vypinace(io_service);
     auto devicesOnOff = builder->buildOnOffDevices();
     builder = nullptr;
     auto meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
