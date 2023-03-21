@@ -20,17 +20,23 @@ class Builder
     std::map<std::string, std::unique_ptr<IDigiOut>> digiOutputs;
     std::vector<std::reference_wrapper<DigInput>> digInputs;
     std::vector<std::reference_wrapper<SensorInput>> sensors;
-    OnOffDeviceList devicesOnOff;
-    VypinaceDuoList vypinaceDuo;
+
 
 public:
+    struct AppComponents
+    {
+        VypinaceDuoList vypinaceDuo;
+        OnOffDeviceList devicesOnOff;
+    };
+
     Builder(std::shared_ptr<MqttClient> mqtt);
     [[nodiscard]] std::unique_ptr<can::InputControl> buildCan(CanBus& canbus);
     [[nodiscard]] ow::SensorList buildBBoW();
-    [[nodiscard]] OnOffDeviceList buildOnOffDevices();
-    VypinaceDuoList vypinace(boost::asio::io_service& io_context);
+    void vypinace(boost::asio::io_service& io_context);
+    AppComponents getComponents();
 
 private:
     void buildDevice(std::string name, std::string outputName, std::string inputName = std::string());
     void buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent);
+    AppComponents components;
 };

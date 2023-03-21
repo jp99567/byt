@@ -156,20 +156,14 @@ std::unique_ptr<IDigiOut> getDigOutputByName(std::map<std::string, std::unique_p
     return rv;
 }
 
-
-OnOffDeviceList Builder::buildOnOffDevices()
-{
-    return std::move(devicesOnOff);
-}
-
 void assignVypinavButton(VypinacDuo& vypinac, VypinacDuo::Button id, DigInput& input)
 {
     input.Changed.subscribe(event::subscr([&vypinac, id](bool on){
-        vypinac.pressed(id, on);
+        vypinac.pressed(id, !on);
     }));
 }
 
-VypinaceDuoList Builder::vypinace(boost::asio::io_service &io_context)
+void Builder::vypinace(boost::asio::io_service &io_context)
 {
     auto vypinacKupelka = std::make_unique<VypinacDuoWithLongPress>(io_context);
 
@@ -185,20 +179,28 @@ VypinaceDuoList Builder::vypinace(boost::asio::io_service &io_context)
     buildDevice("SvetloStena", "svetloStena", vypinacKupelka->ClickedLongRD);
     buildDevice("SvetloObyvka", "svetloObyvka", vypinacKupelka->ClickedLongRU);
 
-    vypinacKupelka->ClickedBothD.subscribe(event::subscr([this]{
-        for(auto& dev : devicesOnOff){
-            dev.second->set(false);
+    std::vector<std::reference_wrapper<OnOffDevice>> onOffdevs;
+    for(auto& dev : components.devicesOnOff){
+        onOffdevs.push_back(*dev.second);
+    }
+    vypinacKupelka->ClickedLongBothD.subscribe(event::subscr([onOffdevs]{
+        for(auto& dev : onOffdevs){
+            dev.get().set(false);
         }
     }));
 
-    vypinaceDuo.emplace_back(std::move(vypinacKupelka));
-    return std::move(vypinaceDuo);
+    components.vypinaceDuo.emplace_back(std::move(vypinacKupelka));
+}
+
+Builder::AppComponents Builder::getComponents()
+{
+    return std::move(components);
 }
 
 void Builder::buildDevice(std::string name, std::string outputName, std::string inputName)
 {
     auto out = getDigOutputByName(digiOutputs, outputName);
-    auto it = devicesOnOff.emplace(std::string(OnOffDevice::mqttPathPrefix).append(name), std::make_unique<OnOffDevice>(std::move(out), name, mqtt));
+    auto it = components.devicesOnOff.emplace(std::string(OnOffDevice::mqttPathPrefix).append(name), std::make_unique<OnOffDevice>(std::move(out), name, mqtt));
     if(not inputName.empty()){
         auto& input = getDigInputByName(digInputs, inputName);
         input.Changed.subscribe(event::subscr([&dev=it.first->second](bool on){
@@ -213,6 +215,6 @@ void Builder::buildDevice(std::string name, std::string outputName, std::string 
 void Builder::buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent)
 {
     auto out = getDigOutputByName(digiOutputs, outputName);
-    auto it = devicesOnOff.emplace(std::string(OnOffDevice::mqttPathPrefix).append(name), std::make_unique<OnOffDevice>(std::move(out), name, mqtt));
+    auto it = components.devicesOnOff.emplace(std::string(OnOffDevice::mqttPathPrefix).append(name), std::make_unique<OnOffDevice>(std::move(out), name, mqtt));
     controlEvent.subscribe(event::subscr([&dev=it.first->second](){ dev->toggle(); }));
 }

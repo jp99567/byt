@@ -46,8 +46,8 @@ void AppContainer::run()
     auto builder = std::make_unique<Builder>(mqtt);
     auto tsensors = builder->buildBBoW();
     canInputControl = builder->buildCan(canBus);
-    auto vypinaceDuo = builder->vypinace(io_service);
-    auto devicesOnOff = builder->buildOnOffDevices();
+    builder->vypinace(io_service);
+    auto components = builder->getComponents();
     builder = nullptr;
     auto meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
 
@@ -64,7 +64,7 @@ void AppContainer::run()
         }
     };
 
-    mqtt->OnMsgRecv = [this, &devicesOnOff](auto topic, auto msg){
+    mqtt->OnMsgRecv = [this, &devicesOnOff=components.devicesOnOff](auto topic, auto msg){
         if(topic.substr(0,8) != "rb/ctrl/")
             return;
 
@@ -156,7 +156,8 @@ void AppContainer::run()
     ::sd_notify(0, "READY=1");
     io_service.run();
     LogINFO("io service exited");
-    running.store(true);
+    running.store(false);
+    meas_thread.join();
 }
 
 void AppContainer::on1sec()
