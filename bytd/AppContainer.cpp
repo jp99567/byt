@@ -39,13 +39,34 @@ AppContainer::AppContainer()
     //exporter = std::make_shared<ow::Exporter>();
 }
 
+struct Meranie
+{
+    MeranieTeploty& meranie;
+    std::atomic_bool running;
+    std::thread meas_thread;
+    explicit Meranie(MeranieTeploty& meranie) : meranie(meranie), running(true)
+    {
+        meas_thread = std::thread([this]{
+            while(running.load()){
+                    auto t0 = std::chrono::steady_clock::now();
+                    this->meranie.meas();
+                    std::this_thread::sleep_until(t0 + std::chrono::seconds(1));
+            }
+        });
+    }
+    ~Meranie()
+    {
+        running.store(false);
+        meas_thread.join();
+    }
+};
+
 void AppContainer::run()
 {
     auto pru = std::make_shared<Pru>();
-    std::unique_ptr<can::InputControl> canInputControl;
     auto builder = std::make_unique<Builder>(mqtt);
     auto tsensors = builder->buildBBoW();
-    canInputControl = builder->buildCan(canBus);
+    auto canInputControl = builder->buildCan(canBus);
     builder->vypinace(io_service);
     auto components = builder->getComponents();
     builder = nullptr;
@@ -144,20 +165,12 @@ void AppContainer::run()
 
     sched_1sect();
 
-    std::atomic_bool running = true;
-    std::thread meas_thread([&meranie, &running]{
-        while(running.load()){
-                auto t0 = std::chrono::steady_clock::now();
-                meranie->meas();
-                std::this_thread::sleep_until(t0 + std::chrono::seconds(1));
-        }
-    });
+
     canBus.send(can::mkMsgSetAllStageOperating().frame);
+    Meranie meranie_active_object(*meranie);
     ::sd_notify(0, "READY=1");
     io_service.run();
     LogINFO("io service exited");
-    running.store(false);
-    meas_thread.join();
 }
 
 void AppContainer::on1sec()
