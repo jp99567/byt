@@ -25,6 +25,7 @@ struct IEvent
     virtual ~IEvent(){}
     virtual IObserverConnectionHandler subscribe(std::unique_ptr<ISubscription<void, Args...>>) = 0;
     virtual void unsubscribe(std::unique_ptr<ISubscription<void, Args...>>) = 0;
+    virtual void unsubscribe() = 0;
 };
 
 template<typename... Args>
@@ -89,6 +90,12 @@ public:
     void unsubscribe (std::unique_ptr<ISubscription<void, Args...>> observer) override
     {
         unsubscr(this->mObservers, [&observer](const ISubscrPtr& uPtr) { return uPtr->isSame(*observer); });
+    }
+
+    void unsubscribe() override
+    {
+        std::lock_guard<std::mutex> lock(mObservers->lock);
+        mObservers->observers.clear();
     }
 
     void notify(Args... args)
