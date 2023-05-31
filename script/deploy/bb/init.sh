@@ -9,6 +9,15 @@ if ip link show can1|grep -q 'state DOWN'; then
 	ip link set up can1
 fi
 
+if config-pin -q 'p9.28'|grep -q 'P9_28 Mode: gpio Direction: out Value: 1'; then
+	config-pin p9.28 low
+	sleep 0.2
+fi
+config-pin p9.28 high
+
+./avrcanconf.py --exit_bootloader --candev can1 --all
+./avrcanconf.py --config --yamlfile config.yaml --candev can1
+
 RPROC_CTRL_FILE='/sys/class/remoteproc/remoteproc1/state'
 while [[ ! -f $RPROC_CTRL_FILE ]]; do
 	echo waiting for $RPROC_CTRL_FILE
