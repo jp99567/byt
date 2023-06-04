@@ -4,9 +4,10 @@
 #include "Log.h"
 #include "candata.h"
 #include "Event.h"
+#include "MqttDigiOut.h"
 
 Builder::Builder(std::shared_ptr<MqttClient> mqtt)
-    : config(YAML::LoadFile("test1.yaml"))
+    : config(YAML::LoadFile("config.yaml"))
     , mqtt(mqtt)
 {
 }
@@ -91,6 +92,9 @@ std::unique_ptr<can::InputControl> Builder::buildCan(CanBus &canbus)
                 LogINFO("dig IN {} {:X} {}, {:08b}", name, canAddr, offset, mask);
                 auto input = std::make_unique<can::DigiInItem>(name, mask, offset);
                 digInputs.emplace_back(*input);
+                input->Changed.subscribe(event::subscr([name](bool v){
+                    LogINFO("not used digInput {} {}", name, v);
+                }));
                 insertInputItem(inputsMap, canAddr, std::move(input));
             }
         }
@@ -158,6 +162,7 @@ std::unique_ptr<IDigiOut> getDigOutputByName(std::map<std::string, std::unique_p
 
 void assignVypinavButton(VypinacDuo& vypinac, VypinacDuo::Button id, DigInput& input)
 {
+    input.Changed.unsubscribe();
     input.Changed.subscribe(event::subscr([&vypinac, id](bool on){
         vypinac.pressed(id, !on);
     }));
@@ -165,12 +170,25 @@ void assignVypinavButton(VypinacDuo& vypinac, VypinacDuo::Button id, DigInput& i
 
 void Builder::vypinace(boost::asio::io_service &io_context)
 {
+    /* provizorny bbb2 mqtt client */
+    digiOutputs.emplace("svetloWc", std::make_unique<MqttDigiOut>(mqtt, "ha/svetla/wc"));
+    digiOutputs.emplace("svetloKuchyna", std::make_unique<MqttDigiOut>(mqtt, "ha/svetla/kuchyna"));
+    digiOutputs.emplace("svetloPavlac", std::make_unique<MqttDigiOut>(mqtt, "ha/svetla/pavlac"));
+    digiOutputs.emplace("svetloIzba", std::make_unique<MqttDigiOut>(mqtt, "ha/svetla/izba"));
+    /* treba vymenit za can node vo wc */
+
     auto vypinacKupelka = std::make_unique<VypinacDuoWithLongPress>(io_context);
+    auto vypinacZadverie = std::make_unique<VypinacDuoWithLongPress>(io_context);
 
     assignVypinavButton(*vypinacKupelka, VypinacDuo::Button::LU, getDigInputByName(digInputs, "buttonKupelna1U"));
     assignVypinavButton(*vypinacKupelka, VypinacDuo::Button::LD, getDigInputByName(digInputs, "buttonKupelna1D"));
     assignVypinavButton(*vypinacKupelka, VypinacDuo::Button::RU, getDigInputByName(digInputs, "buttonKupelna2U"));
     assignVypinavButton(*vypinacKupelka, VypinacDuo::Button::RD, getDigInputByName(digInputs, "buttonKupelna2D"));
+
+    assignVypinavButton(*vypinacZadverie, VypinacDuo::Button::LU, getDigInputByName(digInputs, "buttonZadverieLU"));
+    assignVypinavButton(*vypinacZadverie, VypinacDuo::Button::LD, getDigInputByName(digInputs, "buttonZadverieLD"));
+    assignVypinavButton(*vypinacZadverie, VypinacDuo::Button::RU, getDigInputByName(digInputs, "buttonZadverieRU"));
+    assignVypinavButton(*vypinacZadverie, VypinacDuo::Button::RD, getDigInputByName(digInputs, "buttonZadverieRD"));
 
     buildDevice("SvetloKupelna", "svetloKupelna", vypinacKupelka->ClickedLU);
     buildDevice("SvetloSpalna", "svetloSpalna", vypinacKupelka->ClickedLD);
@@ -179,24 +197,29 @@ void Builder::vypinace(boost::asio::io_service &io_context)
     buildDevice("SvetloStena", "svetloStena", vypinacKupelka->ClickedLongRD);
     buildDevice("SvetloObyvka", "svetloObyvka", vypinacKupelka->ClickedLongRU);
 
-    std::vector<std::reference_wrapper<OnOffDevice>> onOffdevs;
+    buildDevice("SvetloKuchyna", "svetloKuchyna", vypinacZadverie->ClickedLU);
+    buildDevice("SvetloIzba", "svetloIzba", vypinacZadverie->ClickedLD);
+    buildDevice("SvetloPavlac", "svetloPavlac", vypinacZadverie->ClickedRU);
+    buildDevice("SvetloWc", "svetloWc", vypinacZadverie->ClickedRD);
+
     for(auto& dev : components.devicesOnOff){
-        onOffdevs.push_back(*dev.second);
+        vypinacKupelka->ClickedLongBothD.subscribe(event::subscr([&ref = *dev.second]{
+            ref.set(false);
+        }));
+        vypinacZadverie->ClickedLongBothD.subscribe(event::subscr([&ref = *dev.second]{
+            ref.set(false);
+        }));
     }
-    vypinacKupelka->ClickedLongBothD.subscribe(event::subscr([onOffdevs]{
-        for(auto& dev : onOffdevs){
-            dev.get().set(false);
-        }
-    }));
 
     components.vypinaceDuo.emplace_back(std::move(vypinacKupelka));
+    components.vypinaceDuo.emplace_back(std::move(vypinacZadverie));
 }
 
 Builder::AppComponents Builder::getComponents()
 {
     return std::move(components);
 }
-
+/*
 void Builder::buildDevice(std::string name, std::string outputName, std::string inputName)
 {
     auto out = getDigOutputByName(digiOutputs, outputName);
@@ -210,7 +233,7 @@ void Builder::buildDevice(std::string name, std::string outputName, std::string 
             }
         }));
     }
-}
+}*/
 
 void Builder::buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent)
 {
