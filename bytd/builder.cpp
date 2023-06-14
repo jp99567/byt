@@ -213,6 +213,8 @@ void Builder::vypinace(boost::asio::io_service &io_context)
 
     components.vypinaceDuo.emplace_back(std::move(vypinacKupelka));
     components.vypinaceDuo.emplace_back(std::move(vypinacZadverie));
+
+    components.brana = std::make_unique<MonoStableDev>(getDigOutputByName(digiOutputs, "brana"), "brana", mqtt, io_context, 0.25);
 }
 
 Builder::AppComponents Builder::getComponents()

@@ -27,6 +27,8 @@ public:
     {
         VypinaceDuoWithLongPressList vypinaceDuo;
         OnOffDeviceList devicesOnOff;
+        std::unique_ptr<MonoStableDev> brana;
+        std::unique_ptr<MonoStableDev> dverePavlac;
     };
 
     Builder(std::shared_ptr<MqttClient> mqtt);
