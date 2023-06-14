@@ -10,4 +10,5 @@ bool MqttDigiOut::operator()(bool value)
 {
     valueCached = value;
     mqtt->publish(path, value);
+    return valueCached;
 }
