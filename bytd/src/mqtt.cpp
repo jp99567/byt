@@ -125,7 +125,7 @@ void MqttClient::on_connect(int rc)
 {
     if(rc == 0){
         LogINFO("on mqtt connect");
-        auto rv = mosqpp::mosquittopp::subscribe(nullptr, "rb/ctrl/#");
+        auto rv = mosqpp::mosquittopp::subscribe(nullptr, std::string(mqtt::rootTopic).append("#").c_str());
         if(rv != MOSQ_ERR_SUCCESS)
             LogERR("mosquitto_subscribe: ({}) {}", rv, mosqpp::strerror(rv));
     }

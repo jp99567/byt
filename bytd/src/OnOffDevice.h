@@ -10,7 +10,7 @@ class IDigiOut;
 class DeviceBase
 {
 public:
-    static constexpr auto mqttPathPrefix = "rb/ctrl/dev/";
+    const std::string& getName() const {return name;}
 protected:
     explicit DeviceBase(std::unique_ptr<IDigiOut> out, std::string name, std::shared_ptr<MqttClient> mqtt);
     std::unique_ptr<IDigiOut> out;

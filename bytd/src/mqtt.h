@@ -9,6 +9,8 @@
 
 namespace mqtt {
  constexpr auto rbResponse = "rb/stat/response";
+ constexpr auto rootTopic = "rb/ctrl/";
+ constexpr auto devicesTopic = "rb/ctrl/dev/";
 }
 
 class MqttWrapper

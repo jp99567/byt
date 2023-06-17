@@ -86,17 +86,21 @@ void AppContainer::run()
     };
 
     mqtt->OnMsgRecv = [this, &devicesOnOff=components.devicesOnOff](auto topic, auto msg){
-        if(topic.substr(0,8) != "rb/ctrl/")
+        if(topic.substr(0,std::char_traits<char>::length(mqtt::rootTopic)) != mqtt::rootTopic)
             return;
 
         LogINFO("OnMsgRecv {}:{}", topic, msg);
 
-        auto devIt = devicesOnOff.find(topic);
-        if(devIt != std::cend(devicesOnOff)){
-            auto v = std::stod(msg);
-            devIt->second->set(v, true);
+        if(topic.substr(0,std::char_traits<char>::length(mqtt::devicesTopic)) != mqtt::devicesTopic){
+            const auto name = topic.substr(topic.find_last_of('/') + 1);
+            auto devIt = devicesOnOff.find(name);
+            if(devIt != std::cend(devicesOnOff)){
+                auto v = std::stod(msg);
+                devIt->second->set(v, true);
+                return;
+            }
         }
-        else if(topic == "rb/ctrl/ot/setpoint/ch"){
+        if(topic == "rb/ctrl/ot/setpoint/ch"){
             auto v = std::stof(msg);
             openTherm->chSetpoint = v;
         }

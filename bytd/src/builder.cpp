@@ -240,6 +240,6 @@ void Builder::buildDevice(std::string name, std::string outputName, std::string 
 void Builder::buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent)
 {
     auto out = getDigOutputByName(digiOutputs, outputName);
-    auto it = components.devicesOnOff.emplace(std::string(OnOffDevice::mqttPathPrefix).append(name), std::make_unique<OnOffDevice>(std::move(out), name, mqtt));
+    auto it = components.devicesOnOff.emplace(name, std::make_unique<OnOffDevice>(std::move(out), name, mqtt));
     controlEvent.subscribe(event::subscr([&dev=it.first->second](){ dev->toggle(); }));
 }

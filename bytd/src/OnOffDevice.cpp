@@ -55,6 +55,6 @@ void MonoStableDev::trigger()
 DeviceBase::DeviceBase(std::unique_ptr<IDigiOut> out, std::string name, std::shared_ptr<MqttClient> mqtt)
     :out(std::move(out))
     ,name(name)
-    ,mqttPath(std::string(mqttPathPrefix).append(name))
+    ,mqttPath(std::string(mqtt::devicesTopic).append(name))
     ,mqtt(mqtt){}
 
