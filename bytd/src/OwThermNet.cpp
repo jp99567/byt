@@ -1,6 +1,6 @@
 #include "OwThermNet.h"
 
-#include "../pru/rpm_iface.h"
+#include "pru/rpm_iface.h"
 #include "Log.h"
 
 namespace pru {

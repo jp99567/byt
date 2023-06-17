@@ -1,6 +1,6 @@
 #include "candata.h"
-#include "../avr/fw/OwResponseCode_generated.h"
-#include "../avr/fw/SvcProtocol_generated.h"
+#include "avr/fw/OwResponseCode_generated.h"
+#include "avr/fw/SvcProtocol_generated.h"
 #include "Log.h"
 
 namespace {

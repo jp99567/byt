@@ -4,7 +4,7 @@
 #include <cmath>
 #include "Log.h"
 #include "Pru.h"
-#include "../pru/rpm_iface.h"
+#include "pru/rpm_iface.h"
 #include "mqtt.h"
 
 namespace {

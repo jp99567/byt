@@ -14,7 +14,7 @@
 #include <csignal>
 
 #include "Log.h"
-#include "../pru/rpm_iface.h"
+#include "pru/rpm_iface.h"
 #include "thread_util.h"
 
 
