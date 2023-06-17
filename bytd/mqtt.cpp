@@ -16,7 +16,7 @@ MqttClient::MqttClient(boost::asio::io_service& io_context)
     ,io_context(io_context)
 {
     threaded_set(true);
-    auto rv = connect_async("176.17.53.1", 1883, 900);
+    auto rv = connect_async("172.16.53.1", 1883, 900);
     check_connect_attempt(rv);
 }
 
