@@ -168,6 +168,14 @@ void assignVypinavButton(VypinacDuo& vypinac, VypinacDuo::Button id, DigInput& i
     }));
 }
 
+void assignVypinavButton(VypinacSingle& vypinac, VypinacSingle::Button id, DigInput& input)
+{
+    input.Changed.unsubscribe();
+    input.Changed.subscribe(event::subscr([&vypinac, id](bool on){
+        vypinac.pressed(id, !on);
+    }));
+}
+
 void Builder::vypinace(boost::asio::io_service &io_context)
 {
     /* provizorny bbb2 mqtt client */
@@ -175,10 +183,14 @@ void Builder::vypinace(boost::asio::io_service &io_context)
     digiOutputs.emplace("svetloKuchyna", std::make_unique<MqttDigiOut>(mqtt, "ha/svetla/kuchyna"));
     digiOutputs.emplace("svetloPavlac", std::make_unique<MqttDigiOut>(mqtt, "ha/svetla/pavlac"));
     digiOutputs.emplace("svetloIzba", std::make_unique<MqttDigiOut>(mqtt, "ha/svetla/izba"));
+    digiOutputs.emplace("vetranie", std::make_unique<MqttDigiOut>(mqtt, "ha/reku/vetranie1"));
     /* treba vymenit za can node vo wc */
 
     auto vypinacKupelka = std::make_unique<VypinacDuoWithLongPress>(io_context);
     auto vypinacZadverie = std::make_unique<VypinacDuoWithLongPress>(io_context);
+    auto vypinacKuchyna = std::make_unique<VypinacDuoSimple>();
+    auto vypinacIzba = std::make_unique<VypinacSingle>(io_context);
+    auto vypinacSpalna = std::make_unique<VypinacSingle>(io_context);
 
     assignVypinavButton(*vypinacKupelka, VypinacDuo::Button::LU, getDigInputByName(digInputs, "buttonKupelna1U"));
     assignVypinavButton(*vypinacKupelka, VypinacDuo::Button::LD, getDigInputByName(digInputs, "buttonKupelna1D"));
@@ -190,15 +202,28 @@ void Builder::vypinace(boost::asio::io_service &io_context)
     assignVypinavButton(*vypinacZadverie, VypinacDuo::Button::RU, getDigInputByName(digInputs, "buttonZadverieRU"));
     assignVypinavButton(*vypinacZadverie, VypinacDuo::Button::RD, getDigInputByName(digInputs, "buttonZadverieRD"));
 
+    assignVypinavButton(*vypinacKuchyna, VypinacDuo::Button::LU, getDigInputByName(digInputs, "buttonKuchyna1LU"));
+    assignVypinavButton(*vypinacKuchyna, VypinacDuo::Button::LD, getDigInputByName(digInputs, "buttonKuchyna1LD"));
+    assignVypinavButton(*vypinacKuchyna, VypinacDuo::Button::RU, getDigInputByName(digInputs, "buttonKuchyna1RU"));
+    assignVypinavButton(*vypinacKuchyna, VypinacDuo::Button::RD, getDigInputByName(digInputs, "buttonKuchyna1RD"));
+
+    assignVypinavButton(*vypinacIzba, VypinacSingle::Button::U, getDigInputByName(digInputs, "buttonIzbaU"));
+    assignVypinavButton(*vypinacIzba, VypinacSingle::Button::D, getDigInputByName(digInputs, "buttonIzbaD"));
+
+    assignVypinavButton(*vypinacSpalna, VypinacSingle::Button::U, getDigInputByName(digInputs, "buttonSpalnaU"));
+    assignVypinavButton(*vypinacSpalna, VypinacSingle::Button::D, getDigInputByName(digInputs, "buttonSpalnaD"));
+
     buildDevice("SvetloKupelna", "svetloKupelna", vypinacKupelka->ClickedLU);
-    buildDevice("SvetloSpalna", "svetloSpalna", vypinacKupelka->ClickedLD);
+    buildDevice("SvetloSpalna", "svetloSpalna", vypinacSpalna->ClickedU);
     buildDevice("SvetloChodbicka", "svetloChodbicka", vypinacKupelka->ClickedRU);
     buildDevice("SvetloStol", "svetloStol", vypinacKupelka->ClickedRD);
     buildDevice("SvetloStena", "svetloStena", vypinacKupelka->ClickedLongRD);
     buildDevice("SvetloObyvka", "svetloObyvka", vypinacKupelka->ClickedLongRU);
-
-    buildDevice("SvetloKuchyna", "svetloKuchyna", vypinacZadverie->ClickedLU);
-    buildDevice("SvetloIzba", "svetloIzba", vypinacZadverie->ClickedLD);
+    auto& svetloKuchyna = buildDevice("SvetloKuchyna", "svetloKuchyna", vypinacZadverie->ClickedLU);
+    vypinacIzba->ClickedD.subscribe(event::subscr([&svetloKuchyna]{svetloKuchyna.toggle();}));
+    vypinacKuchyna->ClickedLU.subscribe(event::subscr([&svetloKuchyna]{svetloKuchyna.toggle();}));
+    buildDevice("Vetranie", "vetranie", vypinacZadverie->ClickedLD);
+    buildDevice("SvetloIzba", "svetloIzba", vypinacIzba->ClickedU);
     buildDevice("SvetloPavlac", "svetloPavlac", vypinacZadverie->ClickedRU);
     buildDevice("SvetloWc", "svetloWc", vypinacZadverie->ClickedRD);
 
@@ -213,8 +238,12 @@ void Builder::vypinace(boost::asio::io_service &io_context)
 
     components.vypinaceDuo.emplace_back(std::move(vypinacKupelka));
     components.vypinaceDuo.emplace_back(std::move(vypinacZadverie));
+    components.vypinaceDuo.emplace_back(std::move(vypinacKuchyna));
 
-    components.brana = std::make_unique<MonoStableDev>(getDigOutputByName(digiOutputs, "brana"), "brana", mqtt, io_context, 0.25);
+    components.vypinaceSingle.emplace_back(std::move(vypinacIzba));
+    components.vypinaceSingle.emplace_back(std::move(vypinacSpalna));
+
+    components.brana = std::make_unique<MonoStableDev>(getDigOutputByName(digiOutputs, "brana"), "Brana", mqtt, io_context, 0.25);
 }
 
 Builder::AppComponents Builder::getComponents()
@@ -237,9 +266,10 @@ void Builder::buildDevice(std::string name, std::string outputName, std::string 
     }
 }*/
 
-void Builder::buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent)
+OnOffDevice& Builder::buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent)
 {
     auto out = getDigOutputByName(digiOutputs, outputName);
     auto it = components.devicesOnOff.emplace(name, std::make_unique<OnOffDevice>(std::move(out), name, mqtt));
     controlEvent.subscribe(event::subscr([&dev=it.first->second](){ dev->toggle(); }));
+    return *(it.first->second);
 }

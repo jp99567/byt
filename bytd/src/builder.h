@@ -11,7 +11,8 @@
 #include "Vypinace.h"
 
 using OnOffDeviceList = std::map<const std::string, std::unique_ptr<OnOffDevice>>;
-using VypinaceDuoWithLongPressList = std::vector<std::unique_ptr<VypinacDuoWithLongPress>>;
+using VypinaceDuoList = std::vector<std::unique_ptr<VypinacDuo>>;
+using VypinaceSingleList = std::vector<std::unique_ptr<VypinacSingle>>;
 
 class Builder
 {
@@ -25,7 +26,8 @@ class Builder
 public:
     struct AppComponents
     {
-        VypinaceDuoWithLongPressList vypinaceDuo;
+        VypinaceDuoList vypinaceDuo;
+        VypinaceSingleList vypinaceSingle;
         OnOffDeviceList devicesOnOff;
         std::unique_ptr<MonoStableDev> brana;
         std::unique_ptr<MonoStableDev> dverePavlac;
@@ -39,6 +41,6 @@ public:
 
 private:
     //void buildDevice(std::string name, std::string outputName, std::string inputName = std::string());
-    void buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent);
+    OnOffDevice& buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent);
     AppComponents components;
 };

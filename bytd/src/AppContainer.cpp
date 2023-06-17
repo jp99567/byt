@@ -85,21 +85,33 @@ void AppContainer::run()
         }
     };
 
-    mqtt->OnMsgRecv = [this, &devicesOnOff=components.devicesOnOff](auto topic, auto msg){
+    mqtt->OnMsgRecv = [this, &components](auto topic, auto msg){
         if(topic.substr(0,std::char_traits<char>::length(mqtt::rootTopic)) != mqtt::rootTopic)
             return;
 
         LogINFO("OnMsgRecv {}:{}", topic, msg);
 
-        if(topic.substr(0,std::char_traits<char>::length(mqtt::devicesTopic)) != mqtt::devicesTopic){
+        if(topic.substr(0,std::char_traits<char>::length(mqtt::devicesTopic)) == mqtt::devicesTopic){
             const auto name = topic.substr(topic.find_last_of('/') + 1);
-            auto devIt = devicesOnOff.find(name);
-            if(devIt != std::cend(devicesOnOff)){
-                auto v = std::stod(msg);
+            auto devIt = components.devicesOnOff.find(name);
+            auto v = std::stod(msg);
+            if(devIt != std::cend(components.devicesOnOff)){
                 devIt->second->set(v, true);
                 return;
             }
+            if(v){
+                if(components.brana->getName() == name){
+                    components.brana->trigger();
+                    return;
+                }
+                if(components.dverePavlac->getName() == name){
+                    components.dverePavlac->trigger();
+                    return;
+                }
+            }
         }
+
+
         if(topic == "rb/ctrl/ot/setpoint/ch"){
             auto v = std::stof(msg);
             openTherm->chSetpoint = v;
@@ -131,14 +143,6 @@ void AppContainer::run()
         else if(topic == "rb/ctrl/i2cpwm/izba"){
             auto v = std::stof(msg);
             slovpwm->update(5,v);
-        }
-        else if(topic == "rb/ctrl/i2cpwm/vetranie"){
-            auto v = std::stod(msg);
-            slovpwm->dig1Out(v);
-        }
-        else if(topic == "rb/ctrl/i2cpwm/dvere"){
-            auto v = std::stod(msg);
-            slovpwm->dig2Out(v);
         }
         else if(topic == "rb/ctrl/pumpa"){
             auto v = std::stod(msg);
