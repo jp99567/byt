@@ -16,12 +16,13 @@ NodeCAN:
         buttonZadverieLD: { addr: [ 0x111, 0, 2 ], pin: PG2 }
         buttonZadverieRU: { addr: [ 0x111, 0, 3 ], pin: PC4 }
         buttonZadverieRD: { addr: [ 0x111, 0, 4 ], pin: PC6 }
-        buttonKuchyna1LU: { addr: [ 0x111, 0, 5 ], pin: PA4 }
-        buttonKuchyna1LD: { addr: [ 0x111, 0, 6 ], pin: PA6 }
-        buttonKuchyna1RU: { addr: [ 0x111, 0, 7 ], pin: PD4 }
-        buttonKuchyna1RD: { addr: [ 0x111, 1, 0 ], pin: PD2 }
-        buttonIzbaU: { addr: [ 0x111, 1, 1 ], pin: PC1 }
-        buttonIzbaD: { addr: [ 0x111, 1, 2 ], pin: PG1 }
+        buttonKuchyna1LU: { addr: [ 0x111, 0, 5 ], pin: PD4 }
+        buttonKuchyna1LD: { addr: [ 0x111, 0, 6 ], pin: PD2 }
+        buttonKuchyna1RU: { addr: [ 0x111, 0, 7 ], pin: PC1 }
+        buttonKuchyna1RD: { addr: [ 0x111, 1, 0 ], pin: PG1 }
+        buttonIzbaU: { addr: [ 0x111, 1, 1 ], pin: PA4 }
+        buttonIzbaD: { addr: [ 0x111, 1, 2 ], pin: PA6 }
+#PA4 PA6 PG2 PC6 PC4 PC2 PC1 PG1 PG0 PD4 PD2
       DigOUT:
         brana: { addr: [ 0x112, 0, 0 ], pin: PA2 }
       OwT:
@@ -37,11 +38,8 @@ NodeCAN:
   Spalna:
     id: 7
     DigIN:
-      buttonSpalnaU: { addr: [ 0x118, 0, 0 ], pin: PA1 }
+      buttonSpalnaU: { addr: [ 0x118, 0, 0 ], pin: PC7 }
       buttonSpalnaD: { addr: [ 0x118, 0, 1 ], pin: PA7 }
-    OwT:
-      spalnaT: { addr: [ 0x120, 0 ]}
-
   KupelnaVypinac:
       id: 3
       DigIN:
