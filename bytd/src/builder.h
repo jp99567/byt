@@ -9,6 +9,7 @@
 #include "mqtt.h"
 #include "therm.h"
 #include "Vypinace.h"
+#include "slowswi2cpwm.h"
 
 using OnOffDeviceList = std::map<const std::string, std::unique_ptr<OnOffDevice>>;
 using VypinaceDuoList = std::vector<std::unique_ptr<VypinacDuo>>;
@@ -34,6 +35,7 @@ public:
     };
 
     Builder(std::shared_ptr<MqttClient> mqtt);
+    void buildMisc(slowswi2cpwm& ioexpander);
     [[nodiscard]] std::unique_ptr<can::InputControl> buildCan(CanBus& canbus);
     [[nodiscard]] ow::SensorList buildBBoW();
     void vypinace(boost::asio::io_service& io_context);

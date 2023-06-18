@@ -63,17 +63,18 @@ struct Meranie
 
 void AppContainer::run()
 {
+    slovpwm = std::make_unique<slowswi2cpwm>();
     auto pru = std::make_shared<Pru>();
     auto builder = std::make_unique<Builder>(mqtt);
     auto tsensors = builder->buildBBoW();
     auto canInputControl = builder->buildCan(canBus);
+    builder->buildMisc(*slovpwm);
     builder->vypinace(io_service);
     auto components = builder->getComponents();
     builder = nullptr;
     auto meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
 
     openTherm = std::make_shared<OpenTherm>(pru, *mqtt);
-    slovpwm = std::make_unique<slowswi2cpwm>();
     Elektromer elektomer(*mqtt);
 
     gpiochip3 = std::make_shared<gpiod::chip>("3");

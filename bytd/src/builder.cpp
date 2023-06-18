@@ -5,11 +5,17 @@
 #include "candata.h"
 #include "Event.h"
 #include "MqttDigiOut.h"
+#include "DigiOutI2cExpander.h"
 
 Builder::Builder(std::shared_ptr<MqttClient> mqtt)
     : config(YAML::LoadFile("config.yaml"))
     , mqtt(mqtt)
 {
+}
+
+void Builder::buildMisc(slowswi2cpwm &ioexpander)
+{
+    digiOutputs.emplace("dverePavlac", std::make_unique<DigiOutI2cExpander>(ioexpander, 2));
 }
 
 struct CanNodeInfo
@@ -244,6 +250,7 @@ void Builder::vypinace(boost::asio::io_service &io_context)
     components.vypinaceSingle.emplace_back(std::move(vypinacSpalna));
 
     components.brana = std::make_unique<MonoStableDev>(getDigOutputByName(digiOutputs, "brana"), "Brana", mqtt, io_context, 0.25);
+    components.dverePavlac = std::make_unique<MonoStableDev>(getDigOutputByName(digiOutputs, "dverePavlac"), "DverePavlac", mqtt, io_context, 2);
 }
 
 Builder::AppComponents Builder::getComponents()
