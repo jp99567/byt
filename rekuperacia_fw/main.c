@@ -82,10 +82,10 @@ const uint8_t mark_mask = 0xFC;
 const uint8_t ctrl_bypass = 1<<0;
 const uint8_t ctrl_off = 1<<1;
 
+enum RekuCh { INTK, EXHT };
 struct {
     uint8_t ctrl;
-    uint8_t pwmIntake;
-    uint8_t pwmExhaust;
+    uint8_t pwm[2];
     uint8_t crc;
 } rekuRx;
 
@@ -94,17 +94,16 @@ struct VentCh {
     uint16_t temp;
 };
 
-struct VentCh intake;
-struct VentCh exhaust;
+struct VentCh rekuCh[2];
     
 const uint8_t markCmd = 0x54;
 const uint8_t markCnf = 0x8C;
 struct {
     uint8_t stat;
-    struct VentCh intake;
-    struct VentCh exhaust;
+    struct VentCh ch[2];
     uint8_t crc;
 } rekuTx;
+
 
 #define MS2TICK(ms) ((ms)*5)
 uint16_t sT0;
@@ -113,7 +112,12 @@ int timeoutT0(uint16_t delay)
         return (TMR0 - sT0) > delay;
 }
 
-void checkRxErr()
+int timeout16(uint16_t t0, uint16_t delay)
+{
+        return (TMR0 - t0) > delay;
+}
+
+int checkRxErr()
 {
     if(RCSTA1 & 6){
         do{
@@ -121,7 +125,9 @@ void checkRxErr()
         }
         while(RCSTA1 & 6);
         RCSTA1bits.CREN = 1;
+        return 1;
     }
+    return 0;
 }
 
 void init_usart()
@@ -192,11 +198,10 @@ void start_tx()
     if(txCtx.state != COMMTX_IDLE)
         return;
     
-    
-    rekuTx.exhaust = exhaust;
+    rekuTx.ch[INTK] = rekuCh[INTK];
     rekuTx.intake = intake;
-    rekuTx.intake.temp |= (reset_condition_flags & 0x1F);
-    rekuTx.exhaust.temp |= (reset_condition_flags >> 6);
+    rekuTx.ch[INTK].temp |= (reset_condition_flags & 0x1F);
+    rekuTx.ch[EXHT].temp |= (reset_condition_flags >> 6);
     
     uint8_t* data = (uint8_t*)&rekuTx;
     uint8_t crc = 0;
@@ -234,6 +239,34 @@ void do_rx()
             }
 }
 
+uint8_t tacho_bits;
+const uint8_t tacho_masks[2] = {1<<5, 1<<4};
+struct {
+    uint8_t cnt;
+    uint16_t t0;
+} tacho[2];
+
+void do_tacho()
+{
+    uint8_t diff = tacho_bits ^ PORTB;
+    tacho_bits = PORTB;
+    for(uint8_t ch=0; ch<2; ch++){
+        if(diff & tacho_bits & tacho_masks[ch]){
+             ++ tacho[ch].cnt;
+            if(timeout16(tacho[ch].t0, MS2TICK(450))){
+                rekuCh[ch].period = tacho[ch].t0 / tacho[ch].cnt;
+                tacho[ch].t0 = TMR0;
+                tacho[ch].cnt = 0;
+            }
+        }
+        else if(timeout16(tacho[ch].t0, MS2TICK(900))){
+            tacho[ch].t0 = TMR0;
+            tacho[ch].cnt = 0;
+            rekuCh[ch].period = 0;
+        }
+    }
+}
+
 static void init()
 {
     handle_reset_condition();
@@ -264,6 +297,7 @@ void main(void)
     sT0 = TMR0;
     while(1) 
     {
+        do_tacho();
         do_tx();
         
         if(TMR0 > 0xC00){
