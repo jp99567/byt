@@ -227,6 +227,21 @@ void do_rx()
             }
 }
 
+struct {
+enum RekuCh curCh;
+struct {
+    uint16_t medbuf[5];
+    uint8_t medidx;
+    uint16_t avgbuf[64];
+    uint8_t avgidx;
+} ch[2];
+} measCtx;
+
+void do_meas_temp()
+{
+
+}
+
 uint8_t tacho_bits;
 const uint8_t tacho_masks[2] = {1<<5, 1<<4};
 struct {
@@ -287,6 +302,7 @@ void main(void)
     sT0 = TMR0;
     while(1) 
     {
+        do_meas_temp();
         do_tacho();
         do_tx();
         
