@@ -73,36 +73,15 @@
 
 
 #include <xc.h>
-#include <stdint.h>
 #include <string.h>
+#include "reku_control_proto.h"
 
 uint8_t calc_crc(uint8_t b, uint8_t prev_b);
 
-const uint8_t mark_mask = 0xFC;
-const uint8_t ctrl_bypass = 1<<0;
-const uint8_t ctrl_off = 1<<1;
-
-enum RekuCh { INTK, EXHT };
-struct {
-    uint8_t ctrl;
-    uint8_t pwm[2];
-    uint8_t crc;
-} rekuRx;
-
-struct VentCh {
-    uint16_t period;
-    uint16_t temp;
-};
-
 struct VentCh rekuCh[2];
-    
-const uint8_t markCmd = 0x54;
-const uint8_t markCnf = 0x8C;
-struct {
-    uint8_t stat;
-    struct VentCh ch[2];
-    uint8_t crc;
-} rekuTx;
+
+RekuTx rekuTx;
+RekuRx rekuRx;
 
 
 #define MS2TICK(ms) ((ms)*5)
@@ -158,6 +137,15 @@ int is_power_on_reset()
     return 0x1C == (reset_condition_flags & 0x9F);
 }
 
+void letny_bypass(uint8_t on)
+{
+    if(on){
+        PORTCbits.RC0 = 1;
+    }
+    else{
+        PORTCbits.RC0 = 0;
+    }
+}
 enum CommState { NO_COMM, COMM, COMM_LOST };
 uint8_t commState;
 
@@ -273,6 +261,8 @@ static void init()
     //ADCON0bits.ADON = 1;
     //CCP1CONbits.CCP1M = 0xC;
     TRISD7 = 0; // PCB orange LED
+    TRISC0 = 0; // letny bypass
+    letny_bypass(0);
     
     //USART1
     
