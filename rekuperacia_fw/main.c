@@ -279,7 +279,14 @@ static void init()
     TRISC0 = 0; // letny bypass
     letny_bypass(0);
     
-    //USART1
+    
+    PR2 = 128; //?
+    CCPR1L |= (1<<4)|(1<<5); //duty bit0 bit1
+    
+    TRISC1 = 0; //CCP2
+    TRISC2 = 0; //CCP1
+    
+    TMR2ON = 1;
     
     
     //4.9152MHz
