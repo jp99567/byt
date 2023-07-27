@@ -114,14 +114,10 @@ int timeout16(uint16_t t0, uint16_t delay)
         return (TMR0 - t0) > delay;
 }
 
-int checkRxErr()
+uint8_t checkRxErr()
 {
     if(RCSTA1 & 6){
-        do{
-            RCSTA1bits.CREN = 0;
-        }
-        while(RCSTA1 & 6);
-        RCSTA1bits.CREN = 1;
+        RCSTA1bits.CREN = 0;
         return 1;
     }
     return 0;
@@ -181,15 +177,15 @@ void do_tx()
         case COMMTX_PENDING:
         {
             if(txCtx.byte_idx < sizeof(rekuTx)){
-                if(TX1IF == 0){
+                if(TX1IF){
                     uint8_t* data = (uint8_t*)&rekuTx;
                     TXREG1 = data[txCtx.byte_idx++];
                 }
-                else{
-                    if(TXSTA1bits.TRMT){
-                        txCtx.state = COMMTX_IDLE;
-                        CLRWDT();
-                    }
+            }
+            else {
+                if (TXSTA1bits.TRMT) {
+                    txCtx.state = COMMTX_IDLE;
+                    CLRWDT();
                 }
             }
         }
@@ -200,12 +196,13 @@ void do_tx()
 }
 
 #define SIZE_OF_ARRAY(array) (sizeof(array) / sizeof(array[0]))
-void start_tx()
+void start_tx(uint8_t mark)
 {
     if(txCtx.state != COMMTX_IDLE){
-        TXREG1 = txCtx.state;
         return;
     }
+
+    rekuTx.stat = mark | commState;
     
     //ToDo
     /*for(uint8_t i=0; i<SIZE_OF_ARRAY(rekuch); i++)
@@ -236,7 +233,6 @@ void do_rx()
 {
     if(RC1IF){
         uint8_t* data = (uint8_t*)&rekuRx;
-        do{
            data[rxCtx.byte_idx++] = RCREG1;
            if(checkRxErr()){
                rxCtx.state = COMMRX_ERR;
@@ -253,7 +249,7 @@ void do_rx()
                        rxCtx.t0Comm = TMR0;
                        commState = COMMUNICATING;
                        updateControlPVs();
-                       start_tx();
+                       start_tx(markCnf);
                    }
                    else{
                        rxCtx.state = COMMRX_ERR;
@@ -267,13 +263,13 @@ void do_rx()
                rxCtx.byte_idx = 0;
                rxCtx.t0Err = TMR0;
            }
-        }
-        while(RC1IF);
     }
     else{
         if(rxCtx.state == COMMRX_ERR){
             if(timeout16(rxCtx.t0Err, MS2TICK(50))){
                 rxCtx.state = COMMRX_READING;
+                rxCtx.t0Comm = TMR0;
+                RCSTA1bits.CREN = 1;
             }
         }
         else{
@@ -290,7 +286,8 @@ void do_rx()
                         commState = COMM_LOST;
                         updateControlPVsFailsafe();
                     }
-                    start_tx();
+                    rxCtx.t0Comm = TMR0;
+                    start_tx(markInd);
                 }
             }
         }
@@ -342,7 +339,7 @@ void do_tacho()
 
 static void init()
 {
-    //handle_reset_condition();
+    handle_reset_condition();
     //ADCON0bits.ADON = 1;
     //CCP1CONbits.CCP1M = 0xC;
     TRISD7 = 0; // PCB orange LED
@@ -362,13 +359,11 @@ static void init()
     //4.9152MHz
     T0CON = 0;
     TMR0ON = 1;
-//    T0CON |= 7; //1:256 T=3.653s dT=208us
+    T0CON |= 7; //1:256 T=3.653s dT=208us
 //    TRISC1_bit = 0;
 //    TRISC2_bit = 0;
     
-    //rekuTx.stat = markCnf;
-    
-    //init_usart();
+    init_usart();
 }
 
 void main(void)
@@ -376,7 +371,7 @@ void main(void)
     init();
     
     //if(is_power_on_reset())
-//        start_tx();
+        start_tx(markInd);
     while(1) 
     {
         //do_meas_temp();

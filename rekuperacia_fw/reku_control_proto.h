@@ -15,6 +15,7 @@ enum RekuCh { INTK, EXHT };
 
 const uint8_t markCmd = 0x54;
 const uint8_t markCnf = 0x8C;
+const uint8_t markInd = 0x4C;
 
 struct RekuRx {
     uint8_t ctrl;
