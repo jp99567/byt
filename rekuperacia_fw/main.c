@@ -80,8 +80,8 @@ uint8_t calc_crc(uint8_t b, uint8_t prev_b);
 
 struct VentCh rekuCh[2];
 
-RekuTx rekuTx;
-RekuRx rekuRx;
+struct RekuTx rekuTx;
+struct RekuRx rekuRx;
 
 
 #define MS2TICK(ms) ((ms)*5)
@@ -187,7 +187,7 @@ void start_tx()
         return;
     
     rekuTx.ch[INTK] = rekuCh[INTK];
-    rekuTx.intake = intake;
+    rekuTx.ch[EXHT] = rekuCh[EXHT];
     rekuTx.ch[INTK].temp |= (reset_condition_flags & 0x1F);
     rekuTx.ch[EXHT].temp |= (reset_condition_flags >> 6);
     
@@ -202,7 +202,7 @@ void start_tx()
 
 enum RxCommState { COMMRX_READING, COMMRX_ERR };
 struct {
-    enum TxCommState state;
+    enum RxCommState state;
     int byte_idx;
 }rxCtx;
 void do_rx()
@@ -317,7 +317,7 @@ void main(void)
     }
 }
 
-const uint8_t __attribute__((space(prog))) one_wire_crc8_table[] = {
+const uint8_t one_wire_crc8_table[] = {
  0, 94,188,226, 97, 63,221,131,194,156,126, 32,163,253, 31, 65,
  157,195, 33,127,252,162, 64, 30, 95,  1,227,189, 62, 96,130,220,
  35,125,159,193, 66, 28,254,160,225,191, 93,  3,128,222, 60, 98,
