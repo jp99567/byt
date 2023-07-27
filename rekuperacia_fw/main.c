@@ -227,8 +227,11 @@ void do_rx()
             }
 }
 
+enum AdcState { ADC_SAMPLING, ADC_CONVERING };
 struct {
 enum RekuCh curCh;
+enum AdcState state;
+uint8_t t0Sampling;
 struct {
     uint16_t medbuf[5];
     uint8_t medidx;
@@ -268,6 +271,11 @@ void do_tacho()
             rekuCh[ch].period = 0;
         }
     }
+}
+
+void toggle_led()
+{
+    PORTDbits.RD7 ^= 1;
 }
 
 static void init()
