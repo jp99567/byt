@@ -10,6 +10,7 @@ const uint8_t mark_mask = 0xFC;
 const uint8_t ctrl_bypass = 1<<0;
 const uint8_t ctrl_off = 1<<1;
 
+enum CommState { NO_COMM, COMMUNICATING, COMM_LOST };
 enum RekuCh { INTK, EXHT };
 
 const uint8_t markCmd = 0x54;

@@ -77,19 +77,37 @@
 #include "reku_control_proto.h"
 
 uint8_t calc_crc(uint8_t b, uint8_t prev_b);
+void letny_bypass(uint8_t on);
 
 struct VentCh rekuCh[2];
-
 struct RekuTx rekuTx;
 struct RekuRx rekuRx;
 
+void led_toggle()
+{
+    PORTDbits.RD7 ^= 1;
+}
+
+void updateControlPVs()
+{
+    uint8_t off = rekuRx.ctrl & ctrl_off;
+    uint8_t bypass = rekuRx.ctrl & ctrl_bypass;
+    if(off){
+        letny_bypass(0);
+        //ToDO pwm 0
+    }
+    else{
+        letny_bypass(bypass);
+        //ToDO pwm
+    }
+}
+
+void updateControlPVsFailsafe()
+{
+    //ToDo
+}
 
 #define MS2TICK(ms) ((ms)*5)
-uint16_t sT0;
-int timeoutT0(uint16_t delay)
-{
-        return (TMR0 - sT0) > delay;
-}
 
 int timeout16(uint16_t t0, uint16_t delay)
 {
@@ -146,7 +164,7 @@ void letny_bypass(uint8_t on)
         PORTCbits.RC0 = 0;
     }
 }
-enum CommState { NO_COMM, COMM, COMM_LOST };
+
 uint8_t commState;
 
 enum TxCommState { COMMTX_IDLE, COMMTX_PENDING };
@@ -181,15 +199,21 @@ void do_tx()
     }
 }
 
+#define SIZE_OF_ARRAY(array) (sizeof(array) / sizeof(array[0]))
 void start_tx()
 {
-    if(txCtx.state != COMMTX_IDLE)
+    if(txCtx.state != COMMTX_IDLE){
+        TXREG1 = txCtx.state;
         return;
+    }
     
-    rekuTx.ch[INTK] = rekuCh[INTK];
-    rekuTx.ch[EXHT] = rekuCh[EXHT];
-    rekuTx.ch[INTK].temp |= (reset_condition_flags & 0x1F);
-    rekuTx.ch[EXHT].temp |= (reset_condition_flags >> 6);
+    //ToDo
+    /*for(uint8_t i=0; i<SIZE_OF_ARRAY(rekuch); i++)
+        rekuTx.ch[i] = rekuCh[i];*/
+    
+    rekuTx.ch[INTK].temp |= (uint16_t)(reset_condition_flags & 0x1F) << 10;
+    rekuTx.ch[EXHT].temp |= (uint16_t)(reset_condition_flags >> 6) << 10;
+    rekuTx.ch[INTK].period = reset_condition_flags;
     
     uint8_t* data = (uint8_t*)&rekuTx;
     uint8_t crc = 0;
@@ -204,34 +228,77 @@ enum RxCommState { COMMRX_READING, COMMRX_ERR };
 struct {
     enum RxCommState state;
     int byte_idx;
+    uint16_t t0Err;
+    uint16_t t0Comm;
 }rxCtx;
+
 void do_rx()
 {
-            if(RC1IF){
-                uint8_t* data = (uint8_t*)&rekuRx;
-            do{
-                data[rxCtx.byte_idx++] = RCREG1;
-                checkRxErr();
-            }
-            while(RC1IF);
+    if(RC1IF){
+        uint8_t* data = (uint8_t*)&rekuRx;
+        do{
+           data[rxCtx.byte_idx++] = RCREG1;
+           if(checkRxErr()){
+               rxCtx.state = COMMRX_ERR;
+               rxCtx.byte_idx = 0;
+               rxCtx.t0Err = TMR0;
+           }
+           if(rxCtx.state == COMMRX_READING){
+               if(rxCtx.byte_idx == sizeof(rekuRx)){
+                   uint8_t crc = 0;
+                   for(uint8_t i = 0; i<sizeof(rekuRx)-1; i++){
+                       crc = calc_crc(data[i], crc);
+                   }
+                   if( crc == rekuRx.crc){
+                       rxCtx.t0Comm = TMR0;
+                       commState = COMMUNICATING;
+                       updateControlPVs();
+                       start_tx();
+                   }
+                   else{
+                       rxCtx.state = COMMRX_ERR;
+                       rxCtx.t0Err = TMR0;
+                   }
+                   rxCtx.byte_idx = 0;
+               }
+               rxCtx.t0Comm = TMR0;
+           }
+           else{
+               rxCtx.byte_idx = 0;
+               rxCtx.t0Err = TMR0;
+           }
         }
-            else{
-            
-    switch(rxCtx.state)
-    {
-        case COMMRX_READING:
-           break;
-        default:
-           break;
+        while(RC1IF);
     }
+    else{
+        if(rxCtx.state == COMMRX_ERR){
+            if(timeout16(rxCtx.t0Err, MS2TICK(50))){
+                rxCtx.state = COMMRX_READING;
             }
+        }
+        else{
+            if(rxCtx.byte_idx > 0){
+                if(timeout16(rxCtx.t0Comm, MS2TICK(50))){
+                    rxCtx.state = COMMRX_ERR;
+                    rxCtx.byte_idx = 0;
+                    rxCtx.t0Err = TMR0;
+                }
+            }
+            else{
+                if(timeout16(rxCtx.t0Comm, MS2TICK(2000))){
+                    if(commState != NO_COMM){
+                        commState = COMM_LOST;
+                        updateControlPVsFailsafe();
+                    }
+                    start_tx();
+                }
+            }
+        }
+    }
 }
 
-enum AdcState { ADC_SAMPLING, ADC_CONVERING };
 struct {
 enum RekuCh curCh;
-enum AdcState state;
-uint8_t t0Sampling;
 struct {
     uint16_t medbuf[5];
     uint8_t medidx;
@@ -273,21 +340,16 @@ void do_tacho()
     }
 }
 
-void toggle_led()
-{
-    PORTDbits.RD7 ^= 1;
-}
-
 static void init()
 {
-    handle_reset_condition();
+    //handle_reset_condition();
     //ADCON0bits.ADON = 1;
     //CCP1CONbits.CCP1M = 0xC;
     TRISD7 = 0; // PCB orange LED
-    TRISC0 = 0; // letny bypass
-    letny_bypass(0);
+    //TRISC0 = 0; // letny bypass
+    //letny_bypass(0);
     
-    
+    /*
     PR2 = 128; //?
     CCPR1L |= (1<<4)|(1<<5); //duty bit0 bit1
     
@@ -295,40 +357,38 @@ static void init()
     TRISC2 = 0; //CCP1
     
     TMR2ON = 1;
-    
+    */
     
     //4.9152MHz
     T0CON = 0;
     TMR0ON = 1;
-    T0CON |= 7; //1:256 T=3.653s dT=208us
+//    T0CON |= 7; //1:256 T=3.653s dT=208us
 //    TRISC1_bit = 0;
 //    TRISC2_bit = 0;
     
-    rekuTx.stat = markCnf;
+    //rekuTx.stat = markCnf;
     
-    init_usart();
-    if(!is_power_on_reset())
-        rxCtx.state = COMMRX_ERR;
+    //init_usart();
 }
 
 void main(void)
 {
     init();
-    sT0 = TMR0;
+    
+    //if(is_power_on_reset())
+//        start_tx();
     while(1) 
     {
-        do_meas_temp();
-        do_tacho();
-        do_tx();
-        
-        if(TMR0 > 0xC00){
+        //do_meas_temp();
+        //do_tacho();
+        //do_tx();
+        //do_rx();
+        if(TMR0 & (1<<4)){
             PORTDbits.RD7 = 1;
         }
         else{
             PORTDbits.RD7 = 0;
         }
-        
-        do_rx();
     }
 }
 
