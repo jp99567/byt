@@ -119,10 +119,22 @@ void updateControlPVsFailsafe()
 }
 
 #define MS2TICK(ms) ((ms)*5)
-
-int timeout16(uint16_t t0, uint16_t delay)
+uint8_t timeout16(uint16_t t0, uint16_t delay)
 {
-        return (TMR0 - t0) > delay;
+    uint32_t t2 = TMR0;
+    if(t0 > t2)
+        t2 += 0x10000;
+        
+    return (t2 - t0) > delay;
+}
+
+#define US2TICK(us) ((us)*4)
+uint8_t timeout8(uint8_t t0, uint8_t delay)
+{
+    uint16_t t2 = TMR2;
+    if(t0 > t2)
+        t2 += 256;
+    return (t2 - t0) > delay;
 }
 
 uint8_t checkRxErr()
