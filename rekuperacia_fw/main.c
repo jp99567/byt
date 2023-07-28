@@ -88,17 +88,28 @@ void led_toggle()
     PORTDbits.RD7 ^= 1;
 }
 
+void led_set()
+{
+    PORTDbits.RD7 = 0;
+}
+
 void updateControlPVs()
 {
     uint8_t off = rekuRx.ctrl & ctrl_off;
     uint8_t bypass = rekuRx.ctrl & ctrl_bypass;
     if(off){
         letny_bypass(0);
-        //ToDO pwm 0
+        CCP1CON &= ~((1<<4)|(1<<5)); //duty bit0 bit1
+        CCP2CON &= ~((1<<4)|(1<<5));
+        CCPR1L = 0;
+        CCPR2L = 0;
     }
     else{
         letny_bypass(bypass);
-        //ToDO pwm
+        CCP1CON |= ((1<<4)|(1<<5)); //duty bit0 bit1
+        CCP2CON |= ((1<<4)|(1<<5));
+        CCPR1L = rekuRx.pwm[INTK];
+        CCPR2L = rekuRx.pwm[EXHT];
     }
 }
 
@@ -186,6 +197,7 @@ void do_tx()
                 if (TXSTA1bits.TRMT) {
                     txCtx.state = COMMTX_IDLE;
                     CLRWDT();
+                    led_toggle();
                 }
             }
         }
@@ -204,13 +216,11 @@ void start_tx(uint8_t mark)
 
     rekuTx.stat = mark | commState;
     
-    //ToDo
-    /*for(uint8_t i=0; i<SIZE_OF_ARRAY(rekuch); i++)
-        rekuTx.ch[i] = rekuCh[i];*/
+    for(uint8_t i=0; i<SIZE_OF_ARRAY(rekuCh); i++)
+        rekuTx.ch[i] = rekuCh[i];
     
     rekuTx.ch[INTK].temp |= (uint16_t)(reset_condition_flags & 0x1F) << 10;
     rekuTx.ch[EXHT].temp |= (uint16_t)(reset_condition_flags >> 6) << 10;
-    rekuTx.ch[INTK].period = reset_condition_flags;
     
     uint8_t* data = (uint8_t*)&rekuTx;
     uint8_t crc = 0;
@@ -240,7 +250,17 @@ void do_rx()
                rxCtx.t0Err = TMR0;
            }
            if(rxCtx.state == COMMRX_READING){
-               if(rxCtx.byte_idx == sizeof(rekuRx)){
+               if(rxCtx.byte_idx == 1){
+                   if((rekuRx.ctrl & mark_mask) != markCmd){
+                       rxCtx.state = COMMRX_ERR;
+                       rxCtx.byte_idx = 0;
+                       rxCtx.t0Err = TMR0;
+                   }
+                   else{
+                       led_set();
+                   }
+               }
+               else if(rxCtx.byte_idx == sizeof(rekuRx)){
                    uint8_t crc = 0;
                    for(uint8_t i = 0; i<sizeof(rekuRx)-1; i++){
                        crc = calc_crc(data[i], crc);
@@ -281,7 +301,7 @@ void do_rx()
                 }
             }
             else{
-                if(timeout16(rxCtx.t0Comm, MS2TICK(2000))){
+                if(timeout16(rxCtx.t0Comm, MS2TICK(1500))){
                     if(commState != NO_COMM){
                         commState = COMM_LOST;
                         updateControlPVsFailsafe();
@@ -321,10 +341,10 @@ void do_tacho()
     uint8_t diff = tacho_bits ^ PORTB;
     tacho_bits = PORTB;
     for(uint8_t ch=0; ch<2; ch++){
-        if(diff & tacho_bits & tacho_masks[ch]){
+        if(diff & ~tacho_bits & tacho_masks[ch]){
              ++ tacho[ch].cnt;
             if(timeout16(tacho[ch].t0, MS2TICK(450))){
-                rekuCh[ch].period = tacho[ch].t0 / tacho[ch].cnt;
+                rekuCh[ch].period = (TMR0 - tacho[ch].t0) / tacho[ch].cnt;
                 tacho[ch].t0 = TMR0;
                 tacho[ch].cnt = 0;
             }
@@ -343,25 +363,29 @@ static void init()
     //ADCON0bits.ADON = 1;
     //CCP1CONbits.CCP1M = 0xC;
     TRISD7 = 0; // PCB orange LED
-    //TRISC0 = 0; // letny bypass
-    //letny_bypass(0);
+    TRISC0 = 0; // letny bypass
+    letny_bypass(0);
     
-    /*
-    PR2 = 128; //?
-    CCPR1L |= (1<<4)|(1<<5); //duty bit0 bit1
+    PR2 = 255;
+    CCP1CON = (1<<4)|(1<<5); //duty bit0 bit1
+    CCP2CON = (1<<4)|(1<<5);
     
     TRISC1 = 0; //CCP2
     TRISC2 = 0; //CCP1
-    
+    T2CONbits.T2CKPS = 1;
     TMR2ON = 1;
-    */
+    
+    CCPR1L = 64;
+    CCPR2L = 64;
+    
+    //set pwm mode
+    CCP1CONbits.CCP1M |= 0xC;
+    CCP2CONbits.CCP2M |= 0xC;
     
     //4.9152MHz
     T0CON = 0;
     TMR0ON = 1;
     T0CON |= 7; //1:256 T=3.653s dT=208us
-//    TRISC1_bit = 0;
-//    TRISC2_bit = 0;
     
     init_usart();
 }
@@ -370,20 +394,15 @@ void main(void)
 {
     init();
     
-    //if(is_power_on_reset())
+    if(is_power_on_reset())
         start_tx(markInd);
+    
     while(1) 
     {
-        //do_meas_temp();
-        //do_tacho();
-        //do_tx();
-        //do_rx();
-        if(TMR0 & (1<<4)){
-            PORTDbits.RD7 = 1;
-        }
-        else{
-            PORTDbits.RD7 = 0;
-        }
+        do_meas_temp();
+        do_tacho();
+        do_tx();
+        do_rx();
     }
 }
 
@@ -423,11 +442,11 @@ B17 - J4.1 temp.sens. -- AN0
 B16 - J4.2 temp.sens. --- AVDD
 A7 - 2k2 vdd pullup
 B8 - J7.1
-B7 - J7.2 -- RC1
+B7 - J7.2 -- RC1(CCP2)
 B6 - J7.3
 B5 - J7.4 -- RB4
 B12 - J6.1
-B11 - J6.2 -- RC2
+B11 - J6.2 -- RC2(CCP1)
 B10 - J6.3
 B9 - J6.4 -- RB5
 
