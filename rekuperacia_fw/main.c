@@ -219,6 +219,7 @@ void do_tx()
     }
 }
 
+uint16_t dbg_adc_cnt;//ToDo remove
 #define SIZE_OF_ARRAY(array) (sizeof(array) / sizeof(array[0]))
 void start_tx(uint8_t mark)
 {
@@ -233,6 +234,8 @@ void start_tx(uint8_t mark)
     
     rekuTx.ch[INTK].temp |= (uint16_t)(reset_condition_flags & 0x1F) << 10;
     rekuTx.ch[EXHT].temp |= (uint16_t)(reset_condition_flags >> 6) << 10;
+    rekuTx.ch[INTK].period = dbg_adc_cnt;
+    dbg_adc_cnt = 0;
     
     uint8_t* data = (uint8_t*)&rekuTx;
     uint8_t crc = 0;
@@ -326,19 +329,51 @@ void do_rx()
     }
 }
 
+uint8_t changeCh(uint8_t curCh)
+{
+    return curCh == INTK ? EXHT : INTK;
+}
+
+enum AdcState {SAMPLING, CONVERTING, BEFORE_NEXT};
+const uint8_t chADC[2] = {0,1};
 struct {
-enum RekuCh curCh;
-struct {
+  enum RekuCh curCh;
+  enum AdcState state;
+  uint8_t t0;
+  struct {
     uint16_t medbuf[5];
     uint8_t medidx;
     uint16_t avgbuf[64];
     uint8_t avgidx;
-} ch[2];
+  } ch[2];
 } measCtx;
 
 void do_meas_temp()
 {
-
+    if(measCtx.state == SAMPLING){
+        if(timeout8(measCtx.t0, US2TICK(25))){
+            ADCON0bits.GO_nDONE = 1;
+            measCtx.state = CONVERTING;
+        }
+    }
+    else if(measCtx.state == CONVERTING){
+        if(!ADCON0bits.GO_nDONE){
+            measCtx.t0 = TMR2;
+            uint16_t val = ADRES;
+            rekuCh[measCtx.curCh].temp = val;
+            measCtx.state = BEFORE_NEXT;
+        }
+    }
+    else if(measCtx.state == BEFORE_NEXT){
+        if(timeout8(measCtx.t0, US2TICK(4))){
+            measCtx.state = SAMPLING;
+            measCtx.t0 = TMR2;
+            measCtx.curCh = changeCh(measCtx.curCh);
+            ADCON0bits.CHS = chADC[measCtx.curCh];
+            ADCON0bits.ADON = 1;
+            dbg_adc_cnt++;
+        }
+    }
 }
 
 uint8_t tacho_bits;
@@ -372,8 +407,7 @@ void do_tacho()
 static void init()
 {
     handle_reset_condition();
-    //ADCON0bits.ADON = 1;
-    //CCP1CONbits.CCP1M = 0xC;
+
     TRISD7 = 0; // PCB orange LED
     TRISC0 = 0; // letny bypass
     letny_bypass(0);
@@ -384,7 +418,7 @@ static void init()
     
     TRISC1 = 0; //CCP2
     TRISC2 = 0; //CCP1
-    T2CONbits.T2CKPS = 1;
+    T2CONbits.T2CKPS = 1; // 3.2552us
     TMR2ON = 1;
     
     CCPR1L = 64;
@@ -398,6 +432,15 @@ static void init()
     T0CON = 0;
     TMR0ON = 1;
     T0CON |= 7; //1:256 T=3.653s dT=208us
+    
+    //ADCON1bits.VCFG = 0;
+    ADCON1bits.PCFG = 0xD;
+    measCtx.t0 = TMR2;
+    ADCON0bits.CHS = chADC[measCtx.curCh];
+    ADCON2bits.ADCS = 5; // fosc/16
+    ADCON2bits.ADFM = 1;
+    ADCON0bits.ADON = 1;
+    measCtx.state = SAMPLING;
     
     init_usart();
 }
