@@ -115,7 +115,9 @@ void updateControlPVs()
 
 void updateControlPVsFailsafe()
 {
-    //ToDo
+    CCPR1L = 64;
+    CCPR2L = 64;
+    letny_bypass(0);
 }
 
 #define MS2TICK(ms) ((ms)*5)
@@ -219,7 +221,6 @@ void do_tx()
     }
 }
 
-uint16_t dbg_adc_cnt;//ToDo remove
 #define SIZE_OF_ARRAY(array) (sizeof(array) / sizeof(array[0]))
 void start_tx(uint8_t mark)
 {
@@ -234,8 +235,6 @@ void start_tx(uint8_t mark)
     
     rekuTx.ch[INTK].temp |= (uint16_t)(reset_condition_flags & 0x1F) << 10;
     rekuTx.ch[EXHT].temp |= (uint16_t)(reset_condition_flags >> 6) << 10;
-    rekuTx.ch[INTK].period = dbg_adc_cnt;
-    dbg_adc_cnt = 0;
     
     uint8_t* data = (uint8_t*)&rekuTx;
     uint8_t crc = 0;
@@ -336,17 +335,51 @@ uint8_t changeCh(uint8_t curCh)
 
 enum AdcState {SAMPLING, CONVERTING, BEFORE_NEXT};
 const uint8_t chADC[2] = {0,1};
+#define MEDBUFSIZE 5
+#define AVGEXP 6
+#define AVGCOUNT (1<<AVGEXP)
 struct {
   enum RekuCh curCh;
   enum AdcState state;
   uint8_t t0;
   struct {
-    uint16_t medbuf[5];
+    uint16_t medbuf[MEDBUFSIZE];
     uint8_t medidx;
-    uint16_t avgbuf[64];
-    uint8_t avgidx;
+    uint16_t avgsum;
+    uint8_t avgcnt;
   } ch[2];
 } measCtx;
+
+void swap(uint16_t *a, uint16_t *b){
+    uint16_t tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+void bubbleSort(uint8_t chidx, uint8_t n)
+{
+    uint8_t i, j;
+    uint8_t swapped;
+    uint16_t* arr = measCtx.ch[chidx].medbuf;
+    for (i = 0; i < n - 1; i++) {
+        swapped = 0;
+        for (j = 0; j < n - i - 1; j++) {
+            if (arr[j] > arr[j + 1]) {
+                swap(&arr[j], &arr[j + 1]);
+                swapped = 1;
+            }
+        }
+
+        if (!swapped)
+            break;
+    }
+}
+
+uint16_t calc_med(uint8_t chidx)
+{
+    bubbleSort(chidx, MEDBUFSIZE);
+    return measCtx.ch[chidx].medbuf[MEDBUFSIZE/2];
+}
 
 void do_meas_temp()
 {
@@ -360,7 +393,23 @@ void do_meas_temp()
         if(!ADCON0bits.GO_nDONE){
             measCtx.t0 = TMR2;
             uint16_t val = ADRES;
-            rekuCh[measCtx.curCh].temp = val;
+            uint8_t *midx = &measCtx.ch[measCtx.curCh].medidx;
+            if(*midx < MEDBUFSIZE){
+                measCtx.ch[measCtx.curCh].medbuf[(*midx)++] = val;
+                if(*midx == MEDBUFSIZE){
+                    *midx = 0;
+                    val = calc_med(measCtx.curCh);
+                    if( measCtx.ch[measCtx.curCh].avgcnt++ < AVGCOUNT){
+                        measCtx.ch[measCtx.curCh].avgsum += val;
+                        if( measCtx.ch[measCtx.curCh].avgcnt == AVGCOUNT){
+                            rekuCh[measCtx.curCh].temp = measCtx.ch[measCtx.curCh].avgsum >> AVGEXP;
+                            measCtx.ch[measCtx.curCh].avgcnt = 0;
+                            measCtx.ch[measCtx.curCh].avgsum = 0;
+                            measCtx.curCh = changeCh(measCtx.curCh);
+                        }
+                    }
+                }
+            }
             measCtx.state = BEFORE_NEXT;
         }
     }
@@ -368,10 +417,7 @@ void do_meas_temp()
         if(timeout8(measCtx.t0, US2TICK(4))){
             measCtx.state = SAMPLING;
             measCtx.t0 = TMR2;
-            measCtx.curCh = changeCh(measCtx.curCh);
             ADCON0bits.CHS = chADC[measCtx.curCh];
-            ADCON0bits.ADON = 1;
-            dbg_adc_cnt++;
         }
     }
 }
@@ -491,9 +537,9 @@ A1,B1 24V
 A2,B2 Vdd
 A3,B3 GND
 B13 summer bypass rele (Q1b 2k2) -- RC0
-B15 - J5.1 temp.sens. -- AN1
+B15 - J5.1 temp.sens. -- AN1 exhaust
 B14 - J5.2 temp.sens. --- AVDD
-B17 - J4.1 temp.sens. -- AN0
+B17 - J4.1 temp.sens. -- AN0 intake
 B16 - J4.2 temp.sens. --- AVDD
 A7 - 2k2 vdd pullup
 B8 - J7.1
