@@ -261,14 +261,12 @@ void do_rx()
            if(checkRxErr()){
                rxCtx.state = COMMRX_ERR;
                rxCtx.byte_idx = 0;
-               rxCtx.t0Err = TMR0;
            }
            if(rxCtx.state == COMMRX_READING){
                if(rxCtx.byte_idx == 1){
                    if((rekuRx.ctrl & mark_mask) != markCmd){
                        rxCtx.state = COMMRX_ERR;
                        rxCtx.byte_idx = 0;
-                       rxCtx.t0Err = TMR0;
                    }
                    else{
                        led_set();
@@ -287,14 +285,15 @@ void do_rx()
                    }
                    else{
                        rxCtx.state = COMMRX_ERR;
-                       rxCtx.t0Err = TMR0;
                    }
                    rxCtx.byte_idx = 0;
                }
-               rxCtx.t0Comm = TMR0;
            }
            else{
                rxCtx.byte_idx = 0;
+           }
+           
+           if(rxCtx.state == COMMRX_ERR || rxCtx.byte_idx==1){
                rxCtx.t0Err = TMR0;
            }
     }
@@ -302,13 +301,12 @@ void do_rx()
         if(rxCtx.state == COMMRX_ERR){
             if(timeout16(rxCtx.t0Err, MS2TICK(50))){
                 rxCtx.state = COMMRX_READING;
-                rxCtx.t0Comm = TMR0;
                 RCSTA1bits.CREN = 1;
             }
         }
         else{
             if(rxCtx.byte_idx > 0){
-                if(timeout16(rxCtx.t0Comm, MS2TICK(50))){
+                if(timeout16(rxCtx.t0Err, MS2TICK(50))){
                     rxCtx.state = COMMRX_ERR;
                     rxCtx.byte_idx = 0;
                     rxCtx.t0Err = TMR0;
