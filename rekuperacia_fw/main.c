@@ -455,6 +455,7 @@ static void init()
     TRISD7 = 0; // PCB orange LED
     TRISC0 = 0; // letny bypass
     letny_bypass(0);
+    RBPU = 0;
     
     PR2 = 255;
     CCP1CON = (1<<4)|(1<<5); //duty bit0 bit1
