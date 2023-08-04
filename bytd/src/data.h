@@ -10,6 +10,7 @@ namespace ow
 {
 
 bool check_crc(const uint8_t* ptr, unsigned size, uint8_t crc);
+uint8_t calc_crc(const uint8_t* ptr, std::size_t size);
 
 template< typename T>
 bool check_crc(const T& owdata)

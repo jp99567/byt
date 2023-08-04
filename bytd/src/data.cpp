@@ -128,4 +128,12 @@ void Sample::add(const RomCode& rc, const float v)
 	data.push_back(std::tuple<RomCode,float>(rc, v));
 }
 
+uint8_t calc_crc(const uint8_t *ptr, std::size_t size)
+{
+    uint8_t crc = 0;
+    for(std::size_t i=0; i< size; ++i)
+        crc = one_wire_crc8_table[crc ^ ptr[i]];
+    return crc;
+}
+
 }
