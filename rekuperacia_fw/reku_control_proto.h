@@ -1,9 +1,12 @@
 #pragma once
 
 #include <stdint.h>
+#include "reku_enum.h"
 
 #ifdef __cplusplus
 namespace reku {
+#pragma pack(push,1)
+constexpr double crystalFoscHz = 4.9152e6;
 #endif
 
 const uint8_t mark_mask = 0xFC;
@@ -11,7 +14,6 @@ const uint8_t ctrl_bypass = 1<<0;
 const uint8_t ctrl_off = 1<<1;
 
 enum CommState { NO_COMM, COMMUNICATING, COMM_LOST };
-enum RekuCh { INTK, EXHT };
 
 const uint8_t markCmd = 0x54;
 const uint8_t markCnf = 0x8C;
@@ -34,6 +36,8 @@ struct RekuTx {
     uint8_t crc;
 };
 
+
 #ifdef __cplusplus
+#pragma pack(pop)
 } //namespace reku
 #endif
