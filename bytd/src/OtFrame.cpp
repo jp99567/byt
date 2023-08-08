@@ -1,4 +1,8 @@
 #include "OtFrame.h"
+#include <string>
+#ifdef OT_FRAME_ANALYZER
+#include <spdlog/spdlog.h>
+#endif
 
 namespace opentherm
 {
@@ -62,3 +66,19 @@ Frame::Frame(msg::type type, int id, uint16_t val)
 }
 
 }
+
+#ifdef OT_FRAME_ANALYZER
+constexpr float floatFromf88(uint16_t v)
+{
+    return v / 256.0;
+}
+
+int main(int argc, char* argv[])
+{
+    spdlog::set_level(spdlog::level::info);
+    uint32_t uv = std::stoul(argv[1], nullptr, 16);
+    opentherm::Frame f(uv);
+    spdlog::info("{} {} {} ({})", opentherm::msg::msgToStr(f.getType()), f.getId(), f.getV(), floatFromf88(f.getV()));
+    return 0;
+}
+#endif
