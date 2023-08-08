@@ -1,7 +1,9 @@
 #include "OtFrame.h"
 #include <string>
+#define OT_FRAME_ANALYZER
 #ifdef OT_FRAME_ANALYZER
 #include <spdlog/spdlog.h>
+#include <iostream>
 #endif
 
 namespace opentherm
@@ -73,12 +75,23 @@ constexpr float floatFromf88(uint16_t v)
     return v / 256.0;
 }
 
+bool isMaster(opentherm::msg::type t)
+{
+    using opentherm::msg::type;
+    for( auto mt : { type::Mrd, type::Mwr, type::Minvalid, type::Mreserved, type::Mwr2}){
+        if(mt==t)
+            return true;
+    }
+    return false;
+}
+
 int main(int argc, char* argv[])
 {
-    spdlog::set_level(spdlog::level::info);
-    uint32_t uv = std::stoul(argv[1], nullptr, 16);
-    opentherm::Frame f(uv);
-    spdlog::info("{} {} {} ({})", opentherm::msg::msgToStr(f.getType()), f.getId(), f.getV(), floatFromf88(f.getV()));
+    uint32_t uv;
+    while(std::cin >> uv){
+        opentherm::Frame f(uv);
+        spdlog::info("{} {} {} ({})", opentherm::msg::msgToStr(f.getType()), f.getId(), f.getV(), floatFromf88(f.getV()));
+    }
     return 0;
 }
 #endif
