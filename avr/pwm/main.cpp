@@ -1,20 +1,26 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
+constexpr uint8_t chN = 16;
+uint8_t pwm_per[chN];
 constexpr uint8_t portb_mask_spi = (1<<2)|(1<<3)|(1<<4)|(1<<5);
 uint8_t portb_255_mask;
 uint8_t portc_255_mask;
 uint8_t portd_255_mask;
+uint8_t spi_bytes_in = 0;
 
 ISR(TIMER0_OVF_vect){
 	PORTD &= portd_255_mask;
 	PORTC &= portc_255_mask;
 	PORTB &= portb_mask_spi|portb_255_mask;
+	if(PORTB & _BV(PB2))
+		spi_bytes_in = 0;
 }
 
-constexpr uint8_t chN = 16;
-
-uint8_t pwm_per[chN];
+ISR(SPI_STC_vect)
+{
+	pwm_per[spi_bytes_in] = SPDR;
+}
 
 template<uint8_t id>
 volatile uint8_t& selectPort(){return PORTD;}
@@ -77,6 +83,7 @@ int main()
 
   TCCR0 = 0b011;
   TIMSK = (1<<0);
+  SPCR = _BV(SPE)|_BV(SPIE);
   sei();
 
   while(1){
