@@ -1,6 +1,5 @@
 #include "OtFrame.h"
 #include <string>
-#define OT_FRAME_ANALYZER
 #ifdef OT_FRAME_ANALYZER
 #include <spdlog/spdlog.h>
 #include <iostream>
@@ -85,13 +84,40 @@ bool isMaster(opentherm::msg::type t)
     return false;
 }
 
-int main(int argc, char* argv[])
+opentherm::Frame getFrame()
 {
     uint32_t uv;
-    while(std::cin >> uv){
-        opentherm::Frame f(uv);
-        spdlog::info("{} {} {} ({})", opentherm::msg::msgToStr(f.getType()), f.getId(), f.getV(), floatFromf88(f.getV()));
+    std::cin >> std::hex >> uv;
+    return opentherm::Frame(uv);
+}
+int main(int argc, char* argv[])
+{
+    spdlog::set_pattern("ot %v");
+    opentherm::Frame fs(opentherm::Frame::invalid), fm(opentherm::Frame::invalid);
+    std::cin.exceptions(std::ios::failbit|std::ios::eofbit);
+    try {
+      while (true) {
+        while (not(isMaster(fm.getType()) && fm.isValid())) {
+          fm = getFrame();
+        }
+        fs = getFrame();
+        if (isMaster(fs.getType())) {
+          fm = fs;
+          continue;
+        }
+        spdlog::info("{} {} {:04X} ({}) -> {} {} {:04X} ({})",
+                     opentherm::msg::msgToStr(fm.getType()), fm.getId(),
+                     fm.getV(), floatFromf88(fm.getV()),
+                     opentherm::msg::msgToStr(fs.getType()), fs.getId(),
+                     fs.getV(), floatFromf88(fs.getV()));
+      }
+    } catch (const std::ios_base::failure &fail) {
+        if(not std::cin.eof()){
+            spdlog::error("exception {}", fail.what());
+            return 1;
+        }
     }
+
     return 0;
 }
 #endif

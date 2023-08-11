@@ -27,7 +27,6 @@ class ParseOt:
         if self.wv and v:
             #if t - self.ta0 > 10*tqbit:
             self.t0 = t - 2 * tqbit
-            print(f'{self.name} start {t-self.ta0}')
             self.wv = False
             self.cnt = 32
             self.v = 0
@@ -46,7 +45,6 @@ class ParseOt:
                             print(f'error parity {self.name} {self.v:08X}')
                         self.wv = True
                 elif self.cnt < 32:
-                    print(f'{self.name} bitval {dt} {not v} cnt:{self.cnt}')
                     if not v:
                         self.v |= (1 << self.cnt)
                 self.cnt -= 1
@@ -58,8 +56,6 @@ class ParseOt:
                         self.doit(t, v)
                 else:
                     print(f' {self.name} {dt} error2 cnt:{self.cnt}')
-            else:
-                print(f'{self.name} return {dt} {v} cnt:{self.cnt}')
         self.ta0 = t
 
 
@@ -67,7 +63,7 @@ def readCsv(path):
     with open(path, newline='') as csvfile:
         reader = csv.reader(csvfile, delimiter=',')
         for skip in range(5):
-            print(f"skip header: {next(reader)}")
+            next(reader)
 
         t = 0
         prev1 = False
@@ -99,8 +95,4 @@ def readCsv(path):
             pass
 
 
-
 readCsv(sys.argv[1])
-
-
-
