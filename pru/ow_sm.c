@@ -62,11 +62,11 @@ static int sBitidx;
 #define cDurPresenceMinT US2TICK(15)
 #define cDurPresenceMaxT US2TICK(240)
 #define cDurInitMasterRx US2TICK(480)
-#define cDurReadInitT US2TICK(6)
+#define cDurReadInitT US2TICK(1)
 #define cDurReadSample US2TICK(15)
 #define cDurWrite0Pulse US2TICK(64)
-#define cDurWrite1Pulse US2TICK(6)
-#define cDurSlot US2TICK(70)
+#define cDurWrite1Pulse US2TICK(1)
+#define cDurSlot US2TICK(100)
 
 static int timeout(unsigned delay)
 {
