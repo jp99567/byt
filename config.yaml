@@ -8,6 +8,11 @@ NodeCAN:
         svetloChodbicka: { addr: [ 0x116, 0, 3 ], pin: PE3 }
         svetloKupelna: { addr: [ 0x116, 0, 4 ], pin: PE4 }
         svetloSpalna: { addr: [ 0x116, 0, 5 ], pin: PE5 }
+      DigIN:
+        buttonChodbickaLU: { addr: [ 0x120, 0, 0 ], pin: PA7 }
+        buttonChodbickaLD: { addr: [ 0x120, 0, 1 ], pin: PC7 }
+        buttonChodbickaRU: { addr: [ 0x120, 0, 2 ], pin: PA6 }
+        buttonChodbickaRD: { addr: [ 0x120, 0, 3 ], pin: PG2 }
   Zadverie:
       id: 6
       DigIN:
@@ -22,7 +27,6 @@ NodeCAN:
         buttonKuchyna1RD: { addr: [ 0x111, 1, 0 ], pin: PG1 }
         buttonIzbaU: { addr: [ 0x111, 1, 1 ], pin: PA4 }
         buttonIzbaD: { addr: [ 0x111, 1, 2 ], pin: PA6 }
-#PA4 PA6 PG2 PC6 PC4 PC2 PC1 PG1 PG0 PD4 PD2
       DigOUT:
         brana: { addr: [ 0x112, 0, 0 ], pin: PA2 }
       OwT:
