@@ -287,21 +287,6 @@ Builder::AppComponents Builder::getComponents()
     components.reku = std::make_unique<Reku>("/dev/ttyO4");
     return std::move(components);
 }
-/*
-void Builder::buildDevice(std::string name, std::string outputName, std::string inputName)
-{
-    auto out = getDigOutputByName(digiOutputs, outputName);
-    auto it = components.devicesOnOff.emplace(std::string(OnOffDevice::mqttPathPrefix).append(name), std::make_unique<OnOffDevice>(std::move(out), name, mqtt));
-    if(not inputName.empty()){
-        auto& input = getDigInputByName(digInputs, inputName);
-        input.Changed.subscribe(event::subscr([&dev=it.first->second](bool on){
-            LogDBG("check {}", on);
-            if(not on){
-                dev->toggle();
-            }
-        }));
-    }
-}*/
 
 OnOffDevice& Builder::buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent)
 {
