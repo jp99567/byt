@@ -64,6 +64,7 @@ BBOw:
   tKuchyna: { owRomCode : 28c440780c0000bb}
   tObyvka1: { owRomCode : 2831fd770c00001b}
   tObyvka2: { owRomCode : 28de47780c00007e}
+  tObyvka: { owRomCode : 283a39790c0000cb}
 
     # SCL P9.19 i2c2_scl
     # SDA P9.20 i2c2_sda
