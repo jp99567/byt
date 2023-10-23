@@ -13,9 +13,28 @@ Builder::Builder(std::shared_ptr<MqttClient> mqtt)
 {
 }
 
+class PrevetranieReku : public IDigiOut
+{
+    Reku& reku;
+public:
+    explicit PrevetranieReku(Reku& reku): reku(reku){}
+    operator bool() const override
+    {
+        return reku.FlowPercent == 100;
+    }
+
+    bool operator()(bool value) override
+    {
+        reku.FlowPercent = value ? 100 : 30;
+        return value;
+    }
+};
+
 void Builder::buildMisc(slowswi2cpwm &ioexpander)
 {
     digiOutputs.emplace("dverePavlac", std::make_unique<DigiOutI2cExpander>(ioexpander, 2));
+    components.reku = std::make_unique<Reku>("/dev/ttyO4");
+    digiOutputs.emplace("prevetranie", std::make_unique<PrevetranieReku>(*components.reku));
 }
 
 struct CanNodeInfo
@@ -234,10 +253,12 @@ void Builder::vypinace(boost::asio::io_service &io_context)
     auto& svetloKuchyna = buildDevice("SvetloKuchyna", "svetloKuchyna", vypinacZadverie->ClickedLU);
     vypinacIzba->ClickedD.subscribe(event::subscr([&svetloKuchyna]{svetloKuchyna.toggle();}));
     vypinacKuchyna->ClickedLU.subscribe(event::subscr([&svetloKuchyna]{svetloKuchyna.toggle();}));
-    buildDevice("Vetranie", "vetranie", vypinacZadverie->ClickedLD);
+    auto& prevetranie = buildDevice("Vetranie", "prevetranie", vypinacZadverie->ClickedRD);
     buildDevice("SvetloIzba", "svetloIzba", vypinacIzba->ClickedU);
     buildDevice("SvetloPavlac", "svetloPavlac", vypinacZadverie->ClickedRU);
-    buildDevice("SvetloWc", "svetloWc", vypinacZadverie->ClickedRD);
+    buildDevice("SvetloWc", "svetloWc", vypinacZadverie->ClickedLD);
+
+    vypinacKuchyna->ClickedRD.subscribe(event::subscr([&prevetranie]{prevetranie.toggle();}));
 
     for(auto& dev : components.devicesOnOff){
         vypinacKupelka->ClickedLongBothD.subscribe(event::subscr([&ref = *dev.second]{
