@@ -10,6 +10,7 @@
 #include "therm.h"
 #include "Vypinace.h"
 #include "slowswi2cpwm.h"
+#include "Reku.h"
 
 using OnOffDeviceList = std::map<const std::string, std::unique_ptr<OnOffDevice>>;
 using VypinaceDuoList = std::vector<std::unique_ptr<VypinacDuo>>;
@@ -32,6 +33,7 @@ public:
         OnOffDeviceList devicesOnOff;
         std::unique_ptr<MonoStableDev> brana;
         std::unique_ptr<MonoStableDev> dverePavlac;
+        std::unique_ptr<Reku> reku;
     };
 
     Builder(std::shared_ptr<MqttClient> mqtt);

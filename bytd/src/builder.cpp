@@ -255,6 +255,7 @@ void Builder::vypinace(boost::asio::io_service &io_context)
 
 Builder::AppComponents Builder::getComponents()
 {
+    components.reku = std::make_unique<Reku>("/dev/ttyO4");
     return std::move(components);
 }
 /*

@@ -59,7 +59,7 @@ Reku::Reku(const char* ttydev)
 
     LogINFO("reku configured uart {}", ttydev);
     thread = std::thread([this]{
-        reku::RekuTx info;
+        reku::RekuTx recvFrame;
         reku::RekuRx control;
         while(fd != -1){
           if (commOk) {
@@ -89,31 +89,19 @@ Reku::Reku(const char* ttydev)
             }
           }
 
-            auto len = ::read(fd, &info, sizeof(info));
-            if(len == sizeof(info)
-                && ((info.stat&reku::mark_mask) == reku::markCnf || (info.stat&reku::mark_mask) == reku::markInd)
-                && ow::check_crc((uint8_t*)&info, sizeof(info)-1, info.crc)){
-                if(not commOk){
-                    LogINFO("Reku connection");
-                    commOk = true;
-                }
-                PVs tmp;
-                tmp.bypass = bypass;
-                for(unsigned i=0; i<pvs.rpm.size(); ++i){
-                    constexpr double dt = 256 * 4 / reku::crystalFoscHz;
-                    tmp.rpm[i] = 0;
-                    if(info.ch[i].period > 0)
-                tmp.rpm[i] = 60 / (info.ch[i].period * dt);
-                    tmp.temp[i] = adc_temp(info.ch[i].temp & 0x03FF);
-                }
-                pvs = tmp;
+          commOk = readFrame(recvFrame);
+          if(commOk){
+            PVs tmp;
+            tmp.bypass = bypass;
+            for(unsigned i=0; i<pvs.rpm.size(); ++i){
+              constexpr double dt = 256 * 4 / reku::crystalFoscHz;
+              tmp.rpm[i] = 0;
+              if(recvFrame.ch[i].period > 0)
+                tmp.rpm[i] = 60 / (recvFrame.ch[i].period * dt);
+              tmp.temp[i] = adc_temp(recvFrame.ch[i].temp & 0x03FF);
             }
-            else{
-                if(commOk){
-                    LogERR("Reku connection {} {:02X} {}", len, info.stat, ow::check_crc((uint8_t*)&info, sizeof(info)-1, info.crc));
-                    commOk = false;
-                }
-            }
+            pvs = tmp;
+          }
         }
     });
 }
@@ -125,6 +113,33 @@ Reku::~Reku()
     ::close(tmpfd);
     thread.join();
 }
+
+bool Reku::readFrame(reku::RekuTx& recvFrame)
+{
+    bool rv = false;
+    auto len = ::read(fd, &recvFrame, sizeof(recvFrame));
+    if(len == sizeof(recvFrame)
+        && ((recvFrame.stat&reku::mark_mask) == reku::markCnf || (recvFrame.stat&reku::mark_mask) == reku::markInd)
+        && ow::check_crc((uint8_t*)&recvFrame, sizeof(recvFrame)-1, recvFrame.crc)){
+        rv = true;
+        LogDBG("bypass:{} INTAKE: {:.1f}deg {}rpm EXHAUST: {:.1f}deg {}rpm Flow:{:.1f}%", getPV().bypass,
+                getPV().temp[reku::INTK],
+                (int)getPV().rpm[reku::INTK],
+                getPV().temp[reku::EXHT],
+                (int)getPV().rpm[reku::EXHT], FlowPercent);
+
+        if(not commOk){
+            LogINFO("Reku connection");
+        }
+    }
+    else{
+        if(commOk){
+            LogERR("Reku connection {} {:02X} {}", len, recvFrame.stat, ow::check_crc((uint8_t*)&recvFrame, sizeof(recvFrame)-1, recvFrame.crc));
+        }
+    }
+    return rv;
+}
+
 
 #ifdef REKU_TESTAPP
 int main(int argc, char* argv[])

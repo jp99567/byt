@@ -2,6 +2,8 @@
 
 #include <thread>
 
+namespace reku { class RekuTx; }
+
 class Reku
 {
 public:
@@ -18,6 +20,7 @@ public:
     } pvs;
     const PVs getPV() const {return pvs;}
 private:
+    bool readFrame(reku::RekuTx& recvFrame);
     int fd=-1;
     std::thread thread;
     bool commOk = true;
