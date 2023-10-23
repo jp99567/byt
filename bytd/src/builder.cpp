@@ -171,7 +171,7 @@ DigInput& getDigInputByName(std::vector<std::reference_wrapper<DigInput>>& digIn
         if(in.get().name == name)
             return in;
     }
-    throw std::runtime_error("getDigInputByName no such name");
+    throw std::runtime_error(std::string("getDigInputByName no such name:").append(name));
 }
 
 std::unique_ptr<IDigiOut> getDigOutputByName(std::map<std::string, std::unique_ptr<IDigiOut>>& digiOutputs, std::string name)
