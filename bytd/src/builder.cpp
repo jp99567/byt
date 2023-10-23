@@ -246,10 +246,11 @@ void Builder::vypinace(boost::asio::io_service &io_context)
 
     buildDevice("SvetloKupelna", "svetloKupelna", vypinacKupelka->ClickedLU);
     buildDevice("SvetloSpalna", "svetloSpalna", vypinacSpalna->ClickedU);
-    buildDevice("SvetloChodbicka", "svetloChodbicka", vypinacKupelka->ClickedRU);
-    buildDevice("SvetloStol", "svetloStol", vypinacKupelka->ClickedRD);
-    buildDevice("SvetloStena", "svetloStena", vypinacKupelka->ClickedLongRD);
-    buildDevice("SvetloObyvka", "svetloObyvka", vypinacKupelka->ClickedLongRU);
+    auto& svetloChodbicka = buildDevice("SvetloChodbicka", "svetloChodbicka", vypinacKupelka->ClickedRU);
+    vypinacChodbicka->ClickedRU.subscribe(event::subscr([&svetloChodbicka]{svetloChodbicka.toggle();}));
+    buildDevice("SvetloStol", "svetloStol", vypinacChodbicka->ClickedRD);
+    buildDevice("SvetloStena", "svetloStena", vypinacChodbicka->ClickedLD);
+    buildDevice("SvetloObyvka", "svetloObyvka", vypinacChodbicka->ClickedLU);
     auto& svetloKuchyna = buildDevice("SvetloKuchyna", "svetloKuchyna", vypinacZadverie->ClickedLU);
     vypinacIzba->ClickedD.subscribe(event::subscr([&svetloKuchyna]{svetloKuchyna.toggle();}));
     vypinacKuchyna->ClickedLU.subscribe(event::subscr([&svetloKuchyna]{svetloKuchyna.toggle();}));
