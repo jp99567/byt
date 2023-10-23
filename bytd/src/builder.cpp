@@ -223,10 +223,10 @@ void Builder::vypinace(boost::asio::io_service &io_context)
     assignVypinavButton(*vypinacKupelka, VypinacDuo::Button::RU, getDigInputByName(digInputs, "buttonKupelna2U"));
     assignVypinavButton(*vypinacKupelka, VypinacDuo::Button::RD, getDigInputByName(digInputs, "buttonKupelna2D"));
 
-    assignVypinavButton(*vypinacChodbicka, VypinacDuo::Button::LU, getDigInputByName(digInputs, "buttonChodbicka1U"));
-    assignVypinavButton(*vypinacChodbicka, VypinacDuo::Button::LD, getDigInputByName(digInputs, "buttonChodbicka1D"));
-    assignVypinavButton(*vypinacChodbicka, VypinacDuo::Button::RU, getDigInputByName(digInputs, "buttonChodbicka2U"));
-    assignVypinavButton(*vypinacChodbicka, VypinacDuo::Button::RD, getDigInputByName(digInputs, "buttonChodbicka2D"));
+    assignVypinavButton(*vypinacChodbicka, VypinacDuo::Button::LU, getDigInputByName(digInputs, "buttonChodbickaLU"));
+    assignVypinavButton(*vypinacChodbicka, VypinacDuo::Button::LD, getDigInputByName(digInputs, "buttonChodbickaLD"));
+    assignVypinavButton(*vypinacChodbicka, VypinacDuo::Button::RU, getDigInputByName(digInputs, "buttonChodbickaLU"));
+    assignVypinavButton(*vypinacChodbicka, VypinacDuo::Button::RD, getDigInputByName(digInputs, "buttonChodbickaLD"));
 
     assignVypinavButton(*vypinacZadverie, VypinacDuo::Button::LU, getDigInputByName(digInputs, "buttonZadverieLU"));
     assignVypinavButton(*vypinacZadverie, VypinacDuo::Button::LD, getDigInputByName(digInputs, "buttonZadverieLD"));
