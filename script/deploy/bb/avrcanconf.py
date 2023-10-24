@@ -9,7 +9,6 @@ import argparse
 import time
 import yaml
 import enum
-from struct import pack
 from copy import deepcopy
 import datetime
 
