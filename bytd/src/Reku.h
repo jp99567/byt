@@ -4,6 +4,8 @@
 
 namespace reku { class RekuTx; }
 
+struct pollfd;
+
 class Reku
 {
 public:
@@ -20,8 +22,9 @@ public:
     } pvs;
     const PVs getPV() const {return pvs;}
 private:
-    bool readFrame(reku::RekuTx& recvFrame);
+    bool readFrame(reku::RekuTx& recvFrame, struct pollfd& pfd);
     int fd=-1;
     std::thread thread;
-    bool commOk = true;
+    bool commOk = false;
+    unsigned timeout_cnt = 0;
 };

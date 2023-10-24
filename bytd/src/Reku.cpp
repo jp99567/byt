@@ -3,6 +3,7 @@
 #include <termios.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <sys/poll.h>
 #ifdef REKU_TESTAPP
 #include <fstream>
 #endif
@@ -62,9 +63,11 @@ Reku::Reku(const char* ttydev)
     thread = std::thread([this]{
         reku::RekuTx recvFrame;
         reku::RekuRx control;
+        struct pollfd pfd = {fd, POLLIN, 0};
+
         while(fd != -1){
           if (commOk) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            readFrame(recvFrame, pfd);
             control.ctrl = reku::markCmd;
             int pwm8 = (int)(255 * FlowPercent / 100);
             if (pwm8 > 255 || pwm8 < 0)
@@ -90,7 +93,7 @@ Reku::Reku(const char* ttydev)
             }
           }
 
-          commOk = readFrame(recvFrame);
+          commOk = readFrame(recvFrame, pfd);
           if(commOk){
             PVs tmp;
             tmp.bypass = bypass;
@@ -115,28 +118,50 @@ Reku::~Reku()
     thread.join();
 }
 
-bool Reku::readFrame(reku::RekuTx& recvFrame)
+bool Reku::readFrame(reku::RekuTx& recvFrame, pollfd& pfd)
 {
+    constexpr unsigned tot_timeout_ms = 4*1000;
+    constexpr unsigned timeout_ms = 500;
+    constexpr auto tot_timeout_nr = tot_timeout_ms / timeout_ms;
     bool rv = false;
-    auto len = ::read(fd, &recvFrame, sizeof(recvFrame));
-    if(len == sizeof(recvFrame)
-        && ((recvFrame.stat&reku::mark_mask) == reku::markCnf || (recvFrame.stat&reku::mark_mask) == reku::markInd)
-        && ow::check_crc((uint8_t*)&recvFrame, sizeof(recvFrame)-1, recvFrame.crc)){
-        rv = true;
-        LogDBG("bypass:{} INTAKE: {:.1f}deg {}rpm EXHAUST: {:.1f}deg {}rpm Flow:{:.1f}%", getPV().bypass,
-                getPV().temp[reku::INTK],
-                (int)getPV().rpm[reku::INTK],
-                getPV().temp[reku::EXHT],
-                (int)getPV().rpm[reku::EXHT], FlowPercent);
-
-        if(not commOk){
-            LogINFO("Reku connection");
+    auto poll_ret = ::poll(&pfd, 1, commOk ? 1000 : timeout_ms);
+    if(poll_ret < 0){
+        LogSYSERR("reku poll");
+    }
+    else if(poll_ret == 0){
+        if(++timeout_cnt == tot_timeout_nr){
+            LogERR("reku comm. timeout");
         }
+        return false;
+    }
+    else if(pfd.revents != POLLIN){
+        LogERR("reku poll revents {}", pfd.revents);
     }
     else{
-        if(commOk){
-            LogERR("Reku connection {} {:02X} {}", len, recvFrame.stat, ow::check_crc((uint8_t*)&recvFrame, sizeof(recvFrame)-1, recvFrame.crc));
+      auto len = ::read(fd, &recvFrame, sizeof(recvFrame));
+      if(len == sizeof(recvFrame) &&
+          ((recvFrame.stat & reku::mark_mask) == reku::markCnf ||
+           (recvFrame.stat & reku::mark_mask) == reku::markInd) &&
+          ow::check_crc((uint8_t *)&recvFrame, sizeof(recvFrame) - 1,
+                        recvFrame.crc)){
+        rv = true;
+        LogDBG("bypass:{} INTAKE: {:.1f}deg {}rpm EXHAUST: {:.1f}deg {}rpm Flow:{:.1f}%",
+               getPV().bypass, getPV().temp[reku::INTK],
+               (int)getPV().rpm[reku::INTK], getPV().temp[reku::EXHT],
+               (int)getPV().rpm[reku::EXHT], FlowPercent);
+
+        timeout_cnt = 0;
+        if(not commOk){
+          LogINFO("Reku connection");
         }
+      }
+      else{
+        if (commOk) {
+          LogERR("Reku connection {} {:02X} {}", len, recvFrame.stat,
+                 ow::check_crc((uint8_t *)&recvFrame, sizeof(recvFrame) - 1,
+                               recvFrame.crc));
+        }
+      }
     }
     return rv;
 }
