@@ -245,7 +245,7 @@ void Builder::vypinace(boost::asio::io_service &io_context)
     assignVypinavButton(*vypinacSpalna, VypinacSingle::Button::D, getDigInputByName(digInputs, "buttonSpalnaD"));
 
     buildDevice("SvetloKupelna", "svetloKupelna", vypinacKupelka->ClickedLU);
-    buildDevice("SvetloSpalna", "svetloSpalna", vypinacSpalna->ClickedU);
+    auto& svetloSpalna = buildDevice("SvetloSpalna", "svetloSpalna", vypinacSpalna->ClickedU);
     auto& svetloChodbicka = buildDevice("SvetloChodbicka", "svetloChodbicka", vypinacKupelka->ClickedRU);
     vypinacChodbicka->ClickedRU.subscribe(event::subscr([&svetloChodbicka]{svetloChodbicka.toggle();}));
     buildDevice("SvetloStol", "svetloStol", vypinacChodbicka->ClickedRD);
@@ -260,11 +260,21 @@ void Builder::vypinace(boost::asio::io_service &io_context)
     buildDevice("SvetloWc", "svetloWc", vypinacZadverie->ClickedLD);
 
     vypinacKuchyna->ClickedRD.subscribe(event::subscr([&prevetranie]{prevetranie.toggle();}));
+    vypinacSpalna->ClickedD.subscribe(event::subscr([&dev = svetloChodbicka]{dev.toggle();}));
 
     for(auto& dev : components.devicesOnOff){
-        vypinacKupelka->ClickedLongBothD.subscribe(event::subscr([&ref = *dev.second]{
+        if(dev.second.get() != &svetloSpalna)
+            vypinacSpalna->ClickedLongU.subscribe(event::subscr([&ref = *dev.second]{
+                ref.set(false);
+            }));
+        else
+            vypinacSpalna->ClickedLongU.subscribe(event::subscr([&ref = *dev.second]{
+                ref.set(true);
+            }));
+        vypinacSpalna->ClickedLongD.subscribe(event::subscr([&ref = *dev.second]{
             ref.set(false);
         }));
+
         vypinacZadverie->ClickedLongBothD.subscribe(event::subscr([&ref = *dev.second]{
             ref.set(false);
         }));
