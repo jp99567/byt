@@ -1,4 +1,5 @@
 #include "Reku.h"
+#include <unistd.h>
 #include <termios.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>

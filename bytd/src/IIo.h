@@ -17,6 +17,17 @@ struct DigInput
     event::Event<bool> Changed;
 };
 
+class ISensorInput
+{
+public:
+    virtual event::Event<float>& Changed() = 0;
+    virtual float value() const = 0;
+    virtual std::string name() const = 0;
+    virtual ~ISensorInput(){}
+protected:
+    virtual void update(float) = 0;
+};
+
 struct SensorInput
 {
     const std::string name;

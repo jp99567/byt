@@ -99,26 +99,31 @@ void MqttClient::do_misc()
     }
 }
 
-void MqttClient::publish(const std::string& topic, const std::string& value, bool retain)
+bool MqttClient::publish(const std::string& topic, const std::string& value, bool retain)
 {
     //LogDBG("MqttClient::publish {} {} {}", topic, value, retain);
     auto rv = mosqpp::mosquittopp::publish(nullptr, topic.c_str(), value.length(), value.c_str(), 0, retain);
     if(rv != MOSQ_ERR_SUCCESS){
         if( rv != MOSQ_ERR_NO_CONN)
             LogERR("mosqpp::mosquittopp::publish {}", mosqpp::strerror(rv));
-        return;
+        return false;
     }
     sched_write_mqtt_socket();
+    return  true;
 }
 
-void MqttClient::publish(const std::string& topic, const double value, bool retain)
+void MqttClient::publish_ensured(const std::string &topic, const std::string &value)
 {
-    publish(topic, std::to_string(value), retain);
 }
 
-void MqttClient::publish(const std::string& topic, const int value, bool retain)
+bool MqttClient::publish(const std::string& topic, const double value, bool retain)
 {
-    publish(topic, std::to_string(value), retain);
+    return publish(topic, std::to_string(value), retain);
+}
+
+bool MqttClient::publish(const std::string& topic, const int value, bool retain)
+{
+    return publish(topic, std::to_string(value), retain);
 }
 
 void MqttClient::on_connect(int rc)

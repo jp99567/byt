@@ -6,6 +6,7 @@
 #include <functional>
 #include <mosquittopp.h>
 #include <string>
+#include <map>
 
 namespace mqtt {
  constexpr auto rbResponse = "rb/stat/response";
@@ -28,13 +29,15 @@ class MqttClient : public mosqpp::mosquittopp
     int reconnect_delay_countdown = reconnect_delay_countdown_init;
     std::atomic_bool mqtt_pending_write = false;
     bool connecting = false;
+    std::map<std::string, std::string> ensure_publish;
 public:
     explicit MqttClient(boost::asio::io_service& io_context);
     ~MqttClient() override;
     void do_misc();
-    void publish(const std::string& topic, const double value, bool retain = true);
-    void publish(const std::string& topic, const int value, bool retain = true);
-    void publish(const std::string& topic, const std::string& value, bool retain = true);
+    bool publish(const std::string& topic, const double value, bool retain = true);
+    bool publish(const std::string& topic, const int value, bool retain = true);
+    bool publish(const std::string& topic, const std::string& value, bool retain = true);
+    void publish_ensured(const std::string& topic, const std::string& value);
 
     std::function<void(std::string &&topic, std::string &&msg)> OnMsgRecv;
 
@@ -50,3 +53,4 @@ private:
     void new_conn_init_wait();
 };
 
+using MqttClientSPtr = std::shared_ptr<MqttClient>;
