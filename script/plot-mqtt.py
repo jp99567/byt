@@ -149,7 +149,7 @@ print(f'mqtt client id: {client_id}')
 client.on_connect = on_connect
 client.on_message = on_message
 client.on_disconnect = on_disconnect
-client.connect('176.17.53.1')
+client.connect('172.16.53.1')
 #connecting = True
 #while client.is_connected() or connecting:
 #     if client.is_connected():
