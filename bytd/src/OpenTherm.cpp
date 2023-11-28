@@ -77,14 +77,14 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
 				auto lastTransmit = std::chrono::steady_clock::now();
                 if(id==0){
                     //Mrd-Srdack id=0 M: v16=03CA (00000011.11001010) f88=3.78906 S: v16=0320 (00000011.00100000) f88=3.125
-                    uint32_t txv = 0x03CA;
+                    uint32_t txv = 0x00CA | static_cast<uint16_t>(mode) << 8;
                     auto rsp = transmit(txv);
                     if(Frame(rsp).isValid()){
                         uint16_t v = 0xFFFF&rsp;
                         if(v != status){
                             publish_status(v);
                             status = v;
-                            LogDBG("ot transfer id0 req:{} rsp:{:b} {} ", frameToStr(opentherm::Frame(txv)), status, frameToStr(opentherm::Frame(status)));
+                            LogDBG("ot transfer id0 req:({:04X}){} rsp:{:b} {} ", txv, frameToStr(opentherm::Frame(txv)), status, frameToStr(opentherm::Frame(status)));
                         }
                     }
                     if(asyncReq.isValid()){
@@ -259,4 +259,5 @@ uint32_t OpenTherm::transmit(uint32_t frame)
 	}
 	return Frame::invalid;
 }
+
 static_assert(parity(opentherm::Frame::invalid) == opentherm::Frame::invalid, "Zly vyber konstanty");

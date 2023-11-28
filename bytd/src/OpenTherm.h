@@ -45,6 +45,11 @@ public:
         asyncReq = req;
     }
 
+    enum class Mode { OFF, LETO=2, ZIMA=3 };
+    void setMode(Mode mode)
+    {
+        this->mode = mode;
+    }
 private:
     void publish_status(uint16_t newstat);
 	uint32_t transmit(uint32_t frame);
@@ -57,4 +62,5 @@ private:
     MqttClient& mqtt;
     uint16_t status = 0;
     opentherm::Frame asyncReq;
+    Mode mode = Mode::ZIMA;
 };
