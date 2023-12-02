@@ -2,7 +2,6 @@
 
 #include "BBDigiOut.h"
 #include "Log.h"
-#include "thread_util.h"
 #include "Elektromer.h"
 #include "Pru.h"
 #include "builder.h"

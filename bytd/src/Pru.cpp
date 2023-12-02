@@ -60,8 +60,9 @@ Pru::Pru() {
 				auto buf = PruRxMsg::Buf(32);
 				auto len = ::read(fd, buf.data(), buf.size());
 				if(len <= 0){
-                    if(not(fd == -1 && errno == EINTR))
+                    if(not(fd == -1 && errno == EINTR)){
                         LogSYSERR("pru read");
+                    }
 					break;
 				}
 				else{

@@ -28,3 +28,7 @@ target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system PostgreSQL:
 target_include_directories(${PROJECT_NAME} PRIVATE ${PostgreSQL_INCLUDE_DIRS} ${CMAKE_SYSROOT}/usr/local/include ${CMAKE_CURRENT_SOURCE_DIR}/..)
 #set(CMAKE_CXX_FLAGS_RELEASE "-O2 -flto")
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
+
+IF(NOT CMAKE_CROSSCOMPILING)
+    target_link_libraries(${PROJECT_NAME} fmt)
+ENDIF()

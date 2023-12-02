@@ -2,6 +2,7 @@
 
 #include "pru/rpm_iface.h"
 #include "Log.h"
+#include <cstring>
 
 namespace pru {
 
