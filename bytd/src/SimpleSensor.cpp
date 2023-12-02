@@ -1,4 +1,5 @@
 #include "SimpleSensor.h"
+#include <cmath>
 #include <filesystem>
 
 constexpr auto topic_base = "rb/stat/sens/";
@@ -28,6 +29,10 @@ void SimpleSensor::setValue(float v)
 
 void SimpleSensor::update(float v)
 {
+    if(std::isnan(v) && std::isnan(val)){
+        return;
+    }
+
     if(v != val){
         val = v;
 

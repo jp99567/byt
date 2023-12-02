@@ -1,7 +1,7 @@
 #pragma once
 
 #include "SimpleSensor.h"
-#include "bytd/src/data.h"
+#include "data.h"
 
 namespace ow {
 class OwThermNet;

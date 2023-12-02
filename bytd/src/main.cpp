@@ -2,9 +2,20 @@
 #include "AppContainer.h"
 #include "Log.h"
 
+class LogExit
+{
+    const std::string msg;
+public:
+    LogExit(std::string msg) : msg(std::move(msg)){}
+    ~LogExit()
+    {
+        Util::Log::instance().get()->info("exit:{}", msg);
+    }
+};
+
 int main()
 {
-  Util::LogExit scopedLog("GRACEFUL");
+  LogExit scopedLog("GRACEFUL");
   MqttWrapper libmMosquitto;
 
   if(not ::getenv("TERM")){

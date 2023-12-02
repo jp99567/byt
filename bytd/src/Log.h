@@ -12,6 +12,7 @@ namespace Util {
 
 class Log {
 public:
+#ifndef WITHOUT_SPDLOG
 	~Log();
 
 	static Log& instance();
@@ -27,26 +28,29 @@ public:
 private:
 	Log();
 
-	std::shared_ptr<spdlog::logger> logger;
-};
-
-class LogExit
-{
-	const std::string msg;
-public:
-	LogExit(std::string msg) : msg(std::move(msg)){}
-	~LogExit()
-	{
-        Log::instance().get()->info("exit:{}", msg);
-	}
+    std::shared_ptr<spdlog::logger> logger;
+#else
+    static Log& instance(){static Log _; return _;}
+    void syserr(const char* msg = nullptr){}
+    void die(const char* msg = nullptr){}
+    void sysdie(const char* msg = nullptr){}
+#endif
 };
 
 } /* namespace Util */
 
+#ifndef WITHOUT_SPDLOG
 #define LogINFO(...) Util::Log::instance().get()->info(__VA_ARGS__)
 #define LogERR(...) Util::Log::instance().get()->error(__VA_ARGS__)
 #define LogDBG(...) Util::Log::instance().get()->debug(__VA_ARGS__)
 #define LogSYSDIE(msg) Util::Log::instance().sysdie(msg)
 #define LogSYSERR(msg) Util::Log::instance().syserr(msg)
 #define LogDIE(...) { Util::Log::instance().get()->error(__VA_ARGS__); Util::Log::instance().die(); }
-
+#else
+#define LogINFO(...)
+#define LogERR(...)
+#define LogDBG(...)
+#define LogSYSDIE(msg)
+#define LogSYSERR(msg)
+#define LogDIE(...)
+#endif
