@@ -1,6 +1,6 @@
 #include "MqttDigiOut.h"
 
-MqttDigiOut::MqttDigiOut(MqttClientSPtr mqtt, std::string path)
+MqttDigiOut::MqttDigiOut(IMqttPublisherSPtr mqtt, std::string path)
     :mqtt(mqtt)
     ,path(path)
 {

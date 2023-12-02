@@ -2,7 +2,7 @@
 #include "IIo.h"
 #include "Log.h"
 
-OnOffDevice::OnOffDevice(std::unique_ptr<IDigiOut> out, std::string name, MqttClientSPtr mqtt)
+OnOffDevice::OnOffDevice(std::unique_ptr<IDigiOut> out, std::string name, IMqttPublisherSPtr mqtt)
     :DeviceBase(std::move(out), name, mqtt)
 {}
 
@@ -29,7 +29,7 @@ bool OnOffDevice::get() const
     return *out;
 }
 
-MonoStableDev::MonoStableDev(std::unique_ptr<IDigiOut> out, std::string name, MqttClientSPtr mqtt, boost::asio::io_service& io_context, float timeout_sec)
+MonoStableDev::MonoStableDev(std::unique_ptr<IDigiOut> out, std::string name, IMqttPublisherSPtr mqtt, boost::asio::io_service& io_context, float timeout_sec)
     :DeviceBase(std::move(out), name, mqtt)
     ,timer(io_context)
     ,timeout(std::chrono::milliseconds((int)(timeout_sec*1e3)))
@@ -52,7 +52,7 @@ void MonoStableDev::trigger()
     LogDBG("MonoStableDev triggered");
 }
 
-DeviceBase::DeviceBase(std::unique_ptr<IDigiOut> out, std::string name, MqttClientSPtr mqtt)
+DeviceBase::DeviceBase(std::unique_ptr<IDigiOut> out, std::string name, IMqttPublisherSPtr mqtt)
     :out(std::move(out))
     ,name(name)
     ,mqttPath(std::string(mqtt::devicesTopic).append(name))

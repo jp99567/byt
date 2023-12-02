@@ -8,7 +8,7 @@ class OwThermNet;
 
 struct Sensor : SimpleSensor
 {
-    explicit Sensor(std::string name, MqttClientSPtr mqtt, float factor = 16.0)
+    explicit Sensor(std::string name, IMqttPublisherSPtr mqtt, float factor = 16.0)
         :SimpleSensor(name, mqtt)
         ,factor(factor){}
 

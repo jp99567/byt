@@ -2,7 +2,7 @@
 
 #include "Log.h"
 
-Pumpa::Pumpa(std::unique_ptr<IDigiOut> digiout, MqttClientSPtr mqtt)
+Pumpa::Pumpa(std::unique_ptr<IDigiOut> digiout, IMqttPublisherSPtr mqtt)
     :out(std::move(digiout))
     ,mqtt(mqtt)
 {

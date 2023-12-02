@@ -60,7 +60,7 @@ std::string frameToStr(opentherm::Frame f)
 // Mrd-Srdack id=0 M: v16=03CA (00000011.11001010) f88=3.78906 S: v16=0320 (00000011.00100000) f88=3.125
 // Mwr2-Swrack id=56 M: v16=2700 (00100111.00000000) f88=39.0 S: v16=2700 (00100111.00000000) f88=39.0
 // Mwr-Swrack id=1 M: v16=3900 (00111001.00000000) f88=57.0 S: v16=3900 (00111001.00000000) f88=57.0
-OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClientSPtr mqtt)
+OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, IMqttPublisherSPtr mqtt)
 	:pru(pru)
 	,rxMsg(std::make_shared<PruRxMsg>())
     ,mqtt(mqtt)

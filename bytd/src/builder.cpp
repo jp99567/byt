@@ -7,7 +7,7 @@
 #include "MqttDigiOut.h"
 #include "DigiOutI2cExpander.h"
 
-Builder::Builder(MqttClientSPtr mqtt)
+Builder::Builder(IMqttPublisherSPtr mqtt)
     : config(YAML::LoadFile("config.yaml"))
     , mqtt(mqtt)
 {

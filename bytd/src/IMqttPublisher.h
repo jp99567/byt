@@ -19,4 +19,4 @@ public:
     virtual ~IMqttPublisher(){}
 };
 
-using MqttClientSPtr = std::shared_ptr<IMqttPublisher>;
+using IMqttPublisherSPtr = std::shared_ptr<IMqttPublisher>;

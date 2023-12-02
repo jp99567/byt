@@ -14,10 +14,10 @@ class Pumpa
     constexpr static int maxPlamenOff = 6;
     std::unique_ptr<IDigiOut> out;
     int plamenOffCount = -1;
-    MqttClientSPtr mqtt;
+    IMqttPublisherSPtr mqtt;
 
 public:
-    explicit Pumpa(std::unique_ptr<IDigiOut> digiout, MqttClientSPtr mqtt);
+    explicit Pumpa(std::unique_ptr<IDigiOut> digiout, IMqttPublisherSPtr mqtt);
     void start();
     void stop();
     void onPlamenOff();

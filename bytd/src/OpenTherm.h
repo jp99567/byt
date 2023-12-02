@@ -33,7 +33,7 @@ struct OtWrParam : OtParam
 class OpenTherm
 {
 public:
-    explicit OpenTherm(std::shared_ptr<Pru> pru, MqttClientSPtr mqtt);
+    explicit OpenTherm(std::shared_ptr<Pru> pru, IMqttPublisherSPtr mqtt);
 	~OpenTherm();
 
 	float dhwSetpoint = 38;
@@ -60,7 +60,7 @@ private:
 	std::shared_ptr<PruRxMsg> rxMsg;
 	std::vector<OtParam> rdParams;
 	std::vector<OtWrParam> wrParams;
-    MqttClientSPtr mqtt;
+    IMqttPublisherSPtr mqtt;
     uint16_t status = 0;
     opentherm::Frame asyncReq;
     Mode mode = Mode::ZIMA;

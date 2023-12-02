@@ -3,7 +3,7 @@
 
 constexpr auto topic_base = "rb/stat/sens/";
 
-SimpleSensor::SimpleSensor(std::string name, MqttClientSPtr mqtt)
+SimpleSensor::SimpleSensor(std::string name, IMqttPublisherSPtr mqtt)
     :topic(std::string(topic_base).append(name)), mqtt(mqtt)
 {
 
