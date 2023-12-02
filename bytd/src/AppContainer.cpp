@@ -73,7 +73,7 @@ void AppContainer::run()
     builder = nullptr;
     auto meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
 
-    openTherm = std::make_shared<OpenTherm>(pru, *mqtt);
+    openTherm = std::make_shared<OpenTherm>(pru, mqtt);
     Elektromer elektomer(*mqtt);
 
     gpiochip3 = std::make_shared<gpiod::chip>("3");

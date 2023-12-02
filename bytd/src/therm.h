@@ -2,24 +2,7 @@
 
 #include <memory>
 #include "data.h"
-#include "IIo.h"
-
-namespace ow {
-	class OwThermNet;
-
-struct Sensor : SensorInput
-{
-    explicit Sensor(const ow::RomCode& rc, std::string name)
-    :SensorInput({name})
-    ,romcode(rc){}
-
-    Sensor(const Sensor&) = delete;
-    bool update(float v);
-    const ow::RomCode romcode;
-};
-
-using SensorList = std::vector<std::unique_ptr<ow::Sensor>>;
-}
+#include "OwTempSensor.h"
 
 class Pru;
 class MqttClient;

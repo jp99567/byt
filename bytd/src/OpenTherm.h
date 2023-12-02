@@ -12,6 +12,7 @@
 #include <vector>
 #include <functional>
 #include "OtFrame.h"
+#include "SimpleSensor.h"
 
 class Pru;
 class PruRxMsg;
@@ -32,7 +33,7 @@ struct OtWrParam : OtParam
 class OpenTherm
 {
 public:
-    explicit OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt);
+    explicit OpenTherm(std::shared_ptr<Pru> pru, MqttClientSPtr mqtt);
 	~OpenTherm();
 
 	float dhwSetpoint = 38;
@@ -59,8 +60,10 @@ private:
 	std::shared_ptr<PruRxMsg> rxMsg;
 	std::vector<OtParam> rdParams;
 	std::vector<OtWrParam> wrParams;
-    MqttClient& mqtt;
+    MqttClientSPtr mqtt;
     uint16_t status = 0;
     opentherm::Frame asyncReq;
     Mode mode = Mode::ZIMA;
+    SimpleSensor tCH;
+    SimpleSensor tDHW;
 };

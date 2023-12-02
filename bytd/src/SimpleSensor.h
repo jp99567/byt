@@ -6,12 +6,14 @@
 class SimpleSensor : public ISensorInput
 {
 public:
-    SimpleSensor(std::string name, MqttClientSPtr mqtt);
+    explicit SimpleSensor(std::string name, MqttClientSPtr mqtt);
     float value() const override;
     std::string name() const override;
-
-private:
+    event::Event<float>& Changed() override { return ChangedEvent; }
+    void setValue(float v);
+protected:
     void update(float v) override;
+private:
     const std::string topic;
     MqttClientSPtr mqtt;
     float val = std::numeric_limits<float>::quiet_NaN();

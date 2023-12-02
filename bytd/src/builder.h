@@ -22,7 +22,7 @@ class Builder
     std::shared_ptr<MqttClient> mqtt;
     std::map<std::string, std::unique_ptr<IDigiOut>> digiOutputs;
     std::vector<std::reference_wrapper<DigInput>> digInputs;
-    std::vector<std::reference_wrapper<SensorInput>> sensors;
+    std::vector<std::reference_wrapper<ISensorInput>> sensors;
 
 
 public:

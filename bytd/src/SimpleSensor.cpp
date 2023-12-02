@@ -21,6 +21,11 @@ std::string SimpleSensor::name() const
     return (t.end()--)->native();
 }
 
+void SimpleSensor::setValue(float v)
+{
+    update(v);
+}
+
 void SimpleSensor::update(float v)
 {
     if(v != val){

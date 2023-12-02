@@ -28,12 +28,13 @@ class OwThermNet {
     };
 
 public:
+    static constexpr uint16_t readScratchPadFailed = 0xFC90;
     explicit OwThermNet(std::shared_ptr<Pru> pru);
     ~OwThermNet();
 
     std::vector<RomCode> search();
     bool convert();
-    float measure(const RomCode &rc);
+    uint16_t readMeasured(const RomCode &rc);
     bool read_rom(RomCode& rc);
     bool read_scratchpad(const RomCode& rc, ThermScratchpad& v);
 

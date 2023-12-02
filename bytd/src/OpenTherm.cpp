@@ -59,11 +59,13 @@ std::string frameToStr(opentherm::Frame f)
 // Mrd-Srdack id=0 M: v16=03CA (00000011.11001010) f88=3.78906 S: v16=0320 (00000011.00100000) f88=3.125
 // Mwr2-Swrack id=56 M: v16=2700 (00100111.00000000) f88=39.0 S: v16=2700 (00100111.00000000) f88=39.0
 // Mwr-Swrack id=1 M: v16=3900 (00111001.00000000) f88=57.0 S: v16=3900 (00111001.00000000) f88=57.0
-OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
+OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClientSPtr mqtt)
 	:pru(pru)
 	,rxMsg(std::make_shared<PruRxMsg>())
     ,mqtt(mqtt)
     ,asyncReq(opentherm::Frame::invalid)
+    ,tCH("tCH", mqtt)
+    ,tDHW("tDHW", mqtt)
 {
     using opentherm::Frame;
     Flame = [](bool){};
@@ -93,7 +95,7 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                             auto rspstr = frameToStr(arsp);
                             LogDBG("ot req:{} repsonse:{}", frameToStr(asyncReq), rspstr);
                             rspstr = "otTransfer " + rspstr;
-                            this->mqtt.publish(mqtt::rbResponse, rspstr, false);
+                            this->mqtt->publish(mqtt::rbResponse, rspstr, false);
                         }
                         asyncReq = Frame::invalid;
                     }
@@ -136,7 +138,7 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                             rddhw = v;
                             auto fv = floatFromf88(rsp.getV());
                             LogDBG("id{} cur ch:{}", rsp.getId(), fv);
-                            this->mqtt.publish("rb/stat/ot/tCH", fv);
+                            tCH.setValue(fv);
                         }
                     }
                 }
@@ -149,7 +151,7 @@ OpenTherm::OpenTherm(std::shared_ptr<Pru> pru, MqttClient& mqtt)
                             rdch = v;
                             auto fv = floatFromf88(rsp.getV());
                             LogDBG("id{} cur dhw:{}", rsp.getId(), fv);
-                            this->mqtt.publish("rb/stat/ot/tDHW", fv);
+                            tDHW.setValue(fv);
                         }
                     }
                 }
@@ -178,18 +180,18 @@ void OpenTherm::publish_status(uint16_t newstat)
             const bool v = newstat & mask;
             switch (bit) {
             case 0:
-                mqtt.publish("rb/stat/ot/fault", v);
+                mqtt->publish("rb/stat/ot/fault", v);
                 break;
             case 1:
-                mqtt.publish("rb/stat/ot/ch", v);
+                mqtt->publish("rb/stat/ot/ch", v);
                 break;
             case 2:
                 DhwActive(v);
-                mqtt.publish("rb/stat/ot/dhw", v);
+                mqtt->publish("rb/stat/ot/dhw", v);
                 break;
             case 3:
                 Flame(v);
-                mqtt.publish("rb/stat/ot/flame", v);
+                mqtt->publish("rb/stat/ot/flame", v);
                 break;
             default:
                 break;

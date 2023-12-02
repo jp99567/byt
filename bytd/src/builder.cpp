@@ -101,8 +101,8 @@ std::unique_ptr<can::InputControl> Builder::buildCan(CanBus &canbus)
                 float convFactor = 16;
                 if((it->second)["type"] && (it->second)["type"].as<std::string>() == "DS18S20")
                     convFactor = 2;
-                auto sensor = std::make_unique<can::OwTempItem>(name, offset, convFactor, mqtt);
-                sensors.emplace_back(*sensor);
+                auto sensor = std::make_unique<can::OwTempItem>(name, offset, mqtt, convFactor);
+                sensors.emplace_back(sensor->sens);
                 insertInputItem(inputsMap, canAddr, std::move(sensor));
                 LogINFO("ow sensor {} {:X} {}", name, canAddr, offset);
             }
@@ -158,9 +158,9 @@ ow::SensorList Builder::buildBBoW()
     for(auto it = node.begin(); it != node.end(); ++it){
         auto name = it->first.as<std::string>();
         auto romcode = (it->second)["owRomCode"].as<std::string>();
-        LogINFO("yaml configured sensor {} {}", name, "a");
-        tsensors.emplace_back(std::make_unique<ow::Sensor>(ow::RomCode(romcode), name));
-        sensors.emplace_back(*tsensors.back());
+        LogINFO("yaml configured sensor BBow {}", name);
+        tsensors.emplace_back(std::make_pair(ow::RomCode(romcode), std::make_unique<ow::Sensor>(name, mqtt)));
+        sensors.emplace_back(*tsensors.back().second);
     }
     return tsensors;
 }

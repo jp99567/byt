@@ -9,6 +9,7 @@
 #include "canbus.h"
 #include "IIo.h"
 #include "mqtt.h"
+#include "OwTempSensor.h"
 
 namespace can {
 
@@ -100,19 +101,16 @@ struct DigiInItem : public IInputItem, DigInput
     void update(const Data& data, std::size_t len) override;
 };
 
-struct OwTempItem : public IInputItem, SensorInput
+struct OwTempItem : public IInputItem
 {
-    explicit OwTempItem(std::string name, unsigned offset, float convFactor, std::shared_ptr<MqttClient> mqtt)
-        : SensorInput({name})
-        , factor(convFactor)
-        , offset(offset)
-        , mqtt(mqtt)
+    explicit OwTempItem(std::string name, unsigned offset, std::shared_ptr<MqttClient> mqtt, uint16_t bitshift)
+        : offset(offset)
+        , sens(name, mqtt, bitshift)
     {}
     OwTempItem(OwTempItem& other) = delete;
-    const float factor;
     unsigned offset;
-    std::shared_ptr<MqttClient> mqtt;
     void update(const Data& data, std::size_t len) override;
+    ow::Sensor sens;
 };
 
 class OutputControl : public IOutputControl

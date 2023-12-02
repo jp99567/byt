@@ -29,8 +29,8 @@ MeranieTeploty::MeranieTeploty(std::shared_ptr<Pru> pru, ow::SensorList reqsenso
     std::set<ow::RomCode> predefined;
 
     for(const auto& reqsens : sensors){
-        if(!predefined.insert(reqsens->romcode).second){
-            LogDIE("duplicates:{} {}", reqsens->name, (std::string)reqsens->romcode);
+        if(!predefined.insert(reqsens.first).second){
+            LogDIE("duplicates:{} {}", reqsens.second->name(), (std::string)reqsens.first);
         }
     }
 
@@ -84,21 +84,10 @@ void MeranieTeploty::meas()
     therm->convert();
     std::this_thread::sleep_for(std::chrono::milliseconds(750));
     for(auto& sensor : sensors){
-        auto v = therm->measure(sensor->romcode);
+        auto v = therm->readMeasured(sensor.first);
 
-        if(sensor->update(v)){
-            mqtt.publish(std::string("rb/stat/ow/").append(sensor->name), std::to_string(v));
+        if (v != ow::OwThermNet::readScratchPadFailed) {
+            sensor.second->setValue(v);
         }
     }
-}
-
-namespace ow {
-bool Sensor::update(float v)
-{
-    if(v==value)
-        return false;
-    value = v;
-    Changed(value);
-    return true;
-}
 }

@@ -225,20 +225,14 @@ void OwThermNet::write_simple_cmd(Cmd cmd, bool strongpower)
     write_bits(&cmd, 8, strongpower);
 }
 
-float OwThermNet::measure(const ow::RomCode& rc)
+uint16_t OwThermNet::readMeasured(const ow::RomCode& rc)
 {
     ThermScratchpad res;
 
     if(read_scratchpad(rc, res)){
-        float t = res.temperature / 16.0;
-
-        if(t > 125 || t < -55){
-            LogERR("out of range:{}", t);
-            return std::numeric_limits<float>::quiet_NaN();
-        }
-        return t;
+        return res.temperature;
     }
-    return std::numeric_limits<float>::quiet_NaN();
+    return readScratchPadFailed;
 }
 
 std::vector<ow::RomCode> OwThermNet::search()

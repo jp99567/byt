@@ -27,10 +27,3 @@ public:
 protected:
     virtual void update(float) = 0;
 };
-
-struct SensorInput
-{
-    const std::string name;
-    float value = std::numeric_limits<float>::quiet_NaN();
-    event::Event<float> Changed;
-};

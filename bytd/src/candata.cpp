@@ -109,18 +109,11 @@ void DigiInItem::update(const Data &data, std::size_t len)
 
 void OwTempItem::update(const Data &data, std::size_t len)
 {
-    int16_t owval;
+    int16_t owval = ow::cInvalidValue;
     if( offset+sizeof(owval) <= len){
-        owval = *reinterpret_cast<const int16_t*>(&data[offset]);
-        auto newVal = std::numeric_limits<float>::quiet_NaN();
+        auto owval = *reinterpret_cast<const int16_t*>(&data[offset]);
         if(owval != ow::cInvalidValue ){
-            newVal = owval / factor;
-        }
-        if(value != newVal){
-            value = newVal;
-            LogDBG("can::OwTempItem {} {}", name, value);
-            Changed.notify(value);
-            mqtt->publish(std::string("rb/stat/ow/").append(name), value);
+            sens.setValue((uint16_t)owval);
         }
     }
 }
