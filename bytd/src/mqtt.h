@@ -7,28 +7,13 @@
 #include <mosquittopp.h>
 #include <string>
 #include <map>
-
-namespace mqtt {
- constexpr auto rbResponse = "rb/stat/response";
- constexpr auto rootTopic = "rb/ctrl/";
- constexpr auto devicesTopic = "rb/ctrl/dev/";
-}
+#include "IMqttPublisher.h"
 
 class MqttWrapper
 {
 public:
     MqttWrapper() noexcept;
     ~MqttWrapper();
-};
-
-class IMqttPublisher
-{
-public:
-    virtual bool publish(const std::string& topic, const double value, bool retain = true) = 0;
-    virtual bool publish(const std::string& topic, const int value, bool retain = true) = 0;
-    virtual bool publish(const std::string& topic, const std::string& value, bool retain = true) = 0;
-    virtual void publish_ensured(const std::string& topic, const std::string& value) = 0;
-    virtual ~IMqttPublisher(){}
 };
 
 class MqttClient : public mosqpp::mosquittopp, public IMqttPublisher
@@ -63,4 +48,3 @@ private:
     void new_conn_init_wait();
 };
 
-using MqttClientSPtr = std::shared_ptr<IMqttPublisher>;

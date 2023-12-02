@@ -5,7 +5,8 @@
 #include "Log.h"
 #include "Pru.h"
 #include "pru/rpm_iface.h"
-#include "mqtt.h"
+#include <sstream>
+#include "IMqttPublisher.h"
 
 namespace {
 

@@ -6,8 +6,6 @@
 #include "canbus.h"
 #include "candata.h"
 #include "OnOffDevice.h"
-#include "mqtt.h"
-#include "therm.h"
 #include "Vypinace.h"
 #include "slowswi2cpwm.h"
 #include "Reku.h"

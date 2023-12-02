@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "mqtt.h"
+#include "IMqttPublisher.h"
 #include "IIo.h"
 
 /*** ToDo ******
@@ -14,10 +14,10 @@ class Pumpa
     constexpr static int maxPlamenOff = 6;
     std::unique_ptr<IDigiOut> out;
     int plamenOffCount = -1;
-    std::shared_ptr<MqttClient> mqtt;
+    MqttClientSPtr mqtt;
 
 public:
-    explicit Pumpa(std::unique_ptr<IDigiOut> digiout, std::shared_ptr<MqttClient> mqtt);
+    explicit Pumpa(std::unique_ptr<IDigiOut> digiout, MqttClientSPtr mqtt);
     void start();
     void stop();
     void onPlamenOff();

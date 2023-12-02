@@ -6,6 +6,7 @@
  */
 #pragma once
 
+#include "bytd/src/IMqttPublisher.h"
 #include <thread>
 #include <chrono>
 #include <string>
@@ -34,7 +35,7 @@ private:
 class Elektromer : public Impulzy
 {
 public:
-    explicit Elektromer(MqttClient& mqtt);
+    explicit Elektromer(IMqttPublisher& mqtt);
     ~Elektromer() override;
 
 	double getPowerCur() const;
@@ -44,7 +45,7 @@ private:
 	std::chrono::milliseconds lastPeriod = std::chrono::milliseconds::max();
 	unsigned impCount = 0;
 	double curPwr = std::numeric_limits<double>::quiet_NaN();
-    MqttClient& mqtt;
+    IMqttPublisher& mqtt;
 };
 
 class Vodomer : public Impulzy

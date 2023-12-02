@@ -16,7 +16,7 @@
 #include "Log.h"
 #include "Pru.h"
 #include "OwThermNet.h"
-#include "mqtt.h"
+#include "IMqttPublisher.h"
 
 MeranieTeploty::~MeranieTeploty()
 {

@@ -8,7 +8,7 @@
 #include <cstring>
 #include "canbus.h"
 #include "IIo.h"
-#include "mqtt.h"
+#include "IMqttPublisher.h"
 #include "OwTempSensor.h"
 
 namespace can {

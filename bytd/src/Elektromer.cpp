@@ -10,7 +10,7 @@
 #include "Log.h"
 #include <fstream>
 #include "thread_util.h"
-#include "mqtt.h"
+#include "IMqttPublisher.h"
 
 namespace
 {
@@ -64,7 +64,7 @@ void Elektromer::event(EventType e)
     }
 }
 
-Elektromer::Elektromer(MqttClient& mqtt)
+Elektromer::Elektromer(IMqttPublisher &mqtt)
     :Impulzy("1", 17)
     ,mqtt(mqtt)
 {

@@ -5,6 +5,7 @@
 #include "Elektromer.h"
 #include "Pru.h"
 #include "builder.h"
+#include "bytd/src/therm.h"
 
 void AppContainer::doRequest(std::string msg)
 {

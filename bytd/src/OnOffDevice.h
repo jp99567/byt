@@ -1,7 +1,7 @@
 #pragma once
 
 #include <memory>
-#include "mqtt.h"
+#include "IMqttPublisher.h"
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/steady_timer.hpp>
 

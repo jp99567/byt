@@ -1,7 +1,7 @@
 #pragma once
 
 #include "IIo.h"
-#include "mqtt.h"
+#include "IMqttPublisher.h"
 
 class MqttDigiOut : public IDigiOut
 {
