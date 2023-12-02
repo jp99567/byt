@@ -24,7 +24,9 @@ double adc_temp(uint16_t adc)
     return v;
 }
 
-Reku::Reku(const char* ttydev)
+Reku::Reku(IMqttPublisherSPtr mqtt, const char* ttydev)
+    :temperature{{SimpleSensor{"tRekuIntake", mqtt}, SimpleSensor{"tRekuExhaust", mqtt}}}
+    ,rpm{{SimpleSensor{"rpmIntake", mqtt}, SimpleSensor{"rpmExhaust", mqtt}}}
 {
     fd = ::open(ttydev, O_RDWR | O_NOCTTY);
     if( fd == -1){
@@ -118,6 +120,11 @@ Reku::~Reku()
     thread.join();
 }
 
+static float round5(float v)
+{
+    return std::roundf(v/5)*5;
+}
+
 bool Reku::readFrame(reku::RekuTx& recvFrame, pollfd& pfd)
 {
     constexpr unsigned tot_timeout_ms = 4*1000;
@@ -149,6 +156,10 @@ bool Reku::readFrame(reku::RekuTx& recvFrame, pollfd& pfd)
                getPV().bypass, getPV().temp[reku::INTK],
                (int)getPV().rpm[reku::INTK], getPV().temp[reku::EXHT],
                (int)getPV().rpm[reku::EXHT], FlowPercent);
+        for(int i = reku::INTK; i<reku::_LAST; ++i){
+            temperature[i].setValue(getPV().temp[i]);
+            rpm[i].setValue(round5(getPV().rpm[i]));
+        }
 
         timeout_cnt = 0;
         if(not commOk){

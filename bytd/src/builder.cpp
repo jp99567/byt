@@ -33,7 +33,7 @@ public:
 void Builder::buildMisc(slowswi2cpwm &ioexpander)
 {
     digiOutputs.emplace("dverePavlac", std::make_unique<DigiOutI2cExpander>(ioexpander, 2));
-    components.reku = std::make_unique<Reku>("/dev/ttyO4");
+    components.reku = std::make_unique<Reku>(mqtt, "/dev/ttyO4");
     digiOutputs.emplace("prevetranie", std::make_unique<PrevetranieReku>(*components.reku));
 }
 

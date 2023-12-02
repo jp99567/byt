@@ -1,15 +1,17 @@
 #pragma once
 
 #include <thread>
+#include "SimpleSensor.h"
+#include "rekuperacia_fw/reku_enum.h"
 
-namespace reku { class RekuTx; }
+namespace reku { struct RekuTx; }
 
 struct pollfd;
 
 class Reku
 {
 public:
-    explicit Reku(const char* ttydev = "/dev/ttyUSB0");
+    explicit Reku(IMqttPublisherSPtr mqtt, const char* ttydev = "/dev/ttyUSB0");
     ~Reku();
     float FlowPercent = 30;
     float ByPassTemp = 25;
@@ -27,4 +29,6 @@ private:
     std::thread thread;
     bool commOk = false;
     unsigned timeout_cnt = 0;
+    std::array<SimpleSensor, reku::_LAST> temperature;
+    std::array<SimpleSensor, reku::_LAST> rpm;
 };
