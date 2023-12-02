@@ -5,12 +5,12 @@
 
 class MqttDigiOut : public IDigiOut
 {
-  std::shared_ptr<MqttClient> mqtt;
+  MqttClientSPtr mqtt;
   const std::string path;
   bool valueCached = false;
 
 public:
-  MqttDigiOut(std::shared_ptr<MqttClient> mqtt, std::string path);
+  MqttDigiOut(MqttClientSPtr mqtt, std::string path);
   operator bool() const override
   {
     return valueCached; // weak info. Does not reflect real value in mqtt broker

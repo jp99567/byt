@@ -19,7 +19,7 @@ using VypinaceSingleList = std::vector<std::unique_ptr<VypinacSingle>>;
 class Builder
 {
     const YAML::Node config;
-    std::shared_ptr<MqttClient> mqtt;
+    MqttClientSPtr mqtt;
     std::map<std::string, std::unique_ptr<IDigiOut>> digiOutputs;
     std::vector<std::reference_wrapper<DigInput>> digInputs;
     std::vector<std::reference_wrapper<ISensorInput>> sensors;
@@ -36,7 +36,7 @@ public:
         std::unique_ptr<Reku> reku;
     };
 
-    Builder(std::shared_ptr<MqttClient> mqtt);
+    Builder(MqttClientSPtr mqtt);
     void buildMisc(slowswi2cpwm& ioexpander);
     [[nodiscard]] std::unique_ptr<can::InputControl> buildCan(CanBus& canbus);
     [[nodiscard]] ow::SensorList buildBBoW();

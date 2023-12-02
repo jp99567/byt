@@ -103,7 +103,7 @@ struct DigiInItem : public IInputItem, DigInput
 
 struct OwTempItem : public IInputItem
 {
-    explicit OwTempItem(std::string name, unsigned offset, std::shared_ptr<MqttClient> mqtt, uint16_t bitshift)
+    explicit OwTempItem(std::string name, unsigned offset, MqttClientSPtr mqtt, uint16_t bitshift)
         : offset(offset)
         , sens(name, mqtt, bitshift)
     {}

@@ -5,7 +5,7 @@ void ow::Sensor::setValue(int16_t intval)
 {
     float v = intval / factor;
     if(v==85){
-        if(std::abs(value() - 85) > 1){
+        if(not (std::abs(value() - 85) < 1)){
             LogERR("ow {} unexpected 85", name());
             update(std::numeric_limits<float>::quiet_NaN());
             return;

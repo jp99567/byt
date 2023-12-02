@@ -21,7 +21,17 @@ public:
     ~MqttWrapper();
 };
 
-class MqttClient : public mosqpp::mosquittopp
+class IMqttPublisher
+{
+public:
+    virtual bool publish(const std::string& topic, const double value, bool retain = true) = 0;
+    virtual bool publish(const std::string& topic, const int value, bool retain = true) = 0;
+    virtual bool publish(const std::string& topic, const std::string& value, bool retain = true) = 0;
+    virtual void publish_ensured(const std::string& topic, const std::string& value) = 0;
+    virtual ~IMqttPublisher(){}
+};
+
+class MqttClient : public mosqpp::mosquittopp, public IMqttPublisher
 {
     boost::asio::io_service& io_context;
     std::unique_ptr<boost::asio::ip::tcp::socket> mqtt_socket;
@@ -34,10 +44,10 @@ public:
     explicit MqttClient(boost::asio::io_service& io_context);
     ~MqttClient() override;
     void do_misc();
-    bool publish(const std::string& topic, const double value, bool retain = true);
-    bool publish(const std::string& topic, const int value, bool retain = true);
-    bool publish(const std::string& topic, const std::string& value, bool retain = true);
-    void publish_ensured(const std::string& topic, const std::string& value);
+    bool publish(const std::string& topic, const double value, bool retain = true) override;
+    bool publish(const std::string& topic, const int value, bool retain = true) override;
+    bool publish(const std::string& topic, const std::string& value, bool retain = true) override;
+    void publish_ensured(const std::string& topic, const std::string& value) override;
 
     std::function<void(std::string &&topic, std::string &&msg)> OnMsgRecv;
 
@@ -53,4 +63,4 @@ private:
     void new_conn_init_wait();
 };
 
-using MqttClientSPtr = std::shared_ptr<MqttClient>;
+using MqttClientSPtr = std::shared_ptr<IMqttPublisher>;
