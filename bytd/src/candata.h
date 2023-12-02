@@ -103,9 +103,9 @@ struct DigiInItem : public IInputItem, DigInput
 
 struct OwTempItem : public IInputItem
 {
-    explicit OwTempItem(std::string name, unsigned offset, IMqttPublisherSPtr mqtt, uint16_t bitshift)
+    explicit OwTempItem(std::string name, unsigned offset, IMqttPublisherSPtr mqtt, float factor)
         : offset(offset)
-        , sens(name, mqtt, bitshift)
+        , sens(name, mqtt, factor)
     {}
     OwTempItem(OwTempItem& other) = delete;
     unsigned offset;
