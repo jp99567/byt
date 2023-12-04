@@ -111,10 +111,8 @@ void OwTempItem::update(const Data &data, std::size_t len)
 {
     int16_t owval = ow::cInvalidValue;
     if( offset+sizeof(owval) <= len){
-        auto owval = *reinterpret_cast<const int16_t*>(&data[offset]);
-        if(owval != ow::cInvalidValue ){
-            sens.setValue((uint16_t)owval);
-        }
+        owval = *reinterpret_cast<const int16_t*>(&data[offset]);
+        sens.setValue(owval);
     }
 }
 

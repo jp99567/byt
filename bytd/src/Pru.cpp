@@ -52,7 +52,7 @@ void Pru::send(const uint8_t* data, std::size_t len)
 Pru::Pru() {
 
 	fd = ::open("/dev/rpmsg_pru30", O_RDWR);
-	if( fd < 0 ) LogSYSDIE();
+    if( fd < 0 ) LogSYSDIE("open pru");
 
 	thrd = std::thread([this]{
 		thread_util::set_thread_name("bytd-pru");

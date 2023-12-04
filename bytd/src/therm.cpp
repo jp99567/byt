@@ -17,6 +17,7 @@
 #include "Pru.h"
 #include "OwThermNet.h"
 #include "IMqttPublisher.h"
+#include "avr/fw/OwResponseCode_generated.h"
 
 MeranieTeploty::~MeranieTeploty()
 {
@@ -88,6 +89,9 @@ void MeranieTeploty::meas()
 
         if (v != ow::OwThermNet::readScratchPadFailed) {
             sensor.second->setValue(v);
+        }
+        else{
+            sensor.second->setValue(ow::cInvalidValue);
         }
     }
 }
