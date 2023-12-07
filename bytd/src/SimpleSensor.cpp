@@ -1,4 +1,5 @@
 #include "SimpleSensor.h"
+#include "bytd/src/Log.h"
 #include <cmath>
 #include <filesystem>
 
@@ -7,7 +8,7 @@ constexpr auto topic_base = "rb/stat/sens/";
 SimpleSensor::SimpleSensor(std::string name, IMqttPublisherSPtr mqtt)
     :topic(std::string(topic_base).append(name)), mqtt(mqtt)
 {
-
+  LogINFO("created sensor {}", this->name());
 }
 
 float SimpleSensor::value() const
@@ -19,7 +20,7 @@ std::string SimpleSensor::name() const
 {
 
     std::filesystem::path t(topic);
-    return (t.end()--)->native();
+    return (--t.end())->native();
 }
 
 void SimpleSensor::setValue(float v)
