@@ -95,8 +95,10 @@ void Impulzy::svc_init()
     t = std::thread([this]{
         thread_util::set_thread_name(threadName.c_str());
 
+        try {
         gpiod::chip gpiochip(chipName);
         auto impin = gpiochip.get_line(chipLine);
+
 
         if( impin.direction() != gpiod::line::DIRECTION_INPUT )
         {
@@ -114,6 +116,11 @@ void Impulzy::svc_init()
             else{
                 event(EventType::timeout);
             }
+        }
+        }
+        catch(std::exception& e){
+          LogERR("impulzy gpiochip: {}", e.what());
+          return;
         }
     });
 }
