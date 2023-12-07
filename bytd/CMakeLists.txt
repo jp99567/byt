@@ -31,4 +31,5 @@ target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 IF(NOT CMAKE_CROSSCOMPILING)
     target_link_libraries(${PROJECT_NAME} fmt)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC BYTD_SIMULATOR)
 ENDIF()

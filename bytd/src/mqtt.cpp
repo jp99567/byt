@@ -1,6 +1,12 @@
 #include "mqtt.h"
 #include "Log.h"
 
+#ifdef BYTD_SIMULATOR
+constexpr auto hostname = "localhost";
+#else
+constexpr auto hostname = "172.16.53.1";
+#endif
+
 MqttWrapper::MqttWrapper() noexcept
 {
     mosqpp::lib_init();
@@ -16,7 +22,7 @@ MqttClient::MqttClient(boost::asio::io_service& io_context)
     ,io_context(io_context)
 {
     threaded_set(true);
-    auto rv = connect_async("172.16.53.1", 1883, 900);
+    auto rv = connect_async(hostname, 1883, 900);
     check_connect_attempt(rv);
 }
 

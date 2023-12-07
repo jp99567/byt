@@ -4,7 +4,10 @@
 #include "SimpleSensor.h"
 #include "rekuperacia_fw/reku_enum.h"
 
-namespace reku { struct RekuTx; }
+namespace reku {
+struct RekuTx;
+struct RekuRx;
+}
 
 struct pollfd;
 
@@ -16,15 +19,12 @@ public:
     float FlowPercent = 30;
     float ByPassTemp = 25;
     bool bypass = false;
-    struct PVs
-    {
-        std::array<float, 2> rpm;
-        std::array<float, 2> temp;
-        bool bypass;
-    } pvs;
-    const PVs getPV() const {return pvs;}
 private:
+    void initFd(const char* ttydev = "/dev/ttyUSB0");
     bool readFrame(reku::RekuTx& recvFrame, struct pollfd& pfd);
+    void onNewData(const reku::RekuTx& recvFrame);
+    bool write(const reku::RekuRx& frame);
+    void onFailure();
     int fd=-1;
     std::thread thread;
     bool commOk = false;

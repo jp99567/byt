@@ -24,10 +24,69 @@ double adc_temp(uint16_t adc)
     return v;
 }
 
-Reku::Reku(IMqttPublisherSPtr mqtt, const char* ttydev)
-    :temperature{{SimpleSensor{"tRekuIntake", mqtt}, SimpleSensor{"tRekuExhaust", mqtt}}}
-    ,rpm{{SimpleSensor{"rpmIntake", mqtt}, SimpleSensor{"rpmExhaust", mqtt}}}
+Reku::Reku(IMqttPublisherSPtr mqtt, const char *ttydev)
+    : temperature{{SimpleSensor{"tRekuIntake", mqtt}, SimpleSensor{"tRekuExhaust", mqtt}}},
+      rpm{{SimpleSensor{"rpmIntake", mqtt}, SimpleSensor{"rpmExhaust", mqtt}}}
 {
+
+    initFd(ttydev);
+
+    thread = std::thread([this] {
+      reku::RekuTx recvFrame;
+      reku::RekuRx control;
+      struct pollfd pfd = {fd, POLLIN, 0};
+
+      while(fd != -1) {
+        if(commOk) {
+          if(readFrame(recvFrame, pfd)){
+            onNewData(recvFrame);
+          }
+          control.ctrl = reku::markCmd;
+          int pwm8 = (int)(255 * FlowPercent / 100);
+          if(pwm8 > 255 || pwm8 < 0)
+            pwm8 = 0;
+          control.pwm[reku::INTK] = pwm8;
+          control.pwm[reku::EXHT] = pwm8;
+
+          /*            if(pvs.temp[reku::INTK] < ByPassTemp-2)
+                          bypass = true;
+                      if(pvs.temp[reku::INTK] > ByPassTemp)
+                          bypass = false;
+          */
+          if(bypass)
+            control.ctrl |= reku::ctrl_bypass;
+
+          control.crc = ow::calc_crc((uint8_t *)&control, sizeof(control) - 1);
+          auto ok = write(control);
+          if(not ok){
+            onFailure();
+            return;
+          }
+        }
+
+        const auto prevState = commOk;
+        commOk = readFrame(recvFrame, pfd);
+        if (commOk) {
+          onNewData(recvFrame);
+        }
+        else if(prevState){
+          onFailure();
+        }
+      }
+    });
+}
+
+Reku::~Reku()
+{
+    auto tmpfd = fd;
+    fd = -1;
+    ::close(tmpfd);
+    thread.join();
+}
+
+void Reku::initFd(const char *ttydev)
+{
+#ifndef BYTD_SIMULATOR
     fd = ::open(ttydev, O_RDWR | O_NOCTTY);
     if( fd == -1){
         LogSYSDIE("reku tty open");
@@ -60,64 +119,8 @@ Reku::Reku(IMqttPublisherSPtr mqtt, const char* ttydev)
     if(::ioctl(fd, TIOCEXCL, NULL) < 0) {
         LogSYSDIE("reku tty set TIOCEXCL");
     }
-
+#endif
     LogINFO("reku configured uart {}", ttydev);
-    thread = std::thread([this]{
-        reku::RekuTx recvFrame;
-        reku::RekuRx control;
-        struct pollfd pfd = {fd, POLLIN, 0};
-
-        while(fd != -1){
-          if (commOk) {
-            readFrame(recvFrame, pfd);
-            control.ctrl = reku::markCmd;
-            int pwm8 = (int)(255 * FlowPercent / 100);
-            if (pwm8 > 255 || pwm8 < 0)
-                pwm8 = 0;
-            control.pwm[reku::INTK] = pwm8;
-            control.pwm[reku::EXHT] = pwm8;
-
-/*            if(pvs.temp[reku::INTK] < ByPassTemp-2)
-                bypass = true;
-            if(pvs.temp[reku::INTK] > ByPassTemp)
-                bypass = false;
-*/
-            if(bypass)
-                control.ctrl |= reku::ctrl_bypass;
-
-            control.crc =
-                ow::calc_crc((uint8_t *)&control, sizeof(control) - 1);
-
-            if (sizeof(control) != ::write(fd, &control, sizeof(control))) {
-              if (fd == -1)
-                return;
-              LogSYSDIE("Reku write");
-            }
-          }
-
-          commOk = readFrame(recvFrame, pfd);
-          if(commOk){
-            PVs tmp;
-            tmp.bypass = bypass;
-            for(unsigned i=0; i<pvs.rpm.size(); ++i){
-              constexpr double dt = 256 * 4 / reku::crystalFoscHz;
-              tmp.rpm[i] = 0;
-              if(recvFrame.ch[i].period > 0)
-                tmp.rpm[i] = 60 / (recvFrame.ch[i].period * dt);
-              tmp.temp[i] = adc_temp(recvFrame.ch[i].temp & 0x03FF);
-            }
-            pvs = tmp;
-          }
-        }
-    });
-}
-
-Reku::~Reku()
-{
-    auto tmpfd = fd;
-    fd = -1;
-    ::close(tmpfd);
-    thread.join();
 }
 
 static float round5(float v)
@@ -125,76 +128,111 @@ static float round5(float v)
     return std::roundf(v/5)*5;
 }
 
-bool Reku::readFrame(reku::RekuTx& recvFrame, pollfd& pfd)
+
+bool Reku::readFrame(reku::RekuTx &recvFrame, pollfd &pfd)
 {
-    constexpr unsigned tot_timeout_ms = 4*1000;
+#ifndef BYTD_SIMULATOR
+    constexpr unsigned tot_timeout_ms = 4 * 1000;
     constexpr unsigned timeout_ms = 500;
     constexpr auto tot_timeout_nr = tot_timeout_ms / timeout_ms;
     bool rv = false;
     auto poll_ret = ::poll(&pfd, 1, commOk ? 1000 : timeout_ms);
-    if(poll_ret < 0){
+    if(poll_ret < 0)
+    {
         LogSYSERR("reku poll");
     }
-    else if(poll_ret == 0){
-        if(++timeout_cnt == tot_timeout_nr){
+    else if(poll_ret == 0)
+    {
+        if(++timeout_cnt == tot_timeout_nr)
+        {
             LogERR("reku comm. timeout");
         }
-        return false;
+        return false; // expected regular timeout
     }
-    else if(pfd.revents != POLLIN){
+    else if(pfd.revents != POLLIN)
+    {
         LogERR("reku poll revents {}", pfd.revents);
     }
-    else{
-      auto len = ::read(fd, &recvFrame, sizeof(recvFrame));
-      if(len == sizeof(recvFrame) &&
-          ((recvFrame.stat & reku::mark_mask) == reku::markCnf ||
-           (recvFrame.stat & reku::mark_mask) == reku::markInd) &&
-          ow::check_crc((uint8_t *)&recvFrame, sizeof(recvFrame) - 1,
-                        recvFrame.crc)){
-        rv = true;
-        LogDBG("bypass:{} INTAKE: {:.1f}deg {}rpm EXHAUST: {:.1f}deg {}rpm Flow:{:.1f}%",
-               getPV().bypass, getPV().temp[reku::INTK],
-               (int)getPV().rpm[reku::INTK], getPV().temp[reku::EXHT],
-               (int)getPV().rpm[reku::EXHT], FlowPercent);
-        for(int i = reku::INTK; i<reku::_LAST; ++i){
-            temperature[i].setValue(getPV().temp[i]);
-            rpm[i].setValue(round5(getPV().rpm[i]));
+    else
+    {
+        auto len = ::read(fd, &recvFrame, sizeof(recvFrame));
+        if(len == sizeof(recvFrame) &&
+           ((recvFrame.stat & reku::mark_mask) == reku::markCnf ||
+            (recvFrame.stat & reku::mark_mask) == reku::markInd) &&
+           ow::check_crc((uint8_t *)&recvFrame, sizeof(recvFrame) - 1, recvFrame.crc))
+        {
+            rv = true;
+            timeout_cnt = 0;
+            if(not commOk)
+            {
+                LogINFO("Reku connection");
+            }
         }
-
-        timeout_cnt = 0;
-        if(not commOk){
-          LogINFO("Reku connection");
+        else
+        {
+            if(commOk)
+            {
+                LogERR("Reku connection {} {:02X} {}", len, recvFrame.stat,
+                       ow::check_crc((uint8_t *)&recvFrame, sizeof(recvFrame) - 1, recvFrame.crc));
+            }
         }
-      }
-      else{
-        if (commOk) {
-          LogERR("Reku connection {} {:02X} {}", len, recvFrame.stat,
-                 ow::check_crc((uint8_t *)&recvFrame, sizeof(recvFrame) - 1,
-                               recvFrame.crc));
-        }
-      }
     }
     return rv;
+#else
+  std::ignore = recvFrame;
+  std::ignore = pfd;
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+  return false;
+#endif
 }
 
-
-#ifdef REKU_TESTAPP
-int main(int argc, char* argv[])
+struct PVs
 {
-    Reku reku(argv[1]);
+  std::array<float, 2> rpm;
+  std::array<float, 2> temp;
+  bool bypass;
+};
 
-    while(true){
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        LogINFO("bypass:{} INTAKE: {:.1f}deg {}rpm EXHAUST: {:.1f}deg {}rpm", reku.getPV().bypass,
-                reku.getPV().temp[reku::INTK],
-                (int)reku.getPV().rpm[reku::INTK],
-                reku.getPV().temp[reku::EXHT],
-                (int)reku.getPV().rpm[reku::EXHT]);
-        std::ifstream f("reku.txt");
-        int val = 0;
-        f >> reku.FlowPercent;
-        f >> val;
-        reku.bypass = (bool)val;
+void Reku::onNewData(const reku::RekuTx &recvFrame) {
+  PVs pvs;
+  pvs.bypass = bypass;
+  for (unsigned i = 0; i < pvs.rpm.size(); ++i) {
+    constexpr double dt = 256 * 4 / reku::crystalFoscHz;
+    pvs.rpm[i] = 0;
+    if (recvFrame.ch[i].period > 0)
+      pvs.rpm[i] = 60 / (recvFrame.ch[i].period * dt);
+    pvs.temp[i] = adc_temp(recvFrame.ch[i].temp & 0x03FF);
+  }
+
+    LogDBG("bypass:{} INTAKE: {:.1f}deg {}rpm EXHAUST: {:.1f}deg {}rpm "
+           "Flow:{:.1f}%",
+           pvs.bypass, pvs.temp[reku::INTK], (int)pvs.rpm[reku::INTK], pvs.temp[reku::EXHT],
+           (int)pvs.rpm[reku::EXHT], FlowPercent);
+    for(int i = reku::INTK; i < reku::_LAST; ++i)
+    {
+        temperature[i].setValue(pvs.temp[i]);
+        rpm[i].setValue(round5(pvs.rpm[i]));
     }
 }
+
+bool Reku::write(const reku::RekuRx &frame)
+{
+#ifndef BYTD_SIMULATOR
+    if(sizeof(frame) != ::write(fd, &frame, sizeof(frame))){
+        LogSYSERR("Reku write");
+        return false;
+    }
+#else
+    std::ignore = frame;
 #endif
+    return true;
+}
+
+void Reku::onFailure()
+{
+    for(int i = reku::INTK; i < reku::_LAST; ++i)
+    {
+        temperature[i].setValue(std::numeric_limits<float>::quiet_NaN());
+        rpm[i].setValue(std::numeric_limits<float>::quiet_NaN());
+    }
+}
