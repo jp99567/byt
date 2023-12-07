@@ -8,7 +8,6 @@
 #include "Elektromer.h"
 #include <gpiod.hpp>
 #include "Log.h"
-#include <fstream>
 #include "thread_util.h"
 #include "IMqttPublisher.h"
 
