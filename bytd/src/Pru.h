@@ -55,8 +55,9 @@ public:
 	}
 	~Pru();
 private:
-	int fd = -1;
-	std::thread thrd;
-	std::weak_ptr<PruRxMsg> owRxMsg;
-	std::weak_ptr<PruRxMsg> otRxMsg;
+  void respond(const PruRxMsg::Buf &buf);
+  int fd = -1;
+  std::thread thrd;
+  std::weak_ptr<PruRxMsg> owRxMsg;
+  std::weak_ptr<PruRxMsg> otRxMsg;
 };

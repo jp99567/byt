@@ -39,11 +39,14 @@ void I2CDiOut::i2cread(char* buf, unsigned len)
 
 void I2CDiOut::value(const uint8_t v)
 {
+#ifndef BYTD_SIMULATOR
     i2cwreg(0xA, ~v);
+#endif
 }
 
 I2CDiOut::I2CDiOut()
 {
+#ifndef BYTD_SIMULATOR
     fd = ::open("/dev/i2c-2", O_RDWR);
 
     if(fd < 0) {
@@ -60,6 +63,7 @@ I2CDiOut::I2CDiOut()
     i2cwreg(5, iocon);
     value(0);
     i2cwreg(0x0, 0x0); //dir output
+#endif
 }
 
 I2CDiOut::~I2CDiOut()

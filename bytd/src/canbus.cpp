@@ -11,6 +11,11 @@
 #include <linux/can/raw.h>
 #include <boost/asio/buffer.hpp>
 
+#ifdef BYTD_SIMULATOR
+constexpr auto can_dev_name = "vcan0";
+#else
+constexpr auto can_dev_name = "can1";
+#endif
 
 CanBus::CanBus(boost::asio::io_service& io_context)
     :canStream(io_context)
@@ -25,7 +30,7 @@ CanBus::CanBus(boost::asio::io_service& io_context)
         LogSYSDIE("CAN Socket");
     }
 
-    strcpy(ifr.ifr_name, "can1" );
+    strcpy(ifr.ifr_name, can_dev_name);
     auto rv = ::ioctl(socket, SIOCGIFINDEX, &ifr);
     if( rv == -1){
         LogSYSDIE("CAN Socket ioctl");
