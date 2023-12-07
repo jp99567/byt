@@ -28,8 +28,6 @@ class AppContainer
     std::shared_ptr<OpenTherm> openTherm;
     std::shared_ptr<MqttClient> mqtt;
     std::unique_ptr<slowswi2cpwm> slovpwm;
-    std::shared_ptr<gpiod::chip> gpiochip3;
-    std::unique_ptr<Pumpa> pumpa;
 
 public:
     explicit AppContainer();

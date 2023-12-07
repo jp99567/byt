@@ -3,6 +3,7 @@
 #include <map>
 #include <boost/asio/io_service.hpp>
 
+#include "bytd/src/Pumpa.h"
 #include "canbus.h"
 #include "candata.h"
 #include "OnOffDevice.h"
@@ -13,6 +14,8 @@
 using OnOffDeviceList = std::map<const std::string, std::unique_ptr<OnOffDevice>>;
 using VypinaceDuoList = std::vector<std::unique_ptr<VypinacDuo>>;
 using VypinaceSingleList = std::vector<std::unique_ptr<VypinacSingle>>;
+
+namespace gpiod { class chip; }
 
 class Builder
 {
@@ -32,6 +35,8 @@ public:
         std::unique_ptr<MonoStableDev> brana;
         std::unique_ptr<MonoStableDev> dverePavlac;
         std::unique_ptr<Reku> reku;
+        std::unique_ptr<gpiod::chip> gpiochip3;
+        std::unique_ptr<Pumpa> pumpa;
     };
     
     Builder(IMqttPublisherSPtr mqtt);

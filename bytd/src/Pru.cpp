@@ -68,6 +68,7 @@ break;
       break;
   }
   std::ignore = len;
+  respond(buf);
 #endif
 }
 
@@ -96,27 +97,25 @@ Pru::Pru() {
 					}
                     buf.resize(len);
 
-                                        respond(buf);
+                                        respond(std::move(buf));
 				}
 			}
 	});
 }
 
 Pru::~Pru() {
-#ifndef BYTD_SIMULATOR
-	auto tmpfd = fd;
+    auto tmpfd = fd;
+    fd = -1;
     if(tmpfd >= 0){
-        fd = -1;
+      const int32_t cmd = pru::Commands::eCmdOwInit;
+      ::write(tmpfd, (const uint8_t*)&cmd, sizeof(cmd)); //unblock blocking read
     }
-    const int32_t cmd = pru::Commands::eCmdOwInit;
-    ::write(tmpfd, (const uint8_t*)&cmd, sizeof(cmd)); //unblock blocking read
-	thrd.join();
+    thrd.join();
     ::close(tmpfd);
-#endif
     LogDBG("~Pru");
 }
 
-void Pru::respond(const PruRxMsg::Buf &buf) {
+void Pru::respond(const PruRxMsg::Buf buf) {
   auto code = *reinterpret_cast<const pru::ResponseCode*>(&buf[0]);
 
   auto send = [&buf](auto& wprx){

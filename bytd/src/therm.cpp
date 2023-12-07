@@ -75,7 +75,9 @@ MeranieTeploty::MeranieTeploty(std::shared_ptr<Pru> pru, ow::SensorList reqsenso
             for(auto i=begin(tmpv); i!=it; ++i){
                 LogERR("missing sensor: {}", (std::string)*i);
             }
+#ifndef BYTD_SIMULATOR
             throw std::runtime_error("missing ow sensors");
+#endif
         }
     }
 }

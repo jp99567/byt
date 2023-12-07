@@ -6,6 +6,7 @@
 #include "Event.h"
 #include "MqttDigiOut.h"
 #include "DigiOutI2cExpander.h"
+#include "BBDigiOut.h"
 
 Builder::Builder(IMqttPublisherSPtr mqtt)
     : config(YAML::LoadFile("config.yaml"))
@@ -35,6 +36,14 @@ void Builder::buildMisc(slowswi2cpwm &ioexpander)
     digiOutputs.emplace("dverePavlac", std::make_unique<DigiOutI2cExpander>(ioexpander, 2));
     components.reku = std::make_unique<Reku>(mqtt, "/dev/ttyO4");
     digiOutputs.emplace("prevetranie", std::make_unique<PrevetranieReku>(*components.reku));
+    std::unique_ptr<IDigiOut> pumpaDigOut;
+#ifdef BYTD_SIMULATOR
+    pumpaDigOut = std::make_unique<MqttDigiOut>(mqtt, "test/pumpa");
+#else
+    components.gpiochip3 = std::make_unique<gpiod::chip>("3");
+    pumpaDigOut = std::make_unique<BBDigiOut>(*components.gpiochip3, 21);
+#endif
+    components.pumpa = std::make_unique<Pumpa>(std::move(pumpaDigOut), mqtt);
 }
 
 struct CanNodeInfo

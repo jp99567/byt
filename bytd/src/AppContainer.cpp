@@ -1,6 +1,5 @@
 #include "AppContainer.h"
 
-#include "BBDigiOut.h"
 #include "Log.h"
 #include "Elektromer.h"
 #include "Pru.h"
@@ -77,12 +76,9 @@ void AppContainer::run()
     openTherm = std::make_shared<OpenTherm>(pru, mqtt);
     Elektromer elektomer(*mqtt);
 
-    gpiochip3 = std::make_shared<gpiod::chip>("3");
-    pumpa = std::make_unique<Pumpa>(std::make_unique<BBDigiOut>(*gpiochip3, 21), mqtt);
-
-    openTherm->Flame = [this](bool flameOn){
+    openTherm->Flame = [&components](bool flameOn){
         if(!flameOn){
-            pumpa->onPlamenOff();
+            components.pumpa->onPlamenOff();
         }
     };
 
@@ -148,10 +144,10 @@ void AppContainer::run()
         else if(topic == "rb/ctrl/pumpa"){
             auto v = std::stod(msg);
             if(v){
-                pumpa->start();
+                components.pumpa->start();
             }
             else {
-                pumpa->stop();
+                components.pumpa->stop();
             }
         }
         else if(topic == "rb/ctrl/req"){
