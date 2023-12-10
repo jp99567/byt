@@ -12,8 +12,8 @@ ROOM txtToRoom(std::string name)
 {
   static std::map<std::string, ROOM> cRoomMap;
   if (cRoomMap.empty()) {
-    for (auto room : {ROOM::Obyvka, ROOM::Spalna, ROOM::Kuchyna, ROOM::Izba,
-                      ROOM::Kupelka}) {
+    for(int iroom = 0; iroom<(int)ROOM::_last; ++iroom){
+      auto room = (ROOM)iroom;
       cRoomMap.emplace(std::string(roomTxt(room)), room);
     }
   }
@@ -39,7 +39,6 @@ constexpr const char *roomTxt(ROOM room)
     return "Kupelna";
   case ROOM::Podlahovka:
     return "Podlahovka";
-    break;
   default:
     return "invalid";
   }

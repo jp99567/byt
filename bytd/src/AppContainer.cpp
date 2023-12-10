@@ -141,7 +141,7 @@ void AppContainer::run()
           auto room = kurenie::txtToRoom(name);
           if (room != kurenie::ROOM::_last) {
             auto v = safeConvertF(topic, msg);
-            components.kurenie->override_t_TEV(room, v);
+            components.kurenie->override_pwm_TEV(room, v);
           }
         }
         else if(topic == "rb/ctrl/override/setpointCH"){

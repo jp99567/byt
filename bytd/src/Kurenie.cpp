@@ -24,7 +24,7 @@ void Kurenie::process(std::chrono::steady_clock::time_point tp)
   update();
 }
 
-void Kurenie::override_t_TEV(ROOM room, float pwm)
+void Kurenie::override_pwm_TEV(ROOM room, float pwm)
 {
   override_pwm_TEV_val[idx(room)] = pwm;
   set_pwm_TEV(room);

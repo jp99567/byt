@@ -15,7 +15,7 @@ public:
   explicit Kurenie(std::unique_ptr<IHw> hw);
   void setSP(ROOM room, float t);
   void process(Clock::time_point tp);
-  void override_t_TEV(ROOM room, float pwm);
+  void override_pwm_TEV(ROOM room, float pwm);
   void override_t_CH(float t);
   static constexpr auto dT = std::chrono::seconds(20);
 
