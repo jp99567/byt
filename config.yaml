@@ -30,13 +30,14 @@ NodeCAN:
       DigOUT:
         brana: { addr: [ 0x112, 0, 0 ], pin: PA2 }
       OwT:
-        izbaT: { addr: [ 0x113, 0 ], owRomCode: 28469e780c0000c3 }
-        zadverieT: { addr: [ 0x113, 2 ], owRomCode: 282cdf780c0000eb }
+        tIzba: { addr: [ 0x113, 0 ], owRomCode: 287f03780c0000e3 }
+        tZadverie: { addr: [ 0x113, 2 ], owRomCode: 282cdf780c0000eb }
   Kupelka:
       id: 4
       OwT:
         vodaKupelka: { addr: [ 0x119, 0 ], owRomCode: 28d50a0a06000046 }
-        podlahovka: { addr: [ 0x119, 2 ], owRomCode: 287fc80a06000074, type: DS18S20}
+        tPodlahovka: { addr: [ 0x119, 2 ], owRomCode: 287fc80a06000074, type: DS18S20}
+        tSpalna: { addr: [ 0x119, 4 ], owRomCode: 28469e780c0000c3 }
       #SensorionCO2: { addr: 0x11A }
       #Vlhkomer: { addr: 0x11B }
   Spalna:
@@ -56,14 +57,15 @@ BBOw:
   tBoiler: { owRomCode : 284b7a0a06000089 }
   tRecir: { owRomCode : 28625008060000eb }
   tPavlac : { owRomCode : 28bf6f0a06000089 }
-  tKupelna: { owRomCode : 28aa97e33b14013c }
-  tPodlaha: { owRomCode : 28362709060000aa }
-  tSpalna1: { owRomCode : 28086d780c00004d}
-  tSpalna2: { owRomCode : 28ffab160d00002a }
-  tIzba: { owRomCode : 28a3c0780c000036 }
-  tKuchyna: { owRomCode : 28c440780c0000bb}
-  tObyvka1: { owRomCode : 2831fd770c00001b}
-  tObyvka2: { owRomCode : 28de47780c00007e}
+  tevKupelna: { owRomCode : 28aa97e33b14013c }
+  tevKupelnaP: { owRomCode : 28a5db780c000088}
+  tevPodlaha: { owRomCode : 28362709060000aa }
+  tevSpalna1: { owRomCode : 28086d780c00004d}
+  tevSpalna2: { owRomCode : 28ffab160d00002a }
+  tevObyvka1: { owRomCode : 2831fd770c00001b}
+  tevObyvka2: { owRomCode : 28de47780c00007e}
+  tevIzba: { owRomCode : 28a3c0780c000036 }
+  tevKuchyna: { owRomCode : 28c440780c0000bb}
   tObyvka: { owRomCode : 283a39790c0000cb}
 
     # SCL P9.19 i2c2_scl
