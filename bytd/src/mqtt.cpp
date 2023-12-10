@@ -1,5 +1,6 @@
 #include "mqtt.h"
 #include "Log.h"
+#include "IIo.h"
 
 #ifdef BYTD_SIMULATOR
 constexpr auto hostname = "localhost";
@@ -120,6 +121,16 @@ bool MqttClient::publish(const std::string& topic, const std::string& value, boo
 
 void MqttClient::publish_ensured(const std::string &topic, const std::string &value)
 {
+}
+
+void MqttClient::registerSensor(std::string name, ISensorInput &sens)
+{
+  registeredSensors.emplace(name, sens);
+}
+
+SensorDict &MqttClient::sensors()
+{
+  return registeredSensors;
 }
 
 bool MqttClient::publish(const std::string& topic, const double value, bool retain)

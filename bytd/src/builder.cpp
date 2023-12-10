@@ -7,6 +7,7 @@
 #include "MqttDigiOut.h"
 #include "DigiOutI2cExpander.h"
 #include "BBDigiOut.h"
+#include "kurenieHW.h"
 
 Builder::Builder(IMqttPublisherSPtr mqtt)
     : config(YAML::LoadFile("config.yaml"))
@@ -31,7 +32,7 @@ public:
     }
 };
 
-void Builder::buildMisc(slowswi2cpwm &ioexpander)
+void Builder::buildMisc(slowswi2cpwm &ioexpander, OpenTherm &ot)
 {
     digiOutputs.emplace("dverePavlac", std::make_unique<DigiOutI2cExpander>(ioexpander, 2));
     components.reku = std::make_unique<Reku>(mqtt, "/dev/ttyO4");
@@ -44,6 +45,23 @@ void Builder::buildMisc(slowswi2cpwm &ioexpander)
     pumpaDigOut = std::make_unique<BBDigiOut>(*components.gpiochip3, 21);
 #endif
     components.pumpa = std::make_unique<Pumpa>(std::move(pumpaDigOut), mqtt);
+
+    kurenie::HW::RoomSensors sensTrooms;
+    components.dummyKupelnaT = std::make_unique<SimpleSensor>("dummyKupelka", mqtt);
+    auto assignSensor = [&sensTrooms](kurenie::ROOM room, ISensorInput& sens){
+      if((std::size_t)room != sensTrooms.size())
+        throw std::runtime_error("sensorT kurenie vytvoreny mimo poradia");
+      sensTrooms.emplace_back(sens);
+    };
+
+    assignSensor(kurenie::ROOM::Obyvka, findSensor("tObyvka"));
+    assignSensor(kurenie::ROOM::Spalna, findSensor("tSpalna"));
+    assignSensor(kurenie::ROOM::Kuchyna, findSensor("tZadverie"));
+    assignSensor(kurenie::ROOM::Izba, findSensor("tIzba"));
+    assignSensor(kurenie::ROOM::Kupelka, *components.dummyKupelnaT);
+    assignSensor(kurenie::ROOM::Podlahovka, findSensor("tPodlahovka"));
+    auto kurenieHw = std::make_unique<kurenie::HW>(ot, ioexpander, mqtt, std::move(sensTrooms));
+    components.kurenie = std::make_unique<kurenie::Kurenie>(std::move(kurenieHw));
 }
 
 struct CanNodeInfo
@@ -312,4 +330,14 @@ OnOffDevice& Builder::buildDevice(std::string name, std::string outputName, even
     auto it = components.devicesOnOff.emplace(name, std::make_unique<OnOffDevice>(std::move(out), name, mqtt));
     controlEvent.subscribe(event::subscr([&dev=it.first->second](){ dev->toggle(); }));
     return *(it.first->second);
+}
+
+ISensorInput &Builder::findSensor(std::string name)
+{
+  auto rv = std::find_if(std::cbegin(sensors), std::cend(sensors), [&name](auto item){
+    return item.get().name() == name;
+  });
+  if(rv == std::cend(sensors))
+    throw std::runtime_error(std::string("sensor not found ").append(name));
+  return *rv;
 }

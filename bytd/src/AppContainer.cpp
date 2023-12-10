@@ -5,6 +5,7 @@
 #include "Pru.h"
 #include "builder.h"
 #include "bytd/src/therm.h"
+#include "TxtEnum.h"
 
 void AppContainer::doRequest(std::string msg)
 {
@@ -27,10 +28,11 @@ void AppContainer::doRequest(std::string msg)
 AppContainer::AppContainer()
     :signals(io_service, SIGINT, SIGTERM)
     ,t1sec(io_service, std::chrono::seconds(1))
+    ,timerKurenie(io_service, kurenie::Kurenie::dT)
     ,canBus(io_service)
 {
     signals.async_wait([this](auto error, auto signum){
-        LogINFO("signal {}",signum);
+        LogINFO("signal {} {}",signum, error.message());
         io_service.stop();
     });
 
@@ -60,20 +62,37 @@ struct Meranie
     }
 };
 
+bool matchTopicBase(const std::string& topic, const char* base)
+{
+  return topic.substr(0,std::char_traits<char>::length(base)) == base;
+}
+
+float safeConvertF(const std::string& topic, const std::string& msg)
+{
+  auto v = std::numeric_limits<float>::quiet_NaN();
+  try {
+    v = std::stof(msg);
+  }
+  catch (std::exception &e) {
+    LogERR("conversion error {} {}", topic, msg);
+  }
+  return v;
+}
+
 void AppContainer::run()
 {
     slovpwm = std::make_unique<slowswi2cpwm>();
     auto pru = std::make_shared<Pru>();
+    openTherm = std::make_shared<OpenTherm>(pru, mqtt);
     auto builder = std::make_unique<Builder>(mqtt);
     auto tsensors = builder->buildBBoW();
     auto canInputControl = builder->buildCan(canBus);
-    builder->buildMisc(*slovpwm);
+    builder->buildMisc(*slovpwm, *openTherm);
     builder->vypinace(io_service);
     auto components = builder->getComponents();
     builder = nullptr;
     auto meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
 
-    openTherm = std::make_shared<OpenTherm>(pru, mqtt);
     Elektromer elektomer(*mqtt);
 
     openTherm->Flame = [&components](bool flameOn){
@@ -83,12 +102,13 @@ void AppContainer::run()
     };
 
     mqtt->OnMsgRecv = [this, &components](auto topic, auto msg){
-        if(topic.substr(0,std::char_traits<char>::length(mqtt::rootTopic)) != mqtt::rootTopic)
-            return;
+      if(not matchTopicBase(topic, mqtt::rootTopic)){
+        return;
+      }
 
-        LogINFO("OnMsgRecv {}:{}", topic, msg);
+      LogINFO("OnMsgRecv {}:{}", topic, msg);
 
-        if(topic.substr(0,std::char_traits<char>::length(mqtt::devicesTopic)) == mqtt::devicesTopic){
+      if(matchTopicBase(topic, mqtt::devicesTopic)){
             const auto name = topic.substr(topic.find_last_of('/') + 1);
             auto devIt = components.devicesOnOff.find(name);
             auto v = std::stod(msg);
@@ -107,39 +127,27 @@ void AppContainer::run()
                 }
             }
         }
-
-
-        if(topic == "rb/ctrl/ot/setpoint/ch"){
-            auto v = std::stof(msg);
-            openTherm->chSetpoint = v;
+        else if(matchTopicBase(topic, mqtt::kurenieSetpointTopic)){
+          const auto name = topic.substr(topic.find_last_of('/') + 1);
+          auto room = kurenie::txtToRoom(name);
+          if (room != kurenie::ROOM::_last) {
+            auto v = safeConvertF(topic, msg);
+            components.kurenie->setSP(room, v);
+          }
+        }
+        else if(matchTopicBase(topic, mqtt::tevOverrideTopic)){
+          const auto name = topic.substr(topic.find_last_of('/') + 1);
+          auto room = kurenie::txtToRoom(name);
+          if (room != kurenie::ROOM::_last) {
+            auto v = safeConvertF(topic, msg);
+            components.kurenie->override_t_TEV(room, v);
+          }
+        }
+        else if(topic == "rb/ctrl/override/setpointCH"){
+          components.kurenie->override_t_CH(safeConvertF(topic, msg));
         }
         else if(topic == "rb/ctrl/ot/setpoint/dhw"){
-            auto v = std::stof(msg);
-            openTherm->dhwSetpoint = v;
-        }
-        else if(topic == "rb/ctrl/i2cpwm/kuchyna"){
-            auto v = std::stof(msg);
-            slovpwm->update(0,v);
-        }
-        else if(topic == "rb/ctrl/i2cpwm/obyvka"){
-            auto v = std::stof(msg);
-            slovpwm->update(1,v);
-        }
-        else if(topic == "rb/ctrl/i2cpwm/spalna"){
-            auto v = std::stof(msg);
-            slovpwm->update(2,v);
-        }
-        else if(topic == "rb/ctrl/i2cpwm/kupelna"){
-            auto v = std::stof(msg);
-            slovpwm->update(3,v);
-        }
-        else if(topic == "rb/ctrl/i2cpwm/podlaha"){
-            auto v = std::stof(msg);
-            slovpwm->update(4,v);
-        }
-        else if(topic == "rb/ctrl/i2cpwm/izba"){
-            auto v = std::stof(msg);
-            slovpwm->update(5,v);
+            openTherm->dhwSetpoint = safeConvertF(topic, msg);
         }
         else if(topic == "rb/ctrl/pumpa"){
             auto v = std::stod(msg);
@@ -164,7 +172,6 @@ void AppContainer::run()
                 LogERR("request unkown exception");
                 mqtt->publish(mqtt::rbResponse, "unkown exception", false);
             }
-
         }
     };
 

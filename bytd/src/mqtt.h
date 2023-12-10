@@ -25,6 +25,7 @@ class MqttClient : public mosqpp::mosquittopp, public IMqttPublisher
     std::atomic_bool mqtt_pending_write = false;
     bool connecting = false;
     std::map<std::string, std::string> ensure_publish;
+    SensorDict registeredSensors;
 public:
     explicit MqttClient(boost::asio::io_service& io_context);
     ~MqttClient() override;
@@ -33,6 +34,9 @@ public:
     bool publish(const std::string& topic, const int value, bool retain = true) override;
     bool publish(const std::string& topic, const std::string& value, bool retain = true) override;
     void publish_ensured(const std::string& topic, const std::string& value) override;
+
+    void registerSensor(std::string name, ISensorInput& sens) override;
+    SensorDict& sensors() override;
 
     std::function<void(std::string &&topic, std::string &&msg)> OnMsgRecv;
 

@@ -10,12 +10,14 @@
 #include "Vypinace.h"
 #include "slowswi2cpwm.h"
 #include "Reku.h"
+#include "Kurenie.h"
 
 using OnOffDeviceList = std::map<const std::string, std::unique_ptr<OnOffDevice>>;
 using VypinaceDuoList = std::vector<std::unique_ptr<VypinacDuo>>;
 using VypinaceSingleList = std::vector<std::unique_ptr<VypinacSingle>>;
 
 namespace gpiod { class chip; }
+class OpenTherm;
 
 class Builder
 {
@@ -29,6 +31,7 @@ class Builder
 public:
     struct AppComponents
     {
+    std::unique_ptr<ISensorInput> dummyKupelnaT;
         VypinaceDuoList vypinaceDuo;
         VypinaceSingleList vypinaceSingle;
         OnOffDeviceList devicesOnOff;
@@ -37,10 +40,11 @@ public:
         std::unique_ptr<Reku> reku;
         std::unique_ptr<gpiod::chip> gpiochip3;
         std::unique_ptr<Pumpa> pumpa;
+        std::unique_ptr<kurenie::Kurenie> kurenie;
     };
     
     Builder(IMqttPublisherSPtr mqtt);
-    void buildMisc(slowswi2cpwm& ioexpander);
+    void buildMisc(slowswi2cpwm& ioexpander, OpenTherm& ot);
     [[nodiscard]] std::unique_ptr<can::InputControl> buildCan(CanBus& canbus);
     [[nodiscard]] ow::SensorList buildBBoW();
     void vypinace(boost::asio::io_service& io_context);
@@ -50,4 +54,5 @@ private:
     //void buildDevice(std::string name, std::string outputName, std::string inputName = std::string());
     OnOffDevice& buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent);
     AppComponents components;
+    ISensorInput& findSensor(std::string name);
 };
