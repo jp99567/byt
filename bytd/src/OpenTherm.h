@@ -51,6 +51,8 @@ public:
     {
         this->mode = mode;
     }
+    ISensorInput& sensCH() { return tCH; }
+    ISensorInput& sensDHW() { return tDHW; }
 private:
     void publish_status(uint16_t newstat);
 	uint32_t transmit(uint32_t frame);

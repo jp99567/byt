@@ -11,7 +11,7 @@ class IHw
 {
 public:
     virtual void setTch(float t) = 0;
-    virtual void setTEV(ROOM room, float v, Clock::time_point tp) = 0;
+    virtual void setTEV(ROOM room, float pwm, Clock::time_point tp) = 0;
     virtual void setTEVsDefault(Clock::time_point tp) = 0;
     virtual float curTch() const = 0;
     virtual float curTroom(ROOM room) const = 0;

@@ -17,7 +17,7 @@
 #include "Pumpa.h"
 #include <gpiod.hpp>
 #include "canbus.h"
-
+#include "builder.h"
 
 class AppContainer
 {
@@ -30,14 +30,17 @@ class AppContainer
     std::shared_ptr<OpenTherm> openTherm;
     std::shared_ptr<MqttClient> mqtt;
     std::unique_ptr<slowswi2cpwm> slovpwm;
+    AppComponents components;
 
 public:
     explicit AppContainer();
+    ~AppContainer();
     void run();
 
  private:
 
     void on1sec();
     void sched_1sect();
+    void sched_kurenie();
     void doRequest(std::string msg);
 };

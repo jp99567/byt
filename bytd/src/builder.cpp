@@ -319,7 +319,7 @@ void Builder::vypinace(boost::asio::io_service &io_context)
     components.dverePavlac = std::make_unique<MonoStableDev>(getDigOutputByName(digiOutputs, "dverePavlac"), "DverePavlac", mqtt, io_context, 2);
 }
 
-Builder::AppComponents Builder::getComponents()
+AppComponents Builder::getComponents()
 {
     return std::move(components);
 }

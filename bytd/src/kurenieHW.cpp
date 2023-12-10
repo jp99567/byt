@@ -95,6 +95,18 @@ HW::HW(OpenTherm &ot, slowswi2cpwm &tevpwm, IMqttPublisherSPtr mqtt,
     LogINFO("createTev: {}", tevs.size());
   }
   createTev(ROOM::Podlahovka, false);
+
+  for(int i = 0; (ROOM)i < ROOM::_last; ++i){
+    roomSensor[i].get().Changed().subscribe(event::subscr([this,i](float v){
+      if(std::isnan(v)){
+        ++curTemp[i].enr;
+      }
+      else{
+        curTemp[i].v = v;
+        curTemp[i].enr = 0;
+      }
+    }));
+  }
 }
 
 HW::~HW()
@@ -107,9 +119,9 @@ void HW::setTch(float t)
     ot.chSetpoint = t;
 }
 
-void HW::setTEV(ROOM room, float v, std::chrono::steady_clock::time_point tp)
+void HW::setTEV(ROOM room, float pwm, std::chrono::steady_clock::time_point tp)
 {
-  tevs.at(idx(room))->update(v, tevCtrl, *mqtt, tp);
+  tevs.at(idx(room))->update(pwm, tevCtrl, *mqtt, tp);
 }
 
 void HW::setTEVsDefault(Clock::time_point tp)
@@ -120,12 +132,12 @@ void HW::setTEVsDefault(Clock::time_point tp)
 
 float HW::curTch() const
 {
-    return 0;
+  return ot.sensCH().value();
 }
 
 float HW::curTroom(ROOM room) const
 {
-    return 0;
+  return curTemp[idx(room)].v;
 }
 
 } // namespace kurenie

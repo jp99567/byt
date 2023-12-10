@@ -3,7 +3,6 @@
 #include "Log.h"
 #include "Elektromer.h"
 #include "Pru.h"
-#include "builder.h"
 #include "bytd/src/therm.h"
 #include "TxtEnum.h"
 
@@ -40,9 +39,11 @@ AppContainer::AppContainer()
     //exporter = std::make_shared<ow::Exporter>();
 }
 
+AppContainer::~AppContainer() {}
+
 struct Meranie
 {
-    MeranieTeploty& meranie;
+  MeranieTeploty& meranie;
     std::atomic_bool running;
     std::thread meas_thread;
     explicit Meranie(MeranieTeploty& meranie) : meranie(meranie), running(true)
@@ -89,19 +90,19 @@ void AppContainer::run()
     auto canInputControl = builder->buildCan(canBus);
     builder->buildMisc(*slovpwm, *openTherm);
     builder->vypinace(io_service);
-    auto components = builder->getComponents();
+    components = builder->getComponents();
     builder = nullptr;
     auto meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
 
     Elektromer elektomer(*mqtt);
 
-    openTherm->Flame = [&components](bool flameOn){
+    openTherm->Flame = [this](bool flameOn){
         if(!flameOn){
             components.pumpa->onPlamenOff();
         }
     };
 
-    mqtt->OnMsgRecv = [this, &components](auto topic, auto msg){
+    mqtt->OnMsgRecv = [this](auto topic, auto msg){
       if(not matchTopicBase(topic, mqtt::rootTopic)){
         return;
       }
@@ -176,7 +177,7 @@ void AppContainer::run()
     };
 
     sched_1sect();
-
+    sched_kurenie();
 
     canBus.send(can::mkMsgSetAllStageOperating().frame);
     Meranie meranie_active_object(*meranie);
@@ -196,5 +197,14 @@ void AppContainer::sched_1sect()
         on1sec();
         t1sec.expires_at(t1sec.expiry() + std::chrono::seconds(1));
         sched_1sect();
-    });
+  });
+}
+
+void AppContainer::sched_kurenie()
+{
+  timerKurenie.async_wait([this](const boost::system::error_code&){
+    components.kurenie->process(kurenie::Clock::now());
+    timerKurenie.expires_at(timerKurenie.expiry() + kurenie::Kurenie::dT);
+    sched_kurenie();
+  });
 }

@@ -19,6 +19,20 @@ using VypinaceSingleList = std::vector<std::unique_ptr<VypinacSingle>>;
 namespace gpiod { class chip; }
 class OpenTherm;
 
+struct AppComponents
+{
+  std::unique_ptr<ISensorInput> dummyKupelnaT;
+  VypinaceDuoList vypinaceDuo;
+  VypinaceSingleList vypinaceSingle;
+  OnOffDeviceList devicesOnOff;
+  std::unique_ptr<MonoStableDev> brana;
+  std::unique_ptr<MonoStableDev> dverePavlac;
+  std::unique_ptr<Reku> reku;
+  std::unique_ptr<gpiod::chip> gpiochip3;
+  std::unique_ptr<Pumpa> pumpa;
+  std::unique_ptr<kurenie::Kurenie> kurenie;
+};
+
 class Builder
 {
     const YAML::Node config;
@@ -29,19 +43,6 @@ class Builder
 
 
 public:
-    struct AppComponents
-    {
-    std::unique_ptr<ISensorInput> dummyKupelnaT;
-        VypinaceDuoList vypinaceDuo;
-        VypinaceSingleList vypinaceSingle;
-        OnOffDeviceList devicesOnOff;
-        std::unique_ptr<MonoStableDev> brana;
-        std::unique_ptr<MonoStableDev> dverePavlac;
-        std::unique_ptr<Reku> reku;
-        std::unique_ptr<gpiod::chip> gpiochip3;
-        std::unique_ptr<Pumpa> pumpa;
-        std::unique_ptr<kurenie::Kurenie> kurenie;
-    };
     
     Builder(IMqttPublisherSPtr mqtt);
     void buildMisc(slowswi2cpwm& ioexpander, OpenTherm& ot);

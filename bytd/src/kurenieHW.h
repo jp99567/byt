@@ -21,16 +21,18 @@ public:
   ~HW();
 
   void setTch(float t) override;
-  void setTEV(ROOM room, float v, Clock::time_point tp) override;
+  void setTEV(ROOM room, float pwm, Clock::time_point tp) override;
   void setTEVsDefault(Clock::time_point tp) override;
   float curTch() const override;
   float curTroom(ROOM room) const override;
 
 private:
+  struct CurT { int enr = 0; float v = 25; };
     OpenTherm& ot;
     slowswi2cpwm& tevCtrl;
     IMqttPublisherSPtr mqtt;
     std::vector<std::unique_ptr<TEV>> tevs;
+    std::array<CurT,roomNr> curTemp;
   RoomSensors roomSensor;
 };
 
