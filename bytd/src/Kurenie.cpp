@@ -10,6 +10,7 @@ Kurenie::Kurenie(std::unique_ptr<IHw> hw) : hw(std::move(hw))
   for(auto& tstruct : t_cur){
     tstruct.tcirbuf.fill(25);
   }
+  roomSP.fill(0);
 }
 
 void Kurenie::setSP(ROOM room, float t)
@@ -47,10 +48,10 @@ Kurenie::Reg Kurenie::room_regulation_state(ROOM room) const
   auto e = sp - t;
 
   if( e > in_reg_range )
-    return Reg::over;
+    return Reg::under;
 
   if( e < -in_reg_range)
-    return Reg::under;
+    return Reg::over;
 
   return Reg::in;
 }

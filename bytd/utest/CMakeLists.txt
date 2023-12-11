@@ -9,7 +9,15 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(Catch2)
 
-add_executable(tests mqtt_topic.cpp ../src/OwTempSensor.cpp ../src/SimpleSensor.cpp)
+add_executable(tests
+    mqtt_topic.cpp
+    kurenie.cpp
+    ../src/OwTempSensor.cpp
+    ../src/SimpleSensor.cpp
+    ../src/Kurenie.cpp
+    kurenie.cpp
+)
+
 target_link_libraries(tests PRIVATE Catch2::Catch2WithMain fmt)
 target_include_directories(tests PRIVATE ../src/ ${CMAKE_SOURCE_DIR}/..)
 target_compile_definitions(tests PRIVATE WITHOUT_SPDLOG)
