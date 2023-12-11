@@ -22,8 +22,10 @@ public:
 private:
   ROOM mainRoom = ROOM::Obyvka;
   float t_CH = 0;
-  float t_CH_lim_low = 38;
-  float t_CH_lim_high = 80;
+  static constexpr float t_CH_lim_low = 38;
+  static constexpr float t_CH_lim_high_standard = 80;
+  static constexpr float t_CH_lim_high_podlahovka = 50;
+  float t_CH_lim_high = t_CH_lim_high_standard;
   float override_t_CH_val = std::numeric_limits<float>::quiet_NaN();
   std::array<float, roomNr> pwm_TEV_val;
   std::array<float, roomNr> override_pwm_TEV_val;
@@ -38,13 +40,14 @@ private:
   };
   std::array<CurT, roomNr> t_cur;
   enum class Reg { under, in, over };
-
+  Reg room_regulation_state(ROOM room) const;
   bool error = false;
   bool tevs_set_default = false;
   void set_t_CH();
   void set_pwm_TEV();
   void set_pwm_TEV(ROOM room);
   void calc();
+  void calc_rooms();
   void check();
   void update();
   void setError();

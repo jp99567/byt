@@ -2,6 +2,8 @@
 
 #include<string>
 
+using ust = std::size_t;
+
 namespace kurenie {
 
 enum class ROOM { Obyvka, Spalna, Kuchyna, Izba, Kupelka, Podlahovka, _last };

@@ -119,8 +119,11 @@ void HW::setTch(float t)
     ot.chSetpoint = t;
 }
 
-void HW::setTEV(ROOM room, float pwm, std::chrono::steady_clock::time_point tp)
-{
+void HW::setTEV(ROOM room, float pwm, std::chrono::steady_clock::time_point tp) {
+  if (pwm > 100)
+    pwm = 100;
+  else if (pwm < 0)
+    pwm = 0;
   tevs.at(idx(room))->update(pwm, tevCtrl, *mqtt, tp);
 }
 

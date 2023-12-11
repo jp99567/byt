@@ -39,6 +39,22 @@ void Kurenie::override_t_CH(float t)
   set_t_CH();
 }
 
+Kurenie::Reg Kurenie::room_regulation_state(ROOM room) const
+{
+  const auto sp = roomSP[idx(room)];
+  const auto& tstruct = t_cur[idx(room)];
+  auto t = tstruct.cur();
+  auto e = sp - t;
+
+  if( e > in_reg_range )
+    return Reg::over;
+
+  if( e < -in_reg_range)
+    return Reg::under;
+
+  return Reg::in;
+}
+
 void Kurenie::set_t_CH()
 {
   if(error){
@@ -70,32 +86,88 @@ void Kurenie::set_pwm_TEV(ROOM room)
              curTP);
 }
 
+constexpr bool roomExists(ROOM room)
+{
+  return room != ROOM::_last;
+}
+
+constexpr bool roomExists(ust room)
+{
+  return roomExists((ROOM)room);
+}
+
 void Kurenie::calc()
 {
-  std::vector<ROOM> out_of_reg_low;
   tevs_set_default = false;
   update_t_bufs();
-  if(std::any_of(std::cbegin(roomSP), std::cbegin(roomSP),
-                  [](auto sp) { return sp > 0; })) {
 
-    for(unsigned ir=0; ir < idx(ROOM::Podlahovka); ++ir){
-      if(roomSP[ir] > 0){
-        if(hw->isOpened((ROOM)ir, curTP)){
-          if(mainRoom == ROOM::_last || !hw->isOpened(mainRoom, curTP))
-            mainRoom = (ROOM)ir;
-        }
-        else{
-          valveControl((ROOM)ir);
-        }
+  auto mainRoomPosibleCandid = ROOM::_last;
+  auto mainRoomReqCandid = ROOM::_last;
+  auto is_room_under_regband = [this](ROOM room){ return Reg::under == room_regulation_state(room); };
+  auto is_room_over_regband = [this](ROOM room){ return Reg::over == room_regulation_state(room); };
+
+  for(ust ir = 0; ir < idx(ROOM::_last); ++ir){
+    if(mainRoom == (ROOM)ir)
+        continue;
+    if(roomSP[ir] > 0){
+      if(hw->isOpened((ROOM)ir, curTP)) {
+            mainRoomPosibleCandid = (ROOM)ir;
+          if(is_room_under_regband((ROOM)ir)){
+             mainRoomReqCandid = (ROOM)ir;
+          }
       }
     }
   }
+
+  if(roomExists(mainRoom)){
+    if(is_room_under_regband(mainRoom)){
+      calc_rooms();
+      return;
+    }
+  }
+
+  if(roomExists(mainRoomReqCandid)){
+    mainRoom = mainRoomReqCandid;
+    calc_rooms();
+    return;
+  }
+
+  if(!roomExists(mainRoom) || is_room_over_regband(mainRoom))
+  {
+    if(roomExists(mainRoomPosibleCandid)){
+      mainRoom = mainRoomPosibleCandid;
+      calc_rooms();
+      return;
+    }
+  }
+  else{
+    calc_rooms();
+    return;
+  }
+
   tevs_set_default = true;
   t_CH = 0;
 }
 
+void Kurenie::calc_rooms()
+{
+  for(ust ir = 0; ir < idx(ROOM::_last); ++ir){
+    if((ROOM)ir != mainRoom)
+      valveControl((ROOM)ir);
+  }
+  mainControl();
+}
+
 void Kurenie::check()
 {
+  if(roomSP[idx(ROOM::Podlahovka)] > 0){
+    t_CH_lim_high = t_CH_lim_high_podlahovka;
+    if(t_CH > t_CH_lim_high)
+      t_CH = t_CH_lim_high;
+  }
+  else{
+    t_CH_lim_high = t_CH_lim_high_standard;
+  }
 }
 
 void Kurenie::update()
@@ -118,6 +190,10 @@ void Kurenie::valveControl(ROOM room)
 
   auto e = sp - t;
   pwm += e*cProp - d * cDeriv;
+  if(pwm > 100)
+    pwm = 100;
+  else if(pwm < 0)
+    pwm = 0;
 }
 
 void Kurenie::mainControl()
@@ -132,13 +208,18 @@ void Kurenie::mainControl()
   if( e > in_reg_range ){
     t_CH = t_CH_lim_high;
   }
-  else if(e < in_reg_range ){
+  else if(e < -in_reg_range ){
     t_CH = t_CH_lim_low;
   }
   else{
     auto d = tstruct.delta();
     t_CH += e*cProp - d * cDeriv;
   }
+
+  if(t_CH > t_CH_lim_high)
+    t_CH = t_CH_lim_high;
+  else if(t_CH < t_CH_lim_low)
+    t_CH = t_CH_lim_low;
 }
 
 void Kurenie::update_t_bufs()
