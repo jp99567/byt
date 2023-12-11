@@ -135,9 +135,11 @@ float HW::curTch() const
   return ot.sensCH().value();
 }
 
-float HW::curTroom(ROOM room) const
+float HW::curTroom(ROOM room) const { return curTemp[idx(room)].v; }
+
+bool HW::isOpened(ROOM room, Clock::time_point tp) const
 {
-  return curTemp[idx(room)].v;
+  return tevs.at(idx(room))->isOpened(tp);
 }
 
 } // namespace kurenie

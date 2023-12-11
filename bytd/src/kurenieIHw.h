@@ -15,6 +15,7 @@ public:
     virtual void setTEVsDefault(Clock::time_point tp) = 0;
     virtual float curTch() const = 0;
     virtual float curTroom(ROOM room) const = 0;
+    virtual bool isOpened(ROOM room, Clock::time_point tp) const = 0;
     virtual ~IHw(){}
 };
 
