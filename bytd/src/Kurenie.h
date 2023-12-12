@@ -30,8 +30,10 @@ private:
   std::array<float, roomNr> pwm_TEV_val;
   std::array<float, roomNr> override_pwm_TEV_val;
   std::array<float, roomNr> roomSP;
+  static constexpr auto deltaT_smooth = std::chrono::minutes(3);
   struct CurT {
-    static constexpr std::size_t cnt = 6;
+    static constexpr std::size_t cnt = std::chrono::duration_cast<std::chrono::seconds>(deltaT_smooth).count() / std::chrono::duration_cast<std::chrono::seconds>(dT).count();
+      static_assert(cnt > 1, "invalid circbuf array size");
     std::array<float,cnt> tcirbuf;
     std::size_t curIdx = 0;
     void add(float val);
@@ -57,5 +59,6 @@ private:
   void dump_state() const;
   Clock::time_point curTP = Clock::time_point::min();
   static constexpr float in_reg_range = 0.75;
+  friend class KurenieTest;
 };
 } // namespace kurenie

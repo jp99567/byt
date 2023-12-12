@@ -2,6 +2,9 @@
 cmake_minimum_required(VERSION 3.21)
 project(bytd)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 find_package(Threads REQUIRED)
 find_package(Boost COMPONENTS system REQUIRED)
 find_package(PostgreSQL REQUIRED)
