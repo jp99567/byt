@@ -32,11 +32,11 @@ public:
 auto tpmin = kurenie::Clock::time_point::min();
 void init(kurenie::HwMock& hw)
 {
-  hw.cur_t_ch = 25;
+  hw.cur_t_ch = 20;
   hw.ch_t_sp = 0;
   hw.opened.reset();
   hw.setTEVsDefault(tpmin);
-  hw.roomt.fill(25);
+  hw.roomt.fill(20);
 }
 
 TEST_CASE( "Kurenie", "simple case 1" ) {
@@ -48,6 +48,20 @@ TEST_CASE( "Kurenie", "simple case 1" ) {
   k.process(tpmin);
   using kurenie::ROOM;
   CHECK(hw.ch_t_sp == 0);
-  CHECK(hw.tevpwm[idx(ROOM::Izba)] == 100);
+  for(ust ir=0; ir < idx(ROOM::Podlahovka); ++ir){
+    CHECK(hw.tevpwm[ir] == 100);
+  }
   CHECK(hw.tevpwm[idx(ROOM::Podlahovka)] == 0);
+
+  for(ust ir=0; ir < idx(ROOM::Podlahovka); ++ir){
+    hw.opened.set(ir,true);
+  }
+  k.process(tpmin);
+  for(ust ir=0; ir < idx(ROOM::Podlahovka); ++ir){
+    CHECK(hw.tevpwm[ir] == 100);
+  }
+  k.setSP(ROOM::Kuchyna, 25);
+  k.process(tpmin);
+  CHECK(hw.tevpwm[idx(ROOM::Kuchyna)] == 100);
+  CHECK(hw.tevpwm[idx(ROOM::Izba)] == 0);
 }

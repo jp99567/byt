@@ -54,6 +54,7 @@ private:
   void valveControl(ROOM room);
   void mainControl();
   void update_t_bufs();
+  void dump_state() const;
   Clock::time_point curTP = Clock::time_point::min();
   static constexpr float in_reg_range = 0.75;
 };

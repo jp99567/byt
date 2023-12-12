@@ -24,24 +24,4 @@ ROOM txtToRoom(std::string name)
   return it->second;
 }
 
-constexpr const char *roomTxt(ROOM room)
-{
-  switch (room) {
-  case ROOM::Obyvka:
-    return "Obyvka";
-  case ROOM::Spalna:
-    return "Spalna";
-  case ROOM::Kuchyna:
-    return "Kuchyna";
-  case ROOM::Izba:
-    return "Izba";
-  case ROOM::Kupelka:
-    return "Kupelna";
-  case ROOM::Podlahovka:
-    return "Podlahovka";
-  default:
-    return "invalid";
-  }
-}
-
 } // namespace kurenie

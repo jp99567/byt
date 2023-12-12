@@ -1,6 +1,7 @@
 #include "Kurenie.h"
 #include <algorithm>
 #include <cmath>
+#include "Log.h"
 
 namespace kurenie {
 
@@ -24,6 +25,7 @@ void Kurenie::process(std::chrono::steady_clock::time_point tp)
 {
   curTP = tp;
   calc();
+  dump_state();
   check();
   update();
 }
@@ -190,7 +192,16 @@ void Kurenie::valveControl(ROOM room)
   auto t = tstruct.cur();
 
   auto e = sp - t;
-  pwm += e*cProp - d * cDeriv;
+  if( e > in_reg_range ){
+    pwm = 100;
+  }
+  else if(e < -in_reg_range ){
+    pwm = 0;
+  }
+  else{
+    pwm += e*cProp - d * cDeriv;
+  }
+
   if(pwm > 100)
     pwm = 100;
   else if(pwm < 0)
@@ -201,6 +212,7 @@ void Kurenie::mainControl()
 {
   constexpr float cProp = 0.1;
   constexpr float cDeriv = 7;
+  pwm_TEV_val[idx(mainRoom)] = 100;
   auto sp = roomSP[idx(mainRoom)];
   auto& tstruct = t_cur[idx(mainRoom)];
   auto t = tstruct.cur();
@@ -228,6 +240,18 @@ void Kurenie::update_t_bufs()
   for(unsigned ir=0; ir < idx(ROOM::_last); ++ir){
     t_cur[ir].add(hw->curTroom((ROOM)ir));
   }
+}
+
+void Kurenie::dump_state() const
+{
+  for(ust ir=0; ir < idx(ROOM::_last); ++ir){
+    auto room = (ROOM)ir;
+    const auto sp = roomSP[ir];
+    const auto& tstruct = t_cur[ir];
+    LogDBG("kurenie {}:{}/{}/{} pwm:{} reg:{} opened:{}", roomTxt(room), sp, tstruct.cur(), tstruct.delta(), pwm_TEV_val[ir],
+           (ust)room_regulation_state(room), hw->isOpened(room,curTP) );
+  }
+  LogDBG("kurenie main:{}: {}/{}", roomTxt(mainRoom), t_CH, hw->curTch());
 }
 
 void Kurenie::CurT::add(float val)
