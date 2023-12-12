@@ -116,7 +116,10 @@ HW::~HW()
 
 void HW::setTch(float t)
 {
+  if(t != ot.chSetpoint){
     ot.chSetpoint = t;
+    mqtt->publish("rb/stat/setpointCH", t);
+  }
 }
 
 void HW::setTEV(ROOM room, float pwm, std::chrono::steady_clock::time_point tp) {
