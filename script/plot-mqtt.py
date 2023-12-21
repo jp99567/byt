@@ -70,10 +70,11 @@ class Showit:
         print(len(self.lines))
         self.data = []
         for i, line in enumerate(self.lines):
-            line.set_label(items[i])
+            line.set_label(items[i].split('/')[-1])
             self.data.append(np.empty((0, 2)))
         self.fig = fig
         self.ax = ax
+        self.ax.legend()
 
     def show(self, idx, t, y):
         tmin = 0
