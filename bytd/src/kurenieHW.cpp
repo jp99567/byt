@@ -24,12 +24,12 @@ public:
 
   bool isClosed(Clock::time_point tp) const
   {
-    return value == 0 && last + timeToFullTrip < tp;
+    return value <= 0 && last + timeToFullTrip < tp;
   }
 
   bool isOpened(Clock::time_point tp) const
   {
-    return value == 100 && last + timeToFullTrip < tp;
+    return value >= 100 && last + timeToFullTrip < tp;
   }
 
 protected:
@@ -146,6 +146,11 @@ float HW::curTroom(ROOM room) const { return curTemp[idx(room)].v; }
 bool HW::isOpened(ROOM room, Clock::time_point tp) const
 {
   return tevs.at(idx(room))->isOpened(tp);
+}
+
+bool HW::isClosed(ROOM room, std::chrono::steady_clock::time_point tp) const
+{
+  return tevs.at(idx(room))->isClosed(tp);
 }
 
 } // namespace kurenie

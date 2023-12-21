@@ -163,7 +163,7 @@ void Kurenie::calc_rooms()
 
 void Kurenie::check()
 {
-  if(roomSP[idx(ROOM::Podlahovka)] > 0){
+  if(not hw->isClosed(ROOM::Podlahovka, curTP)){
     t_CH_lim_high = t_CH_lim_high_podlahovka;
     if(t_CH > t_CH_lim_high)
       t_CH = t_CH_lim_high;
@@ -171,6 +171,7 @@ void Kurenie::check()
   else{
     t_CH_lim_high = t_CH_lim_high_standard;
   }
+
 }
 
 void Kurenie::update()

@@ -26,6 +26,7 @@ public:
   float curTch() const override;
   float curTroom(ROOM room) const override;
   bool isOpened(ROOM room, Clock::time_point tp) const override;
+  bool isClosed(ROOM room, Clock::time_point tp) const override;
 
 private:
   struct CurT { int enr = 0; float v = 25; };

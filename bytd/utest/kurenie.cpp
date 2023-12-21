@@ -21,10 +21,12 @@ public:
   float curTch() const override {return cur_t_ch;}
   float curTroom(ROOM room) const  override {return roomt[idx(room)];}
   bool isOpened(ROOM room, Clock::time_point) const  override {return opened[idx(room)];}
+  bool isClosed(ROOM room, Clock::time_point) const  override {return closed[idx(room)];}
 
   std::array<float, roomNr> roomt;
   std::array<float, roomNr> tevpwm;
   std::bitset<roomNr> opened;
+  std::bitset<roomNr> closed;
   float cur_t_ch = 25;
   float ch_t_sp = 0;
 };
