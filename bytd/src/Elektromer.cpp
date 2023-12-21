@@ -7,6 +7,7 @@
 
 #include "Elektromer.h"
 #include <gpiod.hpp>
+#include <fstream>
 #include "Log.h"
 #include "thread_util.h"
 #include "IMqttPublisher.h"
@@ -49,8 +50,9 @@ double Elektromer::getKWh() const
 
 void Elektromer::event(EventType e)
 {
+  Impulzy::event(e);
+
     if(e == EventType::rising){
-        ++impCount;
         auto nt = Clock::now();
         lastPeriod = std::chrono::duration_cast<std::chrono::milliseconds>(nt - lastImp);
         lastImp = nt;
@@ -63,9 +65,13 @@ void Elektromer::event(EventType e)
     }
 }
 
+float Elektromer::calc() const
+{
+  return orig + impCount / imp_per_kwh;
+}
+
 Elektromer::Elektromer(IMqttPublisher &mqtt)
-    :Impulzy("1", 17)
-    ,mqtt(mqtt)
+    :Impulzy("1", 17, mqtt, "elektromer-kwh.txt")
 {
     threadName = "bytd-elektromer";
     svc_init();
@@ -76,10 +82,18 @@ Elektromer::~Elektromer()
     LogDBG("~Elektromer");
 }
 
-Impulzy::Impulzy(std::string chipname, unsigned int line)
-    :chipName(chipname)
-    ,chipLine(line)
+Impulzy::Impulzy(std::string chipname, unsigned int line, IMqttPublisher &mqtt,
+                 const char *filename)
+    : chipName(chipname), chipLine(line), mqtt(mqtt), persistFile(filename)
 {
+  try{
+    std::ifstream f(persistFile);
+    f >> lastStored;
+  }
+  catch(const std::exception& e){
+    LogERR("implzy last value not found ({})", persistFile.string());
+  }
+  orig = lastStored;
 }
 
 Impulzy::~Impulzy()
@@ -124,11 +138,36 @@ void Impulzy::svc_init()
     });
 }
 
-Vodomer::Vodomer(MqttClient &mqtt)
-    :Impulzy("0", 3)
-    ,mqtt(mqtt)
+void Impulzy::event(EventType e)
 {
+  if(e == EventType::rising){
+    ++impCount;
+  }
+}
 
+void Impulzy::checkStore()
+{
+  auto v = calc();
+  if( lastStoredTime + std::chrono::hours(1) < Clock::now()
+      || std::abs(v - lastStored) > minDeltoToSTore){
+    store(v);
+  }
+}
+
+void Impulzy::store(float val)
+{
+  if(val != lastStored){
+    lastStored = val;
+    std::ofstream f(persistFile);
+    f << lastStored;
+    LogINFO("stored value {} to {}", val, persistFile.string());
+  }
+  lastStoredTime = Clock::now();
+}
+
+Vodomer::Vodomer(IMqttPublisher &mqtt) : Impulzy("0", 3, mqtt, "vodomer-litre.txt")
+{
+  minDeltoToSTore = 10;
 }
 
 Vodomer::~Vodomer()
@@ -140,6 +179,8 @@ constexpr double imp_per_liter = 1;
 
 void Vodomer::event(EventType e)
 {
+  Impulzy::event(e);
+
     if(e == EventType::rising){
         ++impCount;
         auto nt = Clock::now();
@@ -149,7 +190,10 @@ void Vodomer::event(EventType e)
     else if(e == EventType::falling){
     }
 
-
     //    mqtt.publish("rb/stat/prietok", std::to_string(pwr));
+}
 
+float Vodomer::calc() const
+{
+  return orig + impCount / imp_per_liter;
 }
