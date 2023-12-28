@@ -13,6 +13,13 @@ NodeCAN:
         buttonChodbickaLD: { addr: [ 0x120, 0, 1 ], pin: PC7 }
         buttonChodbickaRU: { addr: [ 0x120, 0, 2 ], pin: PA6 }
         buttonChodbickaRD: { addr: [ 0x120, 0, 3 ], pin: PG2 }
+  SvetlaPredne:
+      id: 2
+      DigOUT:
+        svetloWc: { addr: [ 0x115, 0, 0 ], pin: PE0 }
+        svetloKuchyna: { addr: [ 0x115, 0, 1 ], pin: PE1 }
+        svetloPavlac: { addr: [ 0x115, 0, 2 ], pin: PE2 }
+        svetloIzba: { addr: [ 0x115, 0, 3 ], pin: PE3 }
   Zadverie:
       id: 6
       DigIN:

@@ -232,14 +232,6 @@ void assignVypinavButton(VypinacSingle& vypinac, VypinacSingle::Button id, DigIn
 
 void Builder::vypinace(boost::asio::io_service &io_context)
 {
-    /* provizorny bbb2 mqtt client */
-    digiOutputs.emplace("svetloWc", std::make_unique<MqttDigiOut>(mqtt, "ha/svetla/wc"));
-    digiOutputs.emplace("svetloKuchyna", std::make_unique<MqttDigiOut>(mqtt, "ha/svetla/kuchyna"));
-    digiOutputs.emplace("svetloPavlac", std::make_unique<MqttDigiOut>(mqtt, "ha/svetla/pavlac"));
-    digiOutputs.emplace("svetloIzba", std::make_unique<MqttDigiOut>(mqtt, "ha/svetla/izba"));
-    digiOutputs.emplace("vetranie", std::make_unique<MqttDigiOut>(mqtt, "ha/reku/vetranie1"));
-    /* treba vymenit za can node vo wc */
-
     auto vypinacKupelka = std::make_unique<VypinacDuoWithLongPress>(io_context);
     auto vypinacZadverie = std::make_unique<VypinacDuoWithLongPress>(io_context);
     auto vypinacKuchyna = std::make_unique<VypinacDuoSimple>();
