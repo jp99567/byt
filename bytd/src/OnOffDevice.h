@@ -21,8 +21,9 @@ protected:
 
 class OnOffDevice : public DeviceBase
 {
+    bool outInverted=false;
 public:
-    explicit OnOffDevice(std::unique_ptr<IDigiOut> out, std::string name, IMqttPublisherSPtr mqtt);
+    explicit OnOffDevice(std::unique_ptr<IDigiOut> out, std::string name, IMqttPublisherSPtr mqtt, bool outInverted=false);
     void toggle();
     void set(bool on, bool by_mqtt = false);
     bool get() const;

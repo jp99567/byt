@@ -2,22 +2,25 @@
 #include "IIo.h"
 #include "Log.h"
 
-OnOffDevice::OnOffDevice(std::unique_ptr<IDigiOut> out, std::string name, IMqttPublisherSPtr mqtt)
-    :DeviceBase(std::move(out), name, mqtt)
-{}
+OnOffDevice::OnOffDevice(std::unique_ptr<IDigiOut> out, std::string name,
+                         IMqttPublisherSPtr mqtt, bool outInverted)
+    : DeviceBase(std::move(out), name, mqtt), outInverted(outInverted)
+{
+  (*this->out)(outInverted);
+}
 
 void OnOffDevice::toggle()
 {
-    auto newVal = ! (bool)*out;
-    (*out)(newVal);
+  auto newVal = ! ((bool)*out != outInverted);
+    (*out)(newVal!=outInverted);
     mqtt->publish(mqttPath, (int)newVal);
 }
 
 void OnOffDevice::set(bool on, bool by_mqtt)
 {
     LogDBG("OnOffDevice::set check {} {}", on, (bool)*out);
-    if(on != (bool)*out){
-        (*out)(on);
+  if(on != ((bool)*out != outInverted)){
+        (*out)(on!=outInverted);
         LogDBG("OnOffDevice::set {}", on);
         if(not by_mqtt)
             mqtt->publish(mqttPath, (int)on);
@@ -26,7 +29,7 @@ void OnOffDevice::set(bool on, bool by_mqtt)
 
 bool OnOffDevice::get() const
 {
-    return *out;
+    return *out != outInverted;
 }
 
 MonoStableDev::MonoStableDev(std::unique_ptr<IDigiOut> out, std::string name, IMqttPublisherSPtr mqtt, boost::asio::io_service& io_context, float timeout_sec)
