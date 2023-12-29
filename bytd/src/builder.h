@@ -53,7 +53,11 @@ public:
 
 private:
     //void buildDevice(std::string name, std::string outputName, std::string inputName = std::string());
-    OnOffDevice& buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent);
+    OnOffDevice& buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent, bool outInverted=false);
+    OnOffDevice& buildDeviceInvertedOut(std::string name, std::string outputName, event::Event<>& controlEvent)
+    {
+      return buildDevice(std::move(name), std::move(outputName), controlEvent, true);
+    }
     AppComponents components;
     ISensorInput& findSensor(std::string name);
 };

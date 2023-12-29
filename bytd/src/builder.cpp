@@ -272,13 +272,13 @@ void Builder::vypinace(boost::asio::io_service &io_context)
     buildDevice("SvetloStol", "svetloStol", vypinacChodbicka->ClickedRD);
     buildDevice("SvetloStena", "svetloStena", vypinacChodbicka->ClickedLD);
     buildDevice("SvetloObyvka", "svetloObyvka", vypinacChodbicka->ClickedLU);
-    auto& svetloKuchyna = buildDevice("SvetloKuchyna", "svetloKuchyna", vypinacZadverie->ClickedLU);
+    auto& svetloKuchyna = buildDeviceInvertedOut("SvetloKuchyna", "svetloKuchyna", vypinacZadverie->ClickedLU);
     vypinacIzba->ClickedD.subscribe(event::subscr([&svetloKuchyna]{svetloKuchyna.toggle();}));
     vypinacKuchyna->ClickedLU.subscribe(event::subscr([&svetloKuchyna]{svetloKuchyna.toggle();}));
     auto& prevetranie = buildDevice("Vetranie", "prevetranie", vypinacZadverie->ClickedRD);
-    buildDevice("SvetloIzba", "svetloIzba", vypinacIzba->ClickedU);
-    buildDevice("SvetloPavlac", "svetloPavlac", vypinacZadverie->ClickedRU);
-    buildDevice("SvetloWc", "svetloWc", vypinacZadverie->ClickedLD);
+    buildDeviceInvertedOut("SvetloIzba", "svetloIzba", vypinacIzba->ClickedU);
+    buildDeviceInvertedOut("SvetloPavlac", "svetloPavlac", vypinacZadverie->ClickedRU);
+    buildDeviceInvertedOut("SvetloWc", "svetloWc", vypinacZadverie->ClickedLD);
 
     vypinacKuchyna->ClickedRD.subscribe(event::subscr([&prevetranie]{prevetranie.toggle();}));
     vypinacSpalna->ClickedD.subscribe(event::subscr([&dev = svetloChodbicka]{dev.toggle();}));
@@ -318,7 +318,9 @@ AppComponents Builder::getComponents()
     return std::move(components);
 }
 
-OnOffDevice& Builder::buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent)
+OnOffDevice &Builder::buildDevice(std::string name, std::string outputName,
+                                  event::Event<> &controlEvent,
+                                  bool outInverted)
 {
     auto out = getDigOutputByName(digiOutputs, outputName);
     auto it = components.devicesOnOff.emplace(name, std::make_unique<OnOffDevice>(std::move(out), name, mqtt));

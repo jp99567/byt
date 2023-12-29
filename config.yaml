@@ -16,10 +16,10 @@ NodeCAN:
   SvetlaPredne:
       id: 2
       DigOUT:
-        svetloWc: { addr: [ 0x115, 0, 0 ], pin: PE0 }
-        svetloKuchyna: { addr: [ 0x115, 0, 1 ], pin: PE1 }
-        svetloPavlac: { addr: [ 0x115, 0, 2 ], pin: PE2 }
-        svetloIzba: { addr: [ 0x115, 0, 3 ], pin: PE3 }
+        svetloKuchyna: { addr: [ 0x115, 0, 0 ], pin: PE0 }
+        svetloIzba: { addr: [ 0x115, 0, 1 ], pin: PE1 }
+        svetloWc: { addr: [ 0x115, 0, 2 ], pin: PE2 }
+        svetloPavlac: { addr: [ 0x115, 0, 3 ], pin: PE3 }
   Zadverie:
       id: 6
       DigIN:
