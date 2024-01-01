@@ -3,6 +3,7 @@
 
 #include "../src/OwTempSensor.h"
 #include "../src/kurenieIHw.h"
+#include "../src/OnOffDevice.h"
 
 class PublisherMock : public IMqttPublisher
 {
@@ -68,4 +69,39 @@ TEST_CASE("misc", "int values")
     CHECK(s1.value() == 85);
     CHECK(0 != std::numeric_limits<float>::quiet_NaN());
     CHECK_FALSE(0 == std::numeric_limits<float>::quiet_NaN());
+}
+
+class DigiOutMock : public IDigiOut
+{
+public:
+  bool state = false;
+  operator bool() const override {return state;}
+  bool operator()(bool value) override {return state=value;}
+};
+
+TEST_CASE("device", "on off inverted")
+{
+  auto mqtt = std::make_shared<PublisherMock>();
+  auto o1UPtr = std::make_unique<DigiOutMock>();
+  auto o2UPtr = std::make_unique<DigiOutMock>();
+  auto& o1 = *o1UPtr;
+  auto& o2 = *o2UPtr;
+
+  OnOffDevice d1(std::move(o1UPtr), "d1", mqtt);
+  OnOffDevice d2inv(std::move(o2UPtr), "d2", mqtt, true);
+
+  CHECK_FALSE( d1.get() );
+  CHECK_FALSE( d2inv.get() );
+
+  CHECK_FALSE((bool)o1);
+  CHECK((bool)o2);
+
+  d1.set(true);
+  d2inv.set(true);
+
+  CHECK( d1.get() );
+  CHECK( d2inv.get() );
+
+  CHECK((bool)o1);
+  CHECK_FALSE((bool)o2);
 }

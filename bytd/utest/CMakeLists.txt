@@ -15,6 +15,7 @@ add_executable(tests
     ../src/OwTempSensor.cpp
     ../src/SimpleSensor.cpp
     ../src/Kurenie.cpp
+    ../src/OnOffDevice.cpp
     kurenie.cpp
 )
 

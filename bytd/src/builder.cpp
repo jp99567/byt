@@ -323,7 +323,7 @@ OnOffDevice &Builder::buildDevice(std::string name, std::string outputName,
                                   bool outInverted)
 {
     auto out = getDigOutputByName(digiOutputs, outputName);
-    auto it = components.devicesOnOff.emplace(name, std::make_unique<OnOffDevice>(std::move(out), name, mqtt));
+    auto it = components.devicesOnOff.emplace(name, std::make_unique<OnOffDevice>(std::move(out), name, mqtt, outInverted));
     controlEvent.subscribe(event::subscr([&dev=it.first->second](){ dev->toggle(); }));
     return *(it.first->second);
 }
