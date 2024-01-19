@@ -10,6 +10,7 @@ import selectors
 import serial
 import time
 import os
+from datetime import datetime
 
 
 class Spe6103:
@@ -126,7 +127,7 @@ class Vctrl:
         self.outDir1.set_value(False)
         self.outDir2.set_value(False)
         self.spe.cmdOneWay("OUTP 0")
-        print("motorStoped")
+        print(f"{datetime.now()} motorStoped")
 
     def motorStart(self, forward):
         print(f"motorStart fw:{forward}")
@@ -152,7 +153,7 @@ class Vctrl:
         print(f"gpio2 {ev}")
         self.ev2 = ev.type
 
-    def readgpio(self, to):
+    def readgpios(self, to):
         events = self.sel.select(to)
         self.ev1, self.ev2 = None, None
         if events:
@@ -164,7 +165,7 @@ class Vctrl:
         return True
 
     def homePos(self):
-        print(f"move to home position Kotol")
+        print(f"{datetime.now()} move to home position Kotol")
         self.flush()
 
         if not self.spe.check():
@@ -176,15 +177,15 @@ class Vctrl:
             self.motorStart(True)
 
             dist = 0
-            targetDistance = 1 if absMarkReached else 4
-            while dist < targetDistance:
-                if self.readgpio(3):
+            maxDistance = 1 if absMarkReached else 5
+            while dist < maxDistance:
+                if self.readgpios(3):
                     if self.ev1 == gpiod.LineEvent.RISING_EDGE:
                         dist += 1
                     if self.ev2 == gpiod.LineEvent.RISING_EDGE:
                         if not absMarkReached:
                             absMarkReached = True
-                            targetDistance = dist + 1
+                            maxDistance = dist + 1
                 else:
                     print(f"process timeout {dist}")
                     break
@@ -199,7 +200,7 @@ class Vctrl:
         return False
 
     def move(self, target):
-        print(f"move to target {porty[self.curPort]} ==> {porty[target]}")
+        print(f"{datetime.now()} move to target {porty[self.curPort]} ==> {porty[target]}")
         self.flush()
 
         try:
@@ -214,10 +215,12 @@ class Vctrl:
         inkrement = 1 if forwardDirection else -1
         posError = False
         print(f"check2 {targetDist} {forwardDirection} {inkrement} {self.curPort} {self.inPosition}")
+        if targetDist == 0:
+            return True
         try:
             self.motorStart(forwardDirection)
             exitPosition = False
-            if self.readgpio(0.5):
+            if self.readgpios(0.5):
                 if self.ev1 == gpiod.LineEvent.FALLING_EDGE:
                     exitPosition = True
                     self.inPosition = False
@@ -225,7 +228,7 @@ class Vctrl:
             absMarkHit = bool(self.inp2.get_value())
             expectAbsMark = expectedAbsMark(self.curPort, forwardDirection)
             while exitPosition and dist < targetDist:
-                if self.readgpio(3):
+                if self.readgpios(3):
                     if self.ev1 == gpiod.LineEvent.RISING_EDGE:
                         dist += 1
                         self.curPort = (self.curPort + inkrement + 4) % 4
@@ -268,7 +271,7 @@ class Vctrl:
     def flush(self):
         self.ignore = True
         while True:
-            if not self.readgpio(0.1):
+            if not self.readgpios(0.1):
                 break
         self.ignore = False
 
@@ -289,7 +292,6 @@ class ScopeExit:
 
 
 async def move_to_position(targetStr, mqtt):
-
     try:
         target = porty.index(targetStr)
     except ValueError:
@@ -302,27 +304,29 @@ async def move_to_position(targetStr, mqtt):
 
     if vctrl.moving:
         return
-    if target == vctrl.curPort:
+    if target == vctrl.curPort and vctrl.inPosition:
         return
     vctrl.moving = True
     topic_position = "ventil4w/position"
-    await mqtt.publish(topic_position, "moving")
+    await mqtt.publish(topic_position, "moving", 0, True)
 
     def cleanup():
         vctrl.moving = False
 
     with ScopeExit(cleanup):
+        ok = False
         if not vctrl.inPosition:
             ok = await to_thread.run_sync(vctrl.homePos)
             if not ok:
-                await mqtt.publish(topic_position, "error")
+                await mqtt.publish(topic_position, "error", 0, True)
                 return
-        ok = await to_thread.run_sync(vctrl.move, target)
+        if vctrl.curPort != target:
+            ok = await to_thread.run_sync(vctrl.move, target)
         print(f"move ok:{ok}")
         if not ok:
-            await mqtt.publish(topic_position, "error")
+            await mqtt.publish(topic_position, "error", 0, True)
             return
-        await mqtt.publish(topic_position, porty[vctrl.curPort])
+        await mqtt.publish(topic_position, porty[vctrl.curPort], 0, True)
 
 
 last_position_file = 'ventil4way-last-position'
