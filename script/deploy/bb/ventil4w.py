@@ -130,8 +130,8 @@ class Vctrl:
         print(f"{datetime.now()} motorStoped")
 
     def motorStart(self, forward):
-        print(f"motorStart fw:{forward}")
         self.spe.cmdOneWay("OUTP 1")
+        print(f"{datetime.now()} motorStart fw:{forward}")
         if forward:
             self.outDir1.set_value(True)
         else:
@@ -250,7 +250,8 @@ class Vctrl:
             return False
         if not self.inp1.get_value():
             return False
-        return self.curPort == target
+        self.inPosition = self.curPort == target
+        return self.inPosition
 
     def checkInitConditions(self):
         print(f"test init cond {self.inp1.get_value()} {self.inp2.get_value()}")
