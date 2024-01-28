@@ -7,71 +7,22 @@ from anyio import to_thread
 import signal
 import gpiod
 import selectors
-import serial
 import time
 import os
 from datetime import datetime
 
-
-class Spe6103:
-    def __init__(self):
-        try:
-            self.ser = serial.Serial(port='/dev/ttyUSB0', baudrate=115200, timeout=0.5)
-        except serial.SerialException as msg:
-            print(msg)
-
-    def readL(self):
-        buf = bytearray()
-        while True:
-            byte = self.ser.read()
-            if len(byte) < 1:
-                print(f"invalid read1 {byte}")
-                break
-
-            if byte[0] == ord('\n'):
-                break
-            buf.extend(byte)
-        return buf.decode()
-
-    def reqrsp(self, req):
-        n = self.ser.write(f"{req}\n".encode())
-        if n != len(req) + 1:
-            print(f"invalid write {n}")
-        return self.readL()
-
-
-    def cmdOneWay(self, cmd):
-        n = self.ser.write(f"{cmd}\n".encode())
-        if n != len(cmd) + 1:
-            print(f"invalid write {n}")
-
-    def flush(self):
-        while True:
-            unsol = self.readL()
-            if len(unsol) < 1:
-                print("spe6103 link clear")
-                return
-            print(f"garbage: {unsol}")
-
-    def check(self):
-        self.flush()
-        rsp = self.reqrsp("MEAS:SCALAR:ALL:INFO?")
-        valvec = rsp.split(',')
-        if len(valvec) != 7:
-            print(f"unexpected {rsp}")
-            return False
-
-        v = float(valvec[0])
-        i = float(valvec[1])
-        w = float(valvec[2])
-        mode = int(valvec[6])
-        modetxt = ('standby', 'CV', 'CC')
-        rsp = self.reqrsp("OUTP?").strip()
-        print(f"{v}V {i}A {w}W {modetxt[mode]} output:{rsp}")
-        return rsp == "0" or rsp == "OFF"
-
-
 porty = ('Kotol', 'StudenaVoda', 'Boiler', 'KotolBoiler')
+
+
+class ScopeExit:
+    def __init__(self, fn):
+        self.on_exit = fn
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.on_exit()
 
 
 def calcMotion(cur, dst):
@@ -99,6 +50,8 @@ class Vctrl:
     ev1 = None
     ev2 = None
     moving = False
+    nextPortTimeout = 1.0
+    exitPositionTimeout = 0.4
 
     def __init__(self):
         self.chip = gpiod.Chip('/dev/gpiochip3')
@@ -107,30 +60,31 @@ class Vctrl:
         self.inp2 = self.chip.get_line(16)
         self.outDir1 = self.chip.get_line(14)
         self.outDir2 = self.chip.get_line(17)
+        self.outSP_ON = self.chip.get_line(19)
         self.inp1.request("t2", type=gpiod.LINE_REQ_EV_BOTH_EDGES)
         self.inp2.request("t2", type=gpiod.LINE_REQ_EV_BOTH_EDGES)
         self.outDir1.request("t2", type=gpiod.LINE_REQ_DIR_OUT)
         self.outDir1.set_value(False)
         self.outDir2.request("t2", type=gpiod.LINE_REQ_DIR_OUT)
         self.outDir2.set_value(False)
+        self.outSP_ON.request("t2", type=gpiod.LINE_REQ_DIR_OUT)
+        self.outSP_ON.set_value(False)
         self.sel = selectors.DefaultSelector()
         fd1 = self.inp1.event_get_fd()
         fd2 = self.inp2.event_get_fd()
         print(f"fd: {fd1} {fd2}")
         self.sel.register(fd1, selectors.EVENT_READ, self.read_pin1)
         self.sel.register(fd2, selectors.EVENT_READ, self.read_pin2)
-        self.spe = Spe6103()
 
     def inPortPosition(self):
         return bool(self.inp1.get_value())
+
     def motorStop(self):
         self.outDir1.set_value(False)
         self.outDir2.set_value(False)
-        self.spe.cmdOneWay("OUTP 0")
         print(f"{datetime.now()} motorStoped")
 
     def motorStart(self, forward):
-        self.spe.cmdOneWay("OUTP 1")
         print(f"{datetime.now()} motorStart fw:{forward}")
         if forward:
             self.outDir1.set_value(True)
@@ -164,94 +118,105 @@ class Vctrl:
             return False
         return True
 
+    def supply12V(self, on):
+        self.outSP_ON.set_value(on)
+
+    def poweroff(self):
+        self.supply12V(False)
+
     def homePos(self):
         print(f"{datetime.now()} move to home position Kotol")
         self.flush()
 
-        if not self.spe.check():
+        with ScopeExit(self.poweroff):
+            self.supply12V(True)
+            time.sleep(1)
+
+            absMarkReached = bool(self.inp2.get_value())
+
+            try:
+                self.motorStart(True)
+
+                dist = 0
+                maxDistance = 1 if absMarkReached else 5
+                while dist < maxDistance:
+                    if self.readgpios(self.nextPortTimeout):
+                        if self.ev1 == gpiod.LineEvent.RISING_EDGE:
+                            dist += 1
+                        if self.ev2 == gpiod.LineEvent.RISING_EDGE:
+                            if not absMarkReached:
+                                absMarkReached = True
+                                maxDistance = dist + 1
+                    else:
+                        print(f"process timeout {dist}")
+                        break
+                print(f"homepos {absMarkReached} {dist}")
+            finally:
+                self.motorStop()
+            time.sleep(0.1)
+            if self.inp1.get_value() and absMarkReached:
+                self.inPosition = True
+                self.curPort = 0
+                return True
             return False
-
-        absMarkReached = bool(self.inp2.get_value())
-
-        try:
-            self.motorStart(True)
-
-            dist = 0
-            maxDistance = 1 if absMarkReached else 5
-            while dist < maxDistance:
-                if self.readgpios(3):
-                    if self.ev1 == gpiod.LineEvent.RISING_EDGE:
-                        dist += 1
-                    if self.ev2 == gpiod.LineEvent.RISING_EDGE:
-                        if not absMarkReached:
-                            absMarkReached = True
-                            maxDistance = dist + 1
-                else:
-                    print(f"process timeout {dist}")
-                    break
-            print(f"homepos {absMarkReached} {dist}")
-        finally:
-            self.motorStop()
-        time.sleep(0.1)
-        if self.inp1.get_value() and absMarkReached:
-            self.inPosition = True
-            self.curPort = 0
-            return True
-        return False
 
     def move(self, target):
         print(f"{datetime.now()} move to target {porty[self.curPort]} ==> {porty[target]}")
         self.flush()
 
-        try:
-            if not self.checkInitConditions():
-                return False
-        except:
-            print("some exception")
-            return False
+        with ScopeExit(self.poweroff):
+            self.supply12V(True)
+            time.sleep(1)
 
-        print("check1")
-        forwardDirection, targetDist = calcMotion(self.curPort, target)
-        inkrement = 1 if forwardDirection else -1
-        posError = False
-        print(f"check2 {targetDist} {forwardDirection} {inkrement} {self.curPort} {self.inPosition}")
-        if targetDist == 0:
-            return True
-        try:
-            self.motorStart(forwardDirection)
-            exitPosition = False
-            if self.readgpios(0.5):
-                if self.ev1 == gpiod.LineEvent.FALLING_EDGE:
-                    exitPosition = True
-                    self.inPosition = False
-            dist = 0
-            absMarkHit = bool(self.inp2.get_value())
-            expectAbsMark = expectedAbsMark(self.curPort, forwardDirection)
-            while exitPosition and dist < targetDist:
-                if self.readgpios(3):
-                    if self.ev1 == gpiod.LineEvent.RISING_EDGE:
-                        dist += 1
-                        self.curPort = (self.curPort + inkrement + 4) % 4
-                        if expectAbsMark != absMarkHit:
-                            posError = True
-                            break
-                        expectAbsMark = expectedAbsMark(self.curPort, forwardDirection)
-                        absMarkHit = False
-                    if self.ev2 == gpiod.LineEvent.RISING_EDGE:
-                        absMarkHit = True
-                else:
-                    print(f"process timeout {dist}")
-                    break
-            print(f"end {exitPosition} {dist}")
-        finally:
-            self.motorStop()
-        time.sleep(0.1)
-        if posError:
-            return False
-        if not self.inp1.get_value():
-            return False
-        self.inPosition = self.curPort == target
-        return self.inPosition
+            try:
+                if not self.checkInitConditions():
+                    return False
+            except:
+                print("some exception")
+                return False
+
+            print("check1")
+            forwardDirection, targetDist = calcMotion(self.curPort, target)
+            inkrement = 1 if forwardDirection else -1
+            posError = False
+            print(f"check2 {targetDist} {forwardDirection} {inkrement} {self.curPort} {self.inPosition}")
+            if targetDist == 0:
+                return True
+            try:
+                self.motorStart(forwardDirection)
+                exitPosition = False
+                if self.readgpios(self.exitPositionTimeout):
+                    if self.ev1 == gpiod.LineEvent.FALLING_EDGE:
+                        exitPosition = True
+                        self.inPosition = False
+                dist = 0
+                absMarkHit = bool(self.inp2.get_value())
+                expectAbsMark = expectedAbsMark(self.curPort, forwardDirection)
+                while exitPosition and dist < targetDist:
+                    if self.readgpios(self.nextPortTimeout):
+                        if self.ev1 == gpiod.LineEvent.RISING_EDGE:
+                            dist += 1
+                            self.curPort = (self.curPort + inkrement + 4) % 4
+                            if expectAbsMark != absMarkHit:
+                                posError = True
+                                break
+                            expectAbsMark = expectedAbsMark(self.curPort, forwardDirection)
+                            absMarkHit = False
+                        if self.ev2 == gpiod.LineEvent.RISING_EDGE:
+                            absMarkHit = True
+                    else:
+                        print(f"process timeout {dist}")
+                        break
+                print(f"end {exitPosition} {dist}")
+            finally:
+                self.motorStop()
+            time.sleep(0.1)
+            if posError:
+                return False
+            if not self.inp1.get_value():
+                return False
+            self.inPosition = self.curPort == target
+            return self.inPosition
 
     def checkInitConditions(self):
         print(f"test init cond {self.inp1.get_value()} {self.inp2.get_value()}")
@@ -266,8 +231,7 @@ class Vctrl:
             self.inPosition = False
             return False
 
-        return self.spe.check()
-
+        return True
 
     def flush(self):
         self.ignore = True
@@ -279,17 +243,6 @@ class Vctrl:
 
 vctrl = Vctrl()
 vctrl.flush()
-
-
-class ScopeExit:
-    def __init__(self, fn):
-        self.on_exit = fn
-
-    def __enter__(self):
-        pass
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.on_exit()
 
 
 async def move_to_position(targetStr, mqtt):
@@ -341,10 +294,10 @@ async def signal_handler(scope: CancelScope):
             else:
                 print('Terminated!')
 
-            print(f"check {vctrl.moving} {vctrl.inPosition} {vctrl.inPortPosition()}")
-            if not vctrl.moving and vctrl.inPosition and vctrl.inPortPosition():
+            print(f"check {vctrl.moving} {vctrl.inPosition}")
+            if not vctrl.moving and vctrl.inPosition:
                 with open(last_position_file, "w") as f:
-                    f.write(porty[vctrl.curPort]+"\n")
+                    f.write(porty[vctrl.curPort] + "\n")
                     print(f"stored last position {porty[vctrl.curPort]}")
 
             scope.cancel()
@@ -364,14 +317,18 @@ async def main() -> None:
         tg.start_soon(start_mqtt, tg)
         tg.start_soon(signal_handler, tg.cancel_scope)
 
+
 try:
     with open(last_position_file) as f:
         postxt = f.readline().strip()
         pos = porty.index(postxt)
+        vctrl.supply12V(True)
+        time.sleep(1)
         if vctrl.inPortPosition():
             vctrl.curPort = pos
             vctrl.inPosition = True
             print(f"loaded last position {postxt}")
+        vctrl.supply12V(False)
 except FileNotFoundError:
     pass
 
@@ -379,6 +336,5 @@ try:
     os.remove(last_position_file)
 except FileNotFoundError:
     pass
-
 
 anyio.run(main)
