@@ -92,9 +92,14 @@ BBOw:
     # OTIN pru0_in14 P8_16
     # OTOUT pru0_out14 P8_12
 
+    # REKU_UART_RX P9.11
+    # REKU_UART_TX P9.13
+
+# CAN kabel
 #   1. žltý - +24V
 #   2. čierny - GND
 #   3. červený - CANH
 #   4. biely - CANL
 
 # GpioTest passed: 3,5,10,4,7,6,2
+

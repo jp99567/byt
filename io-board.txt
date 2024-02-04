@@ -1,0 +1,52 @@
+
+3V3line OT3V3, REKU_RS232_3V3, 
+GNDline1 supply24V_minus(modry), REKU_RS232_0V
+24Vline RELE_PUMPA_P(cerveny)
+24Vpin supply24V_plus(cerveny)
+OWline pavlac, senzory spiatocky, senzory hore tepla voda
+GNDline2 
+5Vline
+
+BBfuzy: (3V3, GND), 5sys, (bb_OWSPWR, bb_OWOUT, bb_OWIN, bb_PUMPA, bb_IMPELM, bb_IMPVM), (bb_CANPWR, bb_dcan1tx, bb_dcan1rx)
+
+SN74HC14N inverter
+1 in free
+2 out free
+3 in free
+4 out free
+5 in pullup vodomer imp(cierny)
+6 out bb_IMPVM
+7 gnd
+8 out bb_IMPELM
+9 in pullup elektromer fototranzisotr(hnedy)
+10 out free
+11 in free 
+12 out free
+13 in free
+14 vcc 3v3
+
+SN74LS06N open colector
+1 in bb_OWOUT
+2 oc OW
+3 in bb_OWSPWR
+4 oc baza ow strong power tranzistor
+5,6 free
+7 gnd
+8 oc free
+9 in free
+10 oc RELE_PUMPA_N(hnedy)
+11 in bb_PUMPA
+12 oc baza tranzistor switch 24V
+13 in bb_CANPWR
+14 vdd 5V
+
+CD4050BE noninv buffer
+1 vdd 3v3
+2 out mcp2551
+3 in bb_dcan1tx
+4 out bb_dcan1rx
+5 in mcp2551
+6 out bb_OWIN
+7 in OW pullup 3v3
+8 gnd
+9,10,11,12,14,15 free
