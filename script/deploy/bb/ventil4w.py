@@ -135,11 +135,15 @@ class Vctrl:
             absMarkReached = bool(self.inp2.get_value())
 
             try:
+                abs_deadline = datetime.now() + timedelta(seconds=5 * self.nextPortTimeout)
                 self.motorStart(True)
 
                 dist = 0
                 maxDistance = 1 if absMarkReached else 5
                 while dist < maxDistance:
+                    if abs_deadline < datetime.now():
+                        print(f"{datetime.now()} process deadline timeout {dist}")
+                        break
                     if self.readgpios(self.nextPortTimeout):
                         if self.ev1 == gpiod.LineEvent.RISING_EDGE:
                             dist += 1
@@ -183,6 +187,7 @@ class Vctrl:
             if targetDist == 0:
                 return True
             try:
+                abs_deadline = datetime.now() + timedelta(seconds=targetDist*self.nextPortTimeout)
                 self.motorStart(forwardDirection)
                 exitPosition = False
                 if self.readgpios(self.exitPositionTimeout):
@@ -194,6 +199,9 @@ class Vctrl:
                 expectAbsMark = expectedAbsMark(self.curPort, forwardDirection)
                 while exitPosition and dist < targetDist:
                     if self.readgpios(self.nextPortTimeout):
+                        if abs_deadline < datetime.now():
+                            print(f"{datetime.now()} process deadline timeout {dist}")
+                            break
                         if self.ev1 == gpiod.LineEvent.RISING_EDGE:
                             dist += 1
                             self.curPort = (self.curPort + inkrement + 4) % 4
