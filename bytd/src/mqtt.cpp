@@ -2,11 +2,15 @@
 #include "Log.h"
 #include "IIo.h"
 
-#ifdef BYTD_SIMULATOR
-constexpr auto hostname = "localhost";
-#else
-constexpr auto hostname = "172.16.53.1";
-#endif
+namespace{
+const char* hostname()
+{
+  auto env_hostname = ::getenv("BYTD_MQTT_BROKER_HOSTNAME");
+  if(env_hostname)
+    return env_hostname;
+  return "localhost";
+}
+}
 
 MqttWrapper::MqttWrapper() noexcept
 {
@@ -23,7 +27,8 @@ MqttClient::MqttClient(boost::asio::io_service& io_context)
     ,io_context(io_context)
 {
     threaded_set(true);
-    auto rv = connect_async(hostname, 1883, 900);
+  LogINFO("mqtt connect to {}", hostname());
+  auto rv = connect_async(hostname(), 1883, 900);
     check_connect_attempt(rv);
 }
 

@@ -3,6 +3,7 @@ Description=Riadenie bytu
 After=network.target
 [Service]
 Type=simple
+Environment="BYTD_MQTT_BROKER_HOSTNAME=172.16.53.1"
 WorkingDirectory=/opt/rb
 ExecStartPre=/opt/rb/init.sh
 LimitCORE=infinity
