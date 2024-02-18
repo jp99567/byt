@@ -5,6 +5,7 @@
 #include "Pru.h"
 #include "bytd/src/therm.h"
 #include "TxtEnum.h"
+#include "git_revision_description.h"
 
 void AppContainer::doRequest(std::string msg)
 {
@@ -30,6 +31,7 @@ AppContainer::AppContainer()
     ,timerKurenie(io_service, kurenie::Kurenie::dT)
     ,canBus(io_service)
 {
+    LogINFO("revison {}", GIT_REV_DESC_STR);
     signals.async_wait([this](auto error, auto signum){
         LogINFO("signal {} {}",signum, error.message());
         io_service.stop();

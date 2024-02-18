@@ -1,0 +1,3 @@
+
+#cmakedefine Git_FOUND
+#cmakedefine GIT_REV_DESC_STR "@GIT_REV_DESC_STR@"
