@@ -26,6 +26,9 @@ std::string AppContainer::doRequest(std::string msg)
         Util::Log::instance().get()->set_level(spdlog::level::from_str(level));
         rsp="ok";
     }
+    else if(cmd == "rev"){
+      rsp = GIT_REV_DESC_STR;
+    }
     return rsp;
 }
 
