@@ -7,9 +7,10 @@
 #include "TxtEnum.h"
 #include "git_revision_description.h"
 
-void AppContainer::doRequest(std::string msg)
+std::string AppContainer::doRequest(std::string msg)
 {
     LogINFO("AppContainer::doRequest {}", msg);
+  std::string rsp="unknown_cmd";
     std::istringstream ss(msg);
     std::string cmd;
     ss >> cmd;
@@ -17,12 +18,15 @@ void AppContainer::doRequest(std::string msg)
         std::string sreq;
         ss >> sreq;
         openTherm->asyncTransferRequest(std::stoi(sreq, nullptr,0));
+        rsp="ok_async";
     }
     else if(cmd == "setLogLevel"){
         std::string level;
         ss >> level;
         Util::Log::instance().get()->set_level(spdlog::level::from_str(level));
+        rsp="ok";
     }
+    return rsp;
 }
 
 AppContainer::AppContainer()
@@ -171,17 +175,18 @@ void AppContainer::run()
         }
         else if(topic == "rb/ctrl/req"){
             try{
-                doRequest(msg);
+                auto rsp = doRequest(msg);
+                mqtt->publish(mqtt::rbResponse, rsp, false, 2);
             }
             catch (std::exception& e)
             {
                 LogERR("request exception: {}", e.what());
-                mqtt->publish(mqtt::rbResponse, e.what(), false);
+                mqtt->publish(mqtt::rbResponse, e.what(), false, 2);
             }
             catch (...)
             {
                 LogERR("request unkown exception");
-                mqtt->publish(mqtt::rbResponse, "unkown exception", false);
+                mqtt->publish(mqtt::rbResponse, "unkown exception", false, 2);
             }
         }
     };

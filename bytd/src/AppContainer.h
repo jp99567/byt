@@ -42,5 +42,5 @@ public:
     void on1sec();
     void sched_1sect();
     void sched_kurenie();
-    void doRequest(std::string msg);
+    std::string  doRequest(std::string msg);
 };
