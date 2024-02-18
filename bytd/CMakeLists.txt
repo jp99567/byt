@@ -20,7 +20,7 @@ if(Git_FOUND)
        OUTPUT_STRIP_TRAILING_WHITESPACE
     )
 endif()
-message("git f:${Git_FOUND} rev:${GIT_REV_DESC_STR} res:${result} cmsrc: ${CMAKE_SOURCE_DIR}")
+message("git rev: ${GIT_REV_DESC_STR}")
 configure_file(git_revision_description.h.in inc_generated/git_revision_description.h)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
