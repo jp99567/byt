@@ -111,10 +111,10 @@ void MqttClient::do_misc()
     }
 }
 
-bool MqttClient::publish(const std::string& topic, const std::string& value, bool retain)
+bool MqttClient::publish(const std::string &topic, const std::string &value, bool retain, int qos)
 {
     //LogDBG("MqttClient::publish {} {} {}", topic, value, retain);
-    auto rv = mosqpp::mosquittopp::publish(nullptr, topic.c_str(), value.length(), value.c_str(), 0, retain);
+    auto rv = mosqpp::mosquittopp::publish(nullptr, topic.c_str(), value.length(), value.c_str(), qos, retain);
     if(rv != MOSQ_ERR_SUCCESS){
         if( rv != MOSQ_ERR_NO_CONN)
             LogERR("mosqpp::mosquittopp::publish {}", mosqpp::strerror(rv));

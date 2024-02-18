@@ -24,7 +24,7 @@ public:
 
     virtual bool publish(const std::string& topic, const double value, bool retain = true) = 0;
     virtual bool publish(const std::string& topic, const int value, bool retain = true) = 0;
-    virtual bool publish(const std::string& topic, const std::string& value, bool retain = true) = 0;
+    virtual bool publish(const std::string& topic, const std::string& value, bool retain = true, int qos = 0) = 0;
 
     virtual void registerSensor(std::string name, ISensorInput& sens) = 0;
     virtual SensorDict& sensors() = 0;

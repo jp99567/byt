@@ -9,9 +9,9 @@ class PublisherMock : public IMqttPublisher
 {
   SensorDict sensDict;
 public:
-    bool publish(const std::string&, const double, bool retain = true) override {return true;}
-    bool publish(const std::string&, const int, bool retain = true) override {return true;}
-    bool publish(const std::string&, const std::string&, bool retain = true) override {return true;}
+    bool publish(const std::string&, const double, bool) override {return true;}
+    bool publish(const std::string&, const int, bool) override {return true;}
+    bool publish(const std::string&, const std::string&, bool, int) override {return true;}
     void registerSensor(std::string name, ISensorInput& sens) override {}
     SensorDict& sensors() override {return sensDict;}
 };
