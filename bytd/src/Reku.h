@@ -17,6 +17,7 @@ public:
     explicit Reku(IMqttPublisherSPtr mqtt, const char* ttydev = "/dev/ttyUSB0");
     ~Reku();
     float FlowPercent = 30;
+    float FlowExhaustPercent = std::numeric_limits<float>::quiet_NaN();
     float ByPassTemp = 25;
     bool bypass = false;
 private:

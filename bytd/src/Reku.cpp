@@ -51,18 +51,19 @@ Reku::Reku(IMqttPublisherSPtr mqtt, const char *ttydev)
           if(readFrame(recvFrame, pfd)){
             onNewData(recvFrame);
           }
-          control.ctrl = reku::markCmd;
-          int pwm8 = f2pwm8(FlowPercent);
-          if(pwm8 > 255 || pwm8 < 0)
-            pwm8 = 0;
-          control.pwm[reku::INTK] = pwm8;
-          control.pwm[reku::EXHT] = pwm8;
 
-          /*            if(pvs.temp[reku::INTK] < ByPassTemp-2)
-                          bypass = true;
-                      if(pvs.temp[reku::INTK] > ByPassTemp)
-                          bypass = false;
-          */
+          control.ctrl = reku::markCmd;
+
+          int pwm8 = f2pwm8(FlowPercent);
+          int pwm8Exht=pwm8;
+
+          if(not std::isnan(FlowExhaustPercent)){
+            pwm8Exht = f2pwm8(FlowPercent);
+          }
+
+          control.pwm[reku::INTK] = pwm8;
+          control.pwm[reku::EXHT] = pwm8Exht;
+
           if(bypass)
             control.ctrl |= reku::ctrl_bypass;
 
