@@ -3,6 +3,7 @@
 #include <iostream>
 #include <thread>
 #include <boost/algorithm/string.hpp>
+#include <fstream>
 
 constexpr unsigned line_port_mark = 7;
 constexpr unsigned line_abs_mark = 9;
@@ -49,6 +50,8 @@ bool expectedAbsMark(int curPos, bool fwDIR)
   return false;
 }
 
+constexpr std::string_view last_position_file = "ventil4way-last-position";
+
 Ventil4w::Ventil4w(powerFnc power, IMqttPublisherSPtr mqtt)
     : chip("2"), lines_in(chip.get_lines({line_port_mark, line_abs_mark})),
       lines_out(chip.get_lines({line_dir_p, line_dir_n})), power(power),
@@ -59,6 +62,24 @@ Ventil4w::Ventil4w(powerFnc power, IMqttPublisherSPtr mqtt)
   std::cout << "line0: " << lines_in[0].get_value() << '\n';
   std::cout << "line1: " << lines_in[1].get_value() << '\n';
   moving.clear();
+
+  try{
+    std::ifstream f((std::string(last_position_file)));
+    std::string postxt;
+    f >> postxt;
+    auto pos = std::find_if(std::cbegin(positionTxt), std::cend(positionTxt), [&postxt](auto& v){return boost::iequals(postxt, v);});
+    if(pos == std::cend(positionTxt)){
+      LogERR("Ventil4w invalid stored position {}", postxt);
+    }
+    else{
+      in_position = true;
+      cur_position = std::distance(std::cbegin(positionTxt), pos);
+      LogINFO("Ventil4w loaded position {} ({})", postxt, cur_position);
+    }
+  }
+  catch(std::exception& e){
+    LogERR("load last ventil position: {}", e.what());
+  }
 }
 
 void Ventil4w::moveTo(std::string target)
@@ -101,6 +122,10 @@ void Ventil4w::moveTo(std::string target)
 
         if (not in_position) {
           mqtt->publish(mqtt::ventil4w_position, "error");
+        }
+        else{
+          std::ofstream f((std::string(last_position_file)));
+          f << positionTxt[target_pos] << '\n';
         }
       }
 
