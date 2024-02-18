@@ -52,6 +52,7 @@ bool expectedAbsMark(int curPos, bool fwDIR)
 
 constexpr std::string_view last_position_file = "ventil4way-last-position";
 
+#ifndef BYTD_SIMULATOR
 Ventil4w::Ventil4w(powerFnc power, IMqttPublisherSPtr mqtt)
     : chip("2"), lines_in(chip.get_lines({line_port_mark, line_abs_mark})),
       lines_out(chip.get_lines({line_dir_p, line_dir_n})), power(power),
@@ -59,8 +60,12 @@ Ventil4w::Ventil4w(powerFnc power, IMqttPublisherSPtr mqtt)
 {
   lines_in.request({"bytd-ventil", gpiod::line_request::EVENT_BOTH_EDGES, 0});
   lines_out.request({"bytd-ventil", gpiod::line_request::DIRECTION_OUTPUT, 0},{0,0});
-  std::cout << "line0: " << lines_in[0].get_value() << '\n';
-  std::cout << "line1: " << lines_in[1].get_value() << '\n';
+#else
+Ventil4w::Ventil4w(powerFnc power, IMqttPublisherSPtr mqtt)
+    : power(power),
+      mqtt(std::move(mqtt))
+{
+#endif
   moving.clear();
 
   try{
@@ -150,7 +155,7 @@ bool Ventil4w::waitEvent(std::chrono::steady_clock::time_point deadline)
 {
     ev_line_port_mark = 0;
     ev_line_abs_mark = 0;
-
+#ifndef BYTD_SIMULATOR
     auto lswe =
         lines_in.event_wait(std::chrono::duration_cast<std::chrono::nanoseconds>(deadline-std::chrono::steady_clock::now()));
     std::cout << "empty:" << lswe.empty() << "size:" << lswe.size() << "\n";
@@ -162,6 +167,10 @@ bool Ventil4w::waitEvent(std::chrono::steady_clock::time_point deadline)
         ev_line_port_mark = e.event_type;
     }
     return not lswe.empty();
+#else
+    std::this_thread::sleep_until(deadline);
+    return false;
+#endif
 }
 
 bool Ventil4w::home_pos()
@@ -291,22 +300,34 @@ void Ventil4w::flush_spurios_signals()
 
 bool Ventil4w::absMark()
 {
+#ifndef BYTD_SIMULATOR
   return lines_in[1].get_value();
+#else
+  return false;
+#endif
 }
 
 bool Ventil4w::portMark()
 {
+#ifndef BYTD_SIMULATOR
   return lines_in[0].get_value();
+#else
+  return false;
+#endif
 }
 
 void Ventil4w::motorStart(bool dir)
 {
+#ifndef BYTD_SIMULATOR
   lines_out[(unsigned)dir].set_value(1);
+#endif
 }
 
 void Ventil4w::motorStop()
 {
+#ifndef BYTD_SIMULATOR
   lines_out[0].set_value(0);
   lines_out[1].set_value(0);
+#endif
 }
 
