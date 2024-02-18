@@ -33,7 +33,6 @@ public:
     bool publish(const std::string& topic, const double value, bool retain = true) override;
     bool publish(const std::string& topic, const int value, bool retain = true) override;
     bool publish(const std::string& topic, const std::string& value, bool retain = true) override;
-    void publish_ensured(const std::string& topic, const std::string& value) override;
 
     void registerSensor(std::string name, ISensorInput& sens) override;
     SensorDict& sensors() override;

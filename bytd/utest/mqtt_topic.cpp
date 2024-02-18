@@ -12,7 +12,6 @@ public:
     bool publish(const std::string&, const double, bool retain = true) override {return true;}
     bool publish(const std::string&, const int, bool retain = true) override {return true;}
     bool publish(const std::string&, const std::string&, bool retain = true) override {return true;}
-    void publish_ensured(const std::string&, const std::string&) override {}
     void registerSensor(std::string name, ISensorInput& sens) override {}
     SensorDict& sensors() override {return sensDict;}
 };

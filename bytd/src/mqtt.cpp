@@ -124,10 +124,6 @@ bool MqttClient::publish(const std::string& topic, const std::string& value, boo
     return  true;
 }
 
-void MqttClient::publish_ensured(const std::string &topic, const std::string &value)
-{
-}
-
 void MqttClient::registerSensor(std::string name, ISensorInput &sens)
 {
   registeredSensors.emplace(name, sens);
