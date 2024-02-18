@@ -27,6 +27,7 @@ public:
     void motorStop();
     bool home_pos();
     bool move(const int target);
+    void task(int target_positon);
     gpiod::chip chip;
     gpiod::line_bulk lines_in;
     gpiod::line_bulk lines_out;

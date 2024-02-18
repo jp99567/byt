@@ -112,42 +112,14 @@ void Ventil4w::moveTo(std::string target)
     LogINFO("Ventil4w already in position {}", target);
     return;
   }
-
-  if (not moving.test_and_set()) {
-    std::thread([this, target_pos] {
-      if (target_pos != cur_position || not in_position) {
-        mqtt->publish(mqtt::ventil4w_position, "moving");
-        if (not in_position) {
-          LogERR("Ventil4w not in position, homing");
-          if (home_pos()) {
-            mqtt->publish(mqtt::ventil4w_position, std::string(positionTxt[cur_position]));
-          }
-          else{
-            LogERR("Ventil4w homing failed");
-          }
-        }
-
-        if (in_position) {
-          if (move(target_pos)) {
-            mqtt->publish(mqtt::ventil4w_position, std::string(positionTxt[cur_position]));
-          }
-          else{
-            LogERR("Ventil4w move to position {} failed", positionTxt[target_pos]);
-          }
-        }
-
-        if (not in_position) {
-          mqtt->publish(mqtt::ventil4w_position, "error");
-        }
-        else{
-          std::ofstream f((std::string(last_position_file)));
-          f << positionTxt[target_pos] << '\n';
-        }
-      }
-
-      LogINFO("Ventil4w positioning finished {} {}", in_position, cur_position);
-      moving.clear();
-    });
+    if (not moving.test_and_set()) {
+      LogDBG("Ventil4w check test and set");
+      std::thread([this, target_pos] {
+        LogDBG("Ventil4w check thread started {}", target_pos);
+         task(target_pos);
+         moving.clear();
+      }).detach();
+    }
   }
 }
 
@@ -289,6 +261,43 @@ bool Ventil4w::move(const int target)
 
   in_position = cur_position == target;
   return in_position;
+}
+
+void Ventil4w::task(int target_pos)
+{
+  LogDBG("Ventil4w::task started {}", target_pos);
+
+  if (target_pos != cur_position || not in_position) {
+    mqtt->publish(mqtt::ventil4w_position, "moving");
+    if (not in_position) {
+      LogERR("Ventil4w not in position, homing");
+      if (home_pos()) {
+        mqtt->publish(mqtt::ventil4w_position, std::string(positionTxt[cur_position]));
+      }
+      else{
+        LogERR("Ventil4w homing failed");
+      }
+    }
+
+    if (in_position) {
+      if (move(target_pos)) {
+        mqtt->publish(mqtt::ventil4w_position, std::string(positionTxt[cur_position]));
+      }
+      else{
+        LogERR("Ventil4w move to position {} failed", positionTxt[target_pos]);
+      }
+    }
+
+    if (not in_position) {
+      mqtt->publish(mqtt::ventil4w_position, "error");
+    }
+    else{
+      std::ofstream f((std::string(last_position_file)));
+      f << positionTxt[target_pos] << '\n';
+    }
+  }
+
+  LogINFO("Ventil4w positioning finished {} {}", in_position, cur_position);
 }
 
 void Ventil4w::flush_spurios_signals()
