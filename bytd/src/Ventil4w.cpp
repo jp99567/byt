@@ -85,12 +85,23 @@ Ventil4w::Ventil4w(powerFnc power, IMqttPublisherSPtr mqtt)
 void Ventil4w::moveTo(std::string target)
 {
   auto pos = std::find_if(std::cbegin(positionTxt), std::cend(positionTxt), [&target](auto& v){return boost::iequals(target, v);});
+  int target_pos = 0;
   if(pos == std::cend(positionTxt)){
-    LogERR("Ventil4w invalid target position {}", target);
-    return;
+    try {
+      target_pos = std::stoi(target);
+      if(target_pos < 0 || target_pos >=  std::distance(std::cbegin(positionTxt), std::cend(positionTxt))){
+        LogERR("Ventil4w invalid target position {} {}", target, target_pos);
+        return;
+      }
+    }
+    catch(std::exception& e){
+      LogERR("Ventil4w invalid target position {} {}", target, e.what());
+      return;
+    }
   }
-
-  auto target_pos = std::distance(std::begin(positionTxt), pos);
+  else{
+    target_pos = std::distance(std::cbegin(positionTxt), pos);
+  }
 
   if(target_pos == cur_position && in_position){
     LogINFO("Ventil4w already in position {}", target);
