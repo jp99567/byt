@@ -37,6 +37,11 @@ AppContainer::AppContainer()
 
     mqtt = std::make_shared<MqttClient>(io_service);
     //exporter = std::make_shared<ow::Exporter>();
+
+    auto can_init_sent_ok = canBus.send(can::mkMsgSetAllStageOperating().frame);
+    if(not can_init_sent_ok){
+      LogERR("can init sent failed");
+    }
 }
 
 AppContainer::~AppContainer() {}
@@ -182,7 +187,6 @@ void AppContainer::run()
     sched_1sect();
     sched_kurenie();
 
-    canBus.send(can::mkMsgSetAllStageOperating().frame);
     Meranie meranie_active_object(*meranie);
     ::sd_notify(0, "READY=1");
     io_service.run();
