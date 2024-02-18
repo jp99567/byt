@@ -24,6 +24,16 @@ double adc_temp(uint16_t adc)
     return v;
 }
 
+constexpr uint8_t f2pwm8(float v)
+{
+  int rv = 0;
+  if(not std::isnan(v)){
+    rv = (int)(255*v/100);
+    if(rv > 255 || rv < 0)
+      return 0;
+  }
+  return rv;
+}
 Reku::Reku(IMqttPublisherSPtr mqtt, const char *ttydev)
     : temperature{{SimpleSensor{"tRekuIntake", mqtt}, SimpleSensor{"tRekuExhaust", mqtt}}},
       rpm{{SimpleSensor{"rpmIntake", mqtt}, SimpleSensor{"rpmExhaust", mqtt}}}
@@ -42,7 +52,7 @@ Reku::Reku(IMqttPublisherSPtr mqtt, const char *ttydev)
             onNewData(recvFrame);
           }
           control.ctrl = reku::markCmd;
-          int pwm8 = (int)(255 * FlowPercent / 100);
+          int pwm8 = f2pwm8(FlowPercent);
           if(pwm8 > 255 || pwm8 < 0)
             pwm8 = 0;
           control.pwm[reku::INTK] = pwm8;
