@@ -159,6 +159,9 @@ void AppContainer::run()
                 components.pumpa->stop();
             }
         }
+        else if(topic == mqtt::ventil4w_target){
+          components.ventil->moveTo(msg);
+        }
         else if(topic == "rb/ctrl/req"){
             try{
                 doRequest(msg);

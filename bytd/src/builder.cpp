@@ -64,6 +64,9 @@ void Builder::buildMisc(slowswi2cpwm &ioexpander, OpenTherm &ot)
     assignSensor(kurenie::ROOM::Podlahovka, findSensor("tPodlahovka"));
     auto kurenieHw = std::make_unique<kurenie::HW>(ot, ioexpander, mqtt, std::move(sensTrooms));
     components.kurenie = std::make_unique<kurenie::Kurenie>(std::move(kurenieHw));
+    components.ventil = std::make_unique<Ventil4w>([&ioexpander](bool on){
+      ioexpander.dig1Out(on);
+    }, mqtt);
 }
 
 struct CanNodeInfo

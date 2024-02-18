@@ -11,6 +11,7 @@
 #include "slowswi2cpwm.h"
 #include "Reku.h"
 #include "Kurenie.h"
+#include "Ventil4w.h"
 
 using OnOffDeviceList = std::map<const std::string, std::unique_ptr<OnOffDevice>>;
 using VypinaceDuoList = std::vector<std::unique_ptr<VypinacDuo>>;
@@ -31,6 +32,7 @@ struct AppComponents
   std::unique_ptr<gpiod::chip> gpiochip3;
   std::unique_ptr<Pumpa> pumpa;
   std::unique_ptr<kurenie::Kurenie> kurenie;
+  std::unique_ptr<Ventil4w> ventil;
 };
 
 class Builder

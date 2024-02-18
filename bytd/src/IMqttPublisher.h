@@ -7,6 +7,8 @@
 
 namespace mqtt {
 constexpr auto rbResponse = "rb/stat/response";
+constexpr auto ventil4w_position = "rb/stat/ventil4w/position";
+constexpr auto ventil4w_target = "rb/ctrl/ventil4w/target";
 constexpr auto rootTopic = "rb/ctrl/";
 constexpr auto devicesTopic = "rb/ctrl/dev/";
 constexpr auto tevOverrideTopic = "rb/ctrl/override/tev/";

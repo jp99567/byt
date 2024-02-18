@@ -3,7 +3,6 @@
 #include "Subscription.h"
 #include <vector>
 #include <mutex>
-#include <atomic>
 #include <algorithm>
 
 namespace event {

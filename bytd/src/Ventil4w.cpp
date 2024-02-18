@@ -1,13 +1,15 @@
 #include "Ventil4w.h"
+#include "Log.h"
 #include <iostream>
 #include <thread>
+#include <boost/algorithm/string.hpp>
 
 constexpr unsigned line_port_mark = 7;
 constexpr unsigned line_abs_mark = 9;
 constexpr unsigned line_dir_p = 11;
 constexpr unsigned line_dir_n = 13;
 
-constexpr std::string_view statusTxt[] = {"Kotol", "StudenaVoda", "Boiler", "KotolBoiler"};
+constexpr std::string_view positionTxt[] = {"Kotol", "StudenaVoda", "Boiler", "KotolBoiler"};
 
 constexpr std::chrono::seconds nextPortTimeout(1);
 constexpr std::chrono::milliseconds exitPositionTimeout(400);
@@ -47,22 +49,74 @@ bool expectedAbsMark(int curPos, bool fwDIR)
   return false;
 }
 
-Ventil4w::Ventil4w(powerFnc power)
+Ventil4w::Ventil4w(powerFnc power, IMqttPublisherSPtr mqtt)
     : chip("2"), lines_in(chip.get_lines({line_port_mark, line_abs_mark})),
-      lines_out(chip.get_lines({line_dir_p, line_dir_n})),
-      power(power)
+      lines_out(chip.get_lines({line_dir_p, line_dir_n})), power(power),
+      mqtt(std::move(mqtt))
 {
   lines_in.request({"bytd-ventil", gpiod::line_request::EVENT_BOTH_EDGES, 0});
   lines_out.request({"bytd-ventil", gpiod::line_request::DIRECTION_OUTPUT, 0},{0,0});
   std::cout << "line0: " << lines_in[0].get_value() << '\n';
   std::cout << "line1: " << lines_in[1].get_value() << '\n';
+  moving.clear();
 }
 
-bool Ventil4w::waitEvent(unsigned int ms)
+void Ventil4w::moveTo(std::string target)
+{
+  auto pos = std::find_if(std::cbegin(positionTxt), std::cend(positionTxt), [&target](auto& v){return boost::iequals(target, v);});
+  if(pos == std::cend(positionTxt)){
+    LogERR("Ventil4w invalid target position {}", target);
+    return;
+  }
+
+  auto target_pos = std::distance(std::begin(positionTxt), pos);
+
+  if(target_pos == cur_position && in_position){
+    LogINFO("Ventil4w already in position {}", target);
+    return;
+  }
+
+  if (not moving.test_and_set()) {
+    std::thread([this, target_pos] {
+      if (target_pos != cur_position || not in_position) {
+        mqtt->publish(mqtt::ventil4w_position, "moving");
+        if (not in_position) {
+          LogERR("Ventil4w not in position, homing");
+          if (home_pos()) {
+            mqtt->publish(mqtt::ventil4w_position, std::string(positionTxt[cur_position]));
+          }
+          else{
+            LogERR("Ventil4w homing failed");
+          }
+        }
+
+        if (in_position) {
+          if (move(target_pos)) {
+            mqtt->publish(mqtt::ventil4w_position, std::string(positionTxt[cur_position]));
+          }
+          else{
+            LogERR("Ventil4w move to position {} failed", positionTxt[target_pos]);
+          }
+        }
+
+        if (not in_position) {
+          mqtt->publish(mqtt::ventil4w_position, "error");
+        }
+      }
+
+      LogINFO("Ventil4w positioning finished {} {}", in_position, cur_position);
+      moving.clear();
+    });
+  }
+}
+
+bool Ventil4w::waitEvent(std::chrono::steady_clock::time_point deadline)
 {
     ev_line_port_mark = 0;
     ev_line_abs_mark = 0;
-    auto lswe = lines_in.event_wait(std::chrono::nanoseconds(ms*1000000));
+
+    auto lswe =
+        lines_in.event_wait(std::chrono::duration_cast<std::chrono::nanoseconds>(deadline-std::chrono::steady_clock::now()));
     std::cout << "empty:" << lswe.empty() << "size:" << lswe.size() << "\n";
     for(unsigned i=0; i<lswe.size(); ++i){
       auto e = lswe[i].event_read();
@@ -88,10 +142,10 @@ bool Ventil4w::home_pos()
 
   while(dist < maxDistance){
     if(abs_deadline < std::chrono::steady_clock::now()){
-      std::cout << "{process deadline timeout\n";
+      LogERR("Ventil4w deadline exceeded");
       break;
     }
-    if(waitEvent(nextPortTimeout.count()*1000)){
+    if(waitEvent(nextPortTimeout)){
       if(ev_line_port_mark == gpiod::line_event::RISING_EDGE)
         dist++;
       if(ev_line_abs_mark == gpiod::line_event::RISING_EDGE){
@@ -102,7 +156,7 @@ bool Ventil4w::home_pos()
       }
     }
     else{
-      std::cout << "{process timeout\n";
+      LogERR("Ventil4w timeouted");
     }
   }
 
@@ -111,7 +165,7 @@ bool Ventil4w::home_pos()
 
   in_position = portMark() && absMarkReached;
   if(in_position){
-    cur_port = State::Kotol;
+    cur_position = 0;
     return true;
   }
 
@@ -126,28 +180,30 @@ bool Ventil4w::move(const int target)
   flush_spurios_signals();
 
   if(absMark()){
+    LogERR("Ventil4w unexpexted abs mark indicated");
     return false;
   }
 
   if(not portMark()){
+    LogERR("Ventil4w unexpexted port mark cleared");
     return false;
   }
 
   auto [forwardDirection, targetDist] = calcMotion(cur_position, target);
   int inkrement = forwardDirection ? 1 : -1;
   bool posError = false;
-  //print(f"check2 {targetDist} {forwardDirection} {inkrement} {self.curPort} {self.inPosition}")
+
   if(targetDist == 0)
     return true;
 
   const auto abs_deadline = std::chrono::steady_clock::now() + targetDist * nextPortTimeout;
   motorStart(forwardDirection);
+  in_position = false;
   bool exitPosition = false;
 
-  if(waitEvent(exitPositionTimeout.count())){
+  if(waitEvent(exitPositionTimeout)){
     if(ev_line_port_mark == gpiod::line_event::FALLING_EDGE){
       exitPosition = true;
-      in_position = false;
     }
   }
 
@@ -156,9 +212,9 @@ bool Ventil4w::move(const int target)
   bool expectAbsMark = expectedAbsMark(cur_position, forwardDirection);
 
   while(exitPosition && dist < targetDist){
-    if(waitEvent(nextPortTimeout.count()*1000)){
+    if(waitEvent(nextPortTimeout)){
       if(abs_deadline < std::chrono::steady_clock::now()){
-        //print(f"{datetime.now()} process deadline timeout {dist}");
+        LogERR("Ventil4w deadline exceeded");
         break;
       }
       if(ev_line_port_mark == gpiod::line_event::RISING_EDGE){
@@ -175,7 +231,7 @@ bool Ventil4w::move(const int target)
         absMarkHit = true;
     }
     else{
-      //print(f"process timeout {dist}")
+      LogERR("Ventil4w timeouted dist:{}", dist);
       break;
     }
   }
@@ -192,7 +248,7 @@ bool Ventil4w::move(const int target)
 
 void Ventil4w::flush_spurios_signals()
 {
-  waitEvent(100);
+  waitEvent(std::chrono::milliseconds(100));
   ev_line_port_mark = 0;
   ev_line_abs_mark = 0;
 }

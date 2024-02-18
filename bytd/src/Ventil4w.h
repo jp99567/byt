@@ -2,26 +2,31 @@
 #include <atomic>
 #include <gpiod.hpp>
 #include <functional>
+#include "IMqttPublisher.h"
 
 class Ventil4w
 {
 public:
     using powerFnc = std::function<void(bool)>;
-    enum class State {Kotol, StudenaVoda, Boiler, KotolBoiler, moving, error};
-    Ventil4w(powerFnc power);
-    void moveTo(State state);
-    State curState() const;
-    bool waitEvent(unsigned ms);
-    bool home_pos();
-    bool move(const int target);
+    Ventil4w(powerFnc power, IMqttPublisherSPtr mqtt);
+    void moveTo(std::string target);
 
   private:
+    bool waitEvent(std::chrono::steady_clock::time_point deadline);
+
+    template<typename _Rep, typename _Period>
+    bool waitEvent(const std::chrono::duration<_Rep, _Period>& timeout)
+    {
+      return waitEvent(std::chrono::steady_clock::now() + timeout);
+    }
+
     void flush_spurios_signals();
     bool absMark();
     bool portMark();
     void motorStart(bool dir);
     void motorStop();
-    std::atomic<State> state;
+    bool home_pos();
+    bool move(const int target);
     gpiod::chip chip;
     gpiod::line_bulk lines_in;
     gpiod::line_bulk lines_out;
@@ -30,6 +35,7 @@ public:
     powerFnc power;
     bool in_position = false;
     int cur_position = 0;
-    State cur_port = State::Kotol;
+    std::atomic_flag moving;
+    IMqttPublisherSPtr mqtt;
 };
 

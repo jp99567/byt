@@ -13,3 +13,7 @@ p9_23 in
 p9_21 in
 p9_11 uart
 p9_13 uart
+P8_46 gpio_pu
+P8_44 gpio_pu
+P8_42 low
+P8_40 low
