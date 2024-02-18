@@ -172,6 +172,11 @@ void Kurenie::check()
     t_CH_lim_high = t_CH_lim_high_standard;
   }
 
+  auto podlahaPrivodT = hw->curT_podlahaPrivod();
+  if(std::isnan(podlahaPrivodT) || podlahaPrivodT > 52){
+    LogERR("teplota podlaha privod: {}", podlahaPrivodT);
+    setError();
+  }
 }
 
 void Kurenie::update()
@@ -180,7 +185,10 @@ void Kurenie::update()
   set_t_CH();
 }
 
-void Kurenie::setError() {}
+void Kurenie::setError()
+{
+  error = true;
+}
 
 void Kurenie::valveControl(ROOM room)
 {
@@ -239,7 +247,13 @@ void Kurenie::mainControl()
 void Kurenie::update_t_bufs()
 {
   for(unsigned ir=0; ir < idx(ROOM::_last); ++ir){
-    t_cur[ir].add(hw->curTroom((ROOM)ir));
+    auto val = hw->curTroom((ROOM)ir);
+    if(std::isnan(val)){
+      LogERR("pokazena teplota izba:{}", roomTxt(ir));
+      setError();
+      break;
+    }
+    t_cur[ir].add(val);
   }
 }
 

@@ -28,6 +28,11 @@ constexpr const char *roomTxt(ROOM room)
   }
 }
 
+constexpr const char *roomTxt(int room_idx)
+{
+  return roomTxt((ROOM)room_idx);
+}
+
 std::string roomTopic(ROOM room);
 ROOM txtToRoom(std::string name);
 

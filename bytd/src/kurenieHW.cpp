@@ -75,10 +75,10 @@ private:
 };
 
 HW::HW(OpenTherm &ot, slowswi2cpwm &tevpwm, IMqttPublisherSPtr mqtt,
-       RoomSensors sensT)
-    : ot(ot), tevCtrl(tevpwm), mqtt(std::move(mqtt)), roomSensor(std::move(sensT))
+       SensorsT sensT, SensorsT podlahaPrivodT)
+    : ot(ot), tevCtrl(tevpwm), mqtt(std::move(mqtt))
 {
-  if(roomSensor.size() != (std::size_t)ROOM::_last)
+  if(sensT.size() != (std::size_t)ROOM::_last)
     throw std::runtime_error("invalid count of room sensors");
 
   auto createTev = [this](auto room, bool no){
@@ -97,15 +97,26 @@ HW::HW(OpenTherm &ot, slowswi2cpwm &tevpwm, IMqttPublisherSPtr mqtt,
   createTev(ROOM::Podlahovka, false);
 
   for(int i = 0; (ROOM)i < ROOM::_last; ++i){
-    roomSensor[i].get().Changed().subscribe(event::subscr([this,i](float v){
-      if(std::isnan(v)){
-        ++curTemp[i].enr;
-      }
-      else{
-        curTemp[i].v = v;
-        curTemp[i].enr = 0;
-      }
+    sensT[i].get().Changed().subscribe(event::subscr([this,i](float v){
+      curTemp[i].update(v);
     }));
+  }
+
+  podlahaPrivodT[0].get().Changed().subscribe(event::subscr([this](float v){
+    podlahaPrivod.update(v);
+  }));
+}
+
+void HW::CurT::update(const float value)
+{
+  if(std::isnan(value)){
+    ++enr;
+    if(enr > 3)
+      v = value;
+  }
+  else{
+    v = value;
+    enr = 0;
   }
 }
 
@@ -142,6 +153,11 @@ float HW::curTch() const
 }
 
 float HW::curTroom(ROOM room) const { return curTemp[idx(room)].v; }
+
+float HW::curT_podlahaPrivod() const
+{
+  return podlahaPrivod.v;
+}
 
 bool HW::isOpened(ROOM room, Clock::time_point tp) const
 {

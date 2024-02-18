@@ -46,7 +46,7 @@ void Builder::buildMisc(slowswi2cpwm &ioexpander, OpenTherm &ot)
 #endif
     components.pumpa = std::make_unique<Pumpa>(std::move(pumpaDigOut), mqtt);
 
-    kurenie::HW::RoomSensors sensTrooms;
+    kurenie::HW::SensorsT sensTrooms;
     auto ss = std::make_unique<SimpleSensor>("dummyKupelka", mqtt);
     ss->setValue(20);
     components.dummyKupelnaT = std::move(ss);
@@ -62,7 +62,11 @@ void Builder::buildMisc(slowswi2cpwm &ioexpander, OpenTherm &ot)
     assignSensor(kurenie::ROOM::Izba, findSensor("tIzba"));
     assignSensor(kurenie::ROOM::Kupelka, *components.dummyKupelnaT);
     assignSensor(kurenie::ROOM::Podlahovka, findSensor("tPodlahovka"));
-    auto kurenieHw = std::make_unique<kurenie::HW>(ot, ioexpander, mqtt, std::move(sensTrooms));
+
+    kurenie::HW::SensorsT sensTpodlaha_privod;
+    sensTpodlaha_privod.emplace_back(findSensor("tretKupelna"));
+    sensTpodlaha_privod.emplace_back(findSensor("tretKupelnaP"));
+    auto kurenieHw = std::make_unique<kurenie::HW>(ot, ioexpander, mqtt, std::move(sensTrooms), std::move(sensTpodlaha_privod));
     components.kurenie = std::make_unique<kurenie::Kurenie>(std::move(kurenieHw));
     components.ventil = std::make_unique<Ventil4w>([&ioexpander](bool on){
       ioexpander.dig1Out(on);
