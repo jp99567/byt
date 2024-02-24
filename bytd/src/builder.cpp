@@ -64,7 +64,6 @@ void Builder::buildMisc(slowswi2cpwm &ioexpander, OpenTherm &ot)
     assignSensor(kurenie::ROOM::Podlahovka, findSensor("tPodlahovka"));
 
     kurenie::HW::SensorsT sensTpodlaha_privod;
-    sensTpodlaha_privod.emplace_back(findSensor("tretKupelna"));
     sensTpodlaha_privod.emplace_back(findSensor("tretKupelnaP"));
     auto kurenieHw = std::make_unique<kurenie::HW>(ot, ioexpander, mqtt, std::move(sensTrooms), std::move(sensTpodlaha_privod));
     components.kurenie = std::make_unique<kurenie::Kurenie>(std::move(kurenieHw));
