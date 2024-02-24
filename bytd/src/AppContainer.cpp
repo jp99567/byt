@@ -174,7 +174,20 @@ void AppContainer::run()
             }
         }
         else if(topic == mqtt::ventil4w_target){
-          components.ventil->moveTo(msg);
+          try {
+            if(components.ventil){
+              components.ventil->moveTo(msg);
+            }
+            else{
+              LogERR("components.ventil nullptr");
+            }
+          }
+          catch(std::exception& e){
+            LogERR("components.ventil {}", e.what());
+          }
+          catch(...){
+            LogERR("components.ventil unknown exception");
+          }
         }
         else if(topic == "rb/ctrl/req"){
             try{

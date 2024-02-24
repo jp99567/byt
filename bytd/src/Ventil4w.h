@@ -28,9 +28,11 @@ public:
     bool home_pos();
     bool move(const int target);
     void task(int target_positon);
+    void lostPosition();
     gpiod::chip chip;
     gpiod::line_bulk lines_in;
-    gpiod::line_bulk lines_out;
+    gpiod::line line_out_p;
+    gpiod::line line_out_n;
     int ev_line_port_mark = 0;
     int ev_line_abs_mark = 0;
     powerFnc power;
@@ -38,5 +40,6 @@ public:
     int cur_position = 0;
     std::atomic_flag moving;
     IMqttPublisherSPtr mqtt;
+    bool flush_gpio_events_flag = false;
 };
 
