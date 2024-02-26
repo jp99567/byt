@@ -1,0 +1,30 @@
+2x17 conn J1 J10 J11
+A1,B1 24V
+A2,B2 Vdd
+A3,B3 GND
+B13 summer bypass rele (Q1b 2k2) -- RC0
+B15 - J5.1 temp.sens. -- AN1
+B14 - J5.2 temp.sens. --- AVDD
+B17 - J4.1 temp.sens. -- AN0
+B16 - J4.2 temp.sens. --- AVDD
+A7 - 2k2 vdd pullup
+B8 - J7.1
+B7 - J7.2 -- RC1
+B6 - J7.3
+B5 - J7.4 -- RB4
+B12 - J6.1
+B11 - J6.2 -- RC2
+B10 - J6.3
+B9 - J6.4 -- RB5
+
+J6 intake fan
+J7 exhaust fan
+1 - cerveny - 10V
+2 - zlty - control input
+3 - modry - gnd
+4 - biely - tach
+
+1.2KHz 42.5% 18.8Hz
+100% 41.7Hz
+
+nLED - RD7

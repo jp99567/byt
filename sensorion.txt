@@ -1,0 +1,12 @@
+SCD41:
+pins:
+zeleny 1. clk   - zeleny PD0
+       2. gnd   - bielo zeleny
+       3. vcc   - oranzovy
+biely  4. data  - bielo oranzovy PD1
+
+SHT11:
+modry         1. gnd  - sivy
+modrobiely    2. data - biely od siveho PC3
+oranzovobiely 3. clk  - biely od zeleneho PC5
+oranzovy      4. vcc  - zeleny
