@@ -60,6 +60,8 @@ struct DigIN_Obj : Dig_Obj
 		Dig_Obj::setParams(msg);
 		setDigOut(pin, true); // pull up
 	}
+	uint8_t debounce = 3;
+	uint8_t consecutive = 0;
 };
 
 struct OwT_Obj : Base_Obj
@@ -436,6 +438,27 @@ void onTimer16s7()
 void onTimer4ms096()
 {
 	meas::measure_ow_temp_sm();
+
+	for(int i=0; i<gDigIN_count; ++i){
+		bool v = getDigInVal(gDigIN_Obj[i].pin);
+		auto& iobyte = gIOData[gDigIN_Obj[i].iodataIdx];
+		const auto mask = gDigIN_Obj[i].mask;
+		auto& consecutive = gDigIN_Obj[i].consecutive;
+		if( (bool)(iobyte & mask) != v){
+			const auto debounce = gDigIN_Obj[i].debounce;
+			if(++consecutive > debounce){
+				if(v)
+					iobyte |= mask;
+				else
+					iobyte &= ~mask;
+				markMobTx(gDigIN_Obj[i].mobIdx);
+				consecutive = 0;
+			}
+		}
+		else{
+			consecutive = 0;
+		}
+	}
 }
 
 constexpr bool isSvcRx(uint8_t mobid)
@@ -484,19 +507,6 @@ void run()
 					}
 				}
 				++mobidx;
-			}
-		}
-
-		for(int i=0; i<gDigIN_count; ++i){
-			bool v = getDigInVal(gDigIN_Obj[i].pin);
-			auto& iobyte = gIOData[gDigIN_Obj[i].iodataIdx];
-			auto mask = gDigIN_Obj[i].mask;
-			if( (bool)(iobyte & mask) != v){
-				if(v)
-					iobyte |= mask;
-				else
-					iobyte &= ~mask;
-				markMobTx(gDigIN_Obj[i].mobIdx);
 			}
 		}
 
