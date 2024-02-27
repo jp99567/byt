@@ -1,8 +1,8 @@
 #include "MqttDigiOut.h"
 
 MqttDigiOut::MqttDigiOut(IMqttPublisherSPtr mqtt, std::string path)
-    :mqtt(mqtt)
-    ,path(path)
+    : mqtt(mqtt)
+    , path(path)
 {
 }
 

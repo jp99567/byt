@@ -6,9 +6,10 @@
 constexpr auto topic_base = "rb/stat/sens/";
 
 SimpleSensor::SimpleSensor(std::string name, IMqttPublisherSPtr mqtt)
-    :topic(std::string(topic_base).append(name)), mqtt(mqtt)
+    : topic(std::string(topic_base).append(name))
+    , mqtt(mqtt)
 {
-  LogINFO("created sensor {}", this->name());
+    LogINFO("created sensor {}", this->name());
 }
 
 float SimpleSensor::value() const
@@ -30,14 +31,14 @@ void SimpleSensor::setValue(float v)
 
 void SimpleSensor::update(float v)
 {
-    if(std::isnan(v) && std::isnan(val)){
+    if(std::isnan(v) && std::isnan(val)) {
         return;
     }
 
-    if(v != val){
+    if(v != val) {
         val = v;
 
-        mqtt->publish(topic,  v);
+        mqtt->publish(topic, v);
         ChangedEvent.notify(val);
     }
 }

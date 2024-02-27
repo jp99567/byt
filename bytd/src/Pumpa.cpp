@@ -3,8 +3,8 @@
 #include "Log.h"
 
 Pumpa::Pumpa(std::unique_ptr<IDigiOut> digiout, IMqttPublisherSPtr mqtt)
-    :out(std::move(digiout))
-    ,mqtt(mqtt)
+    : out(std::move(digiout))
+    , mqtt(mqtt)
 {
     (*out)(false);
 }
@@ -25,9 +25,9 @@ void Pumpa::stop()
 
 void Pumpa::onPlamenOff()
 {
-    if(plamenOffCount >= 0){
+    if(plamenOffCount >= 0) {
         LogINFO("Pumpa onPlamenOff {}", plamenOffCount);
-        if(++plamenOffCount > maxPlamenOff){
+        if(++plamenOffCount > maxPlamenOff) {
             stop();
             LogINFO("pumpa automatic Off");
         }
@@ -42,8 +42,7 @@ Pumpa::~Pumpa()
 
 void Pumpa::setPumpa(bool value)
 {
-    if( value != *out)
-    {
+    if(value != *out) {
         (*out)(value);
         mqtt->publish("rb/stat/pumpa", (int)value);
     }

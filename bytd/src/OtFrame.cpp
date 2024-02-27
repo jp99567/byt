@@ -1,26 +1,35 @@
 #include "OtFrame.h"
 #include <string>
 #ifdef OT_FRAME_ANALYZER
-#include <spdlog/spdlog.h>
 #include <iostream>
+#include <spdlog/spdlog.h>
 #endif
 
-namespace opentherm
-{
+namespace opentherm {
 
 std::string_view msg::msgToStr(type m)
 {
-    switch(m){
-    case type::Mrd: return "Mrd";
-    case type::Mwr: return "Mwr";
-    case type::Minvalid: return "Minvalid";
-    case type::Mreserved: return "Mreserved";
-    case type::Srdack: return "Srdack";
-    case type::Swrack: return "Swrack";
-    case type::Sinvalid: return "Sinvalid";
-    case type::Sunknown: return "Sunknown";
-    case type::Mwr2: return "Mwr2";
-    default: return "---";
+    switch(m) {
+    case type::Mrd:
+        return "Mrd";
+    case type::Mwr:
+        return "Mwr";
+    case type::Minvalid:
+        return "Minvalid";
+    case type::Mreserved:
+        return "Mreserved";
+    case type::Srdack:
+        return "Srdack";
+    case type::Swrack:
+        return "Swrack";
+    case type::Sinvalid:
+        return "Sinvalid";
+    case type::Sunknown:
+        return "Sunknown";
+    case type::Mwr2:
+        return "Mwr2";
+    default:
+        return "---";
     }
 }
 
@@ -77,8 +86,8 @@ constexpr float floatFromf88(uint16_t v)
 bool isMaster(opentherm::msg::type t)
 {
     using opentherm::msg::type;
-    for( auto mt : { type::Mrd, type::Mwr, type::Minvalid, type::Mreserved, type::Mwr2}){
-        if(mt==t)
+    for(auto mt : { type::Mrd, type::Mwr, type::Minvalid, type::Mreserved, type::Mwr2 }) {
+        if(mt == t)
             return true;
     }
     return false;
@@ -94,25 +103,25 @@ int main(int argc, char* argv[])
 {
     spdlog::set_pattern("ot %v");
     opentherm::Frame fs(opentherm::Frame::invalid), fm(opentherm::Frame::invalid);
-    std::cin.exceptions(std::ios::failbit|std::ios::eofbit);
+    std::cin.exceptions(std::ios::failbit | std::ios::eofbit);
     try {
-      while (true) {
-        while (not(isMaster(fm.getType()) && fm.isValid())) {
-          fm = getFrame();
+        while(true) {
+            while(not(isMaster(fm.getType()) && fm.isValid())) {
+                fm = getFrame();
+            }
+            fs = getFrame();
+            if(isMaster(fs.getType())) {
+                fm = fs;
+                continue;
+            }
+            spdlog::info("{} {} {:04X} ({}) -> {} {} {:04X} ({})",
+                opentherm::msg::msgToStr(fm.getType()), fm.getId(),
+                fm.getV(), floatFromf88(fm.getV()),
+                opentherm::msg::msgToStr(fs.getType()), fs.getId(),
+                fs.getV(), floatFromf88(fs.getV()));
         }
-        fs = getFrame();
-        if (isMaster(fs.getType())) {
-          fm = fs;
-          continue;
-        }
-        spdlog::info("{} {} {:04X} ({}) -> {} {} {:04X} ({})",
-                     opentherm::msg::msgToStr(fm.getType()), fm.getId(),
-                     fm.getV(), floatFromf88(fm.getV()),
-                     opentherm::msg::msgToStr(fs.getType()), fs.getId(),
-                     fs.getV(), floatFromf88(fs.getV()));
-      }
-    } catch (const std::ios_base::failure &fail) {
-        if(not std::cin.eof()){
+    } catch(const std::ios_base::failure& fail) {
+        if(not std::cin.eof()) {
             spdlog::error("exception {}", fail.what());
             return 1;
         }

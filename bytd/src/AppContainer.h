@@ -1,26 +1,24 @@
 #pragma once
 
-
-#include <systemd/sd-daemon.h>
-#include <iostream>
-#include <fstream>
-#include <thread>
-#include <mutex>
 #include <condition_variable>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <mutex>
+#include <systemd/sd-daemon.h>
+#include <thread>
 
-#include "exporter.h"
 #include "OpenTherm.h"
-#include <boost/asio.hpp>
+#include "Pumpa.h"
+#include "builder.h"
+#include "canbus.h"
+#include "exporter.h"
 #include "mqtt.h"
 #include "slowswi2cpwm.h"
-#include "Pumpa.h"
+#include <boost/asio.hpp>
 #include <gpiod.hpp>
-#include "canbus.h"
-#include "builder.h"
 
-class AppContainer
-{
+class AppContainer {
     boost::asio::io_service io_service;
     boost::asio::signal_set signals;
     boost::asio::steady_timer t1sec;
@@ -37,10 +35,9 @@ public:
     ~AppContainer();
     void run();
 
- private:
-
+private:
     void on1sec();
     void sched_1sect();
     void sched_kurenie();
-    std::string  doRequest(std::string msg);
+    std::string doRequest(std::string msg);
 };

@@ -1,51 +1,49 @@
 #pragma once
-#include <yaml-cpp/yaml.h>
-#include <map>
 #include <boost/asio/io_service.hpp>
+#include <map>
+#include <yaml-cpp/yaml.h>
 
+#include "Kurenie.h"
+#include "OnOffDevice.h"
+#include "Reku.h"
+#include "Ventil4w.h"
+#include "Vypinace.h"
 #include "bytd/src/Pumpa.h"
 #include "canbus.h"
 #include "candata.h"
-#include "OnOffDevice.h"
-#include "Vypinace.h"
 #include "slowswi2cpwm.h"
-#include "Reku.h"
-#include "Kurenie.h"
-#include "Ventil4w.h"
 
 using OnOffDeviceList = std::map<const std::string, std::unique_ptr<OnOffDevice>>;
 using VypinaceDuoList = std::vector<std::unique_ptr<VypinacDuo>>;
 using VypinaceSingleList = std::vector<std::unique_ptr<VypinacSingle>>;
 
-namespace gpiod { class chip; }
+namespace gpiod {
+class chip;
+}
 class OpenTherm;
 
-struct AppComponents
-{
-  std::unique_ptr<ISensorInput> dummyKupelnaT;
-  VypinaceDuoList vypinaceDuo;
-  VypinaceSingleList vypinaceSingle;
-  OnOffDeviceList devicesOnOff;
-  std::unique_ptr<MonoStableDev> brana;
-  std::unique_ptr<MonoStableDev> dverePavlac;
-  std::unique_ptr<Reku> reku;
-  std::unique_ptr<gpiod::chip> gpiochip3;
-  std::unique_ptr<Pumpa> pumpa;
-  std::unique_ptr<kurenie::Kurenie> kurenie;
-  std::unique_ptr<Ventil4w> ventil;
+struct AppComponents {
+    std::unique_ptr<ISensorInput> dummyKupelnaT;
+    VypinaceDuoList vypinaceDuo;
+    VypinaceSingleList vypinaceSingle;
+    OnOffDeviceList devicesOnOff;
+    std::unique_ptr<MonoStableDev> brana;
+    std::unique_ptr<MonoStableDev> dverePavlac;
+    std::unique_ptr<Reku> reku;
+    std::unique_ptr<gpiod::chip> gpiochip3;
+    std::unique_ptr<Pumpa> pumpa;
+    std::unique_ptr<kurenie::Kurenie> kurenie;
+    std::unique_ptr<Ventil4w> ventil;
 };
 
-class Builder
-{
+class Builder {
     const YAML::Node config;
     IMqttPublisherSPtr mqtt;
     std::map<std::string, std::unique_ptr<IDigiOut>> digiOutputs;
     std::vector<std::reference_wrapper<DigInput>> digInputs;
     std::vector<std::reference_wrapper<ISensorInput>> sensors;
 
-
 public:
-    
     Builder(IMqttPublisherSPtr mqtt);
     void buildMisc(slowswi2cpwm& ioexpander, OpenTherm& ot);
     [[nodiscard]] std::unique_ptr<can::InputControl> buildCan(CanBus& canbus);
@@ -54,11 +52,11 @@ public:
     AppComponents getComponents();
 
 private:
-    //void buildDevice(std::string name, std::string outputName, std::string inputName = std::string());
-    OnOffDevice& buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent, bool outInverted=false);
+    // void buildDevice(std::string name, std::string outputName, std::string inputName = std::string());
+    OnOffDevice& buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent, bool outInverted = false);
     OnOffDevice& buildDeviceInvertedOut(std::string name, std::string outputName, event::Event<>& controlEvent)
     {
-      return buildDevice(std::move(name), std::move(outputName), controlEvent, true);
+        return buildDevice(std::move(name), std::move(outputName), controlEvent, true);
     }
     AppComponents components;
     ISensorInput& findSensor(std::string name);

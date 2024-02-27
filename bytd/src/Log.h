@@ -13,27 +13,32 @@ namespace Util {
 class Log {
 public:
 #ifndef WITHOUT_SPDLOG
-	~Log();
+    ~Log();
 
-	static Log& instance();
+    static Log& instance();
 
-	std::shared_ptr<spdlog::logger> get(){
-		return logger;
-	}
+    std::shared_ptr<spdlog::logger> get()
+    {
+        return logger;
+    }
 
-	void syserr(const char* msg = nullptr);
-	void die(const char* msg = nullptr);
+    void syserr(const char* msg = nullptr);
+    void die(const char* msg = nullptr);
     void sysdie(const char* msg = nullptr);
 
 private:
-	Log();
+    Log();
 
     std::shared_ptr<spdlog::logger> logger;
 #else
-    static Log& instance(){static Log _; return _;}
-    void syserr(const char* msg = nullptr){}
-    void die(const char* msg = nullptr){}
-    void sysdie(const char* msg = nullptr){}
+    static Log& instance()
+    {
+        static Log _;
+        return _;
+    }
+    void syserr(const char* msg = nullptr) { }
+    void die(const char* msg = nullptr) { }
+    void sysdie(const char* msg = nullptr) { }
 #endif
 };
 
@@ -45,7 +50,11 @@ private:
 #define LogDBG(...) Util::Log::instance().get()->debug(__VA_ARGS__)
 #define LogSYSDIE(msg) Util::Log::instance().sysdie(msg)
 #define LogSYSERR(msg) Util::Log::instance().syserr(msg)
-#define LogDIE(...) { Util::Log::instance().get()->error(__VA_ARGS__); Util::Log::instance().die(); }
+#define LogDIE(...)                                      \
+    {                                                    \
+        Util::Log::instance().get()->error(__VA_ARGS__); \
+        Util::Log::instance().die();                     \
+    }
 #else
 #define LogINFO(...)
 #define LogERR(...)

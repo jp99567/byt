@@ -1,7 +1,7 @@
 #include "DigiOutI2cExpander.h"
 
-DigiOutI2cExpander::DigiOutI2cExpander(slowswi2cpwm &ioexpander, int idx)
-    :ioexpander(ioexpander)
+DigiOutI2cExpander::DigiOutI2cExpander(slowswi2cpwm& ioexpander, int idx)
+    : ioexpander(ioexpander)
 {
     if(idx == 1)
         pDigOut = &slowswi2cpwm::dig1Out;

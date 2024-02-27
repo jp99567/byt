@@ -8,15 +8,14 @@
 #ifndef THREAD_UTIL_H_
 #define THREAD_UTIL_H_
 
-namespace thread_util
-{
+namespace thread_util {
 
 #ifndef THREAD_UTIL_CC_
 extern bool shutdown_req;
 #endif
 
 void sigblock(bool block, bool block_alarm);
-void set_thread_name(const char *name);
+void set_thread_name(const char* name);
 void set_sig_handler();
 void set_hi_prio();
 

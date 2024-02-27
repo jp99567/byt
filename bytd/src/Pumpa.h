@@ -2,15 +2,14 @@
 
 #include <memory>
 
-#include "IMqttPublisher.h"
 #include "IIo.h"
+#include "IMqttPublisher.h"
 
 /*** ToDo ******
  * tMAX = 720seconds
  * boiler Tmax = 50deg
  ****************/
-class Pumpa
-{
+class Pumpa {
     constexpr static int maxPlamenOff = 6;
     std::unique_ptr<IDigiOut> out;
     int plamenOffCount = -1;

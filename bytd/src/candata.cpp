@@ -5,13 +5,12 @@
 #include "avr/fw/SvcProtocol_generated.h"
 
 namespace {
-template<typename T>
+template <typename T>
 void set_bits(T& dest_reg, const T mask, bool setNotClear)
 {
-    if(setNotClear){
+    if(setNotClear) {
         dest_reg |= mask;
-    }
-    else{
+    } else {
         dest_reg &= ~mask;
     }
 }
@@ -19,7 +18,7 @@ void set_bits(T& dest_reg, const T mask, bool setNotClear)
 
 namespace can {
 
-constexpr Id broadcastSvcId = 0x1D867E00|(1<<31);
+constexpr Id broadcastSvcId = 0x1D867E00 | (1 << 31);
 
 Frame mkMsgSetAllStageOperating()
 {
@@ -33,40 +32,38 @@ Frame mkMsgSetAllStageOperating()
 void InputControl::onRecvMsg(const can_frame& msg)
 {
     auto it = inputs.find(msg.can_id);
-    if( it != std::cend(inputs)) {
+    if(it != std::cend(inputs)) {
         for(auto& item : it->second)
             item->update(msg.data, msg.can_dlc);
     }
 }
 
-OutputControl::OutputControl(CanBus &bus):canbus(bus)
+OutputControl::OutputControl(CanBus& bus)
+    : canbus(bus)
 {
-    canbus.setWrReadyCbk([this]{
+    canbus.setWrReadyCbk([this] {
         writeReady();
     });
 }
 
-void OutputControl::update(std::size_t idx, IOutputItem &item)
+void OutputControl::update(std::size_t idx, IOutputItem& item)
 {
     LogDBG("OutputControl::update {}", idx);
     auto& outObj = outputs.at(idx);
     item.update(outObj.msg.frame.data);
     outObj.needUpdate = true;
-    if(canbus.send(outObj.msg.frame)){
+    if(canbus.send(outObj.msg.frame)) {
         outObj.needUpdate = false;
     }
 }
 
 void OutputControl::writeReady()
 {
-    for(auto& msg : outputs)
-    {
-        if(msg.needUpdate)
-        {
-            if(canbus.send(msg.msg.frame)){
+    for(auto& msg : outputs) {
+        if(msg.needUpdate) {
+            if(canbus.send(msg.msg.frame)) {
                 msg.needUpdate = false;
-            }
-            else{
+            } else {
                 return;
             }
         }
@@ -80,13 +77,13 @@ void OutputControl::setOutputs(std::vector<OutputMsg> outputs)
 
 void DigOutItem::set(bool v)
 {
-    if(v != value){
+    if(v != value) {
         value = v;
         send();
     }
 }
 
-void DigOutItem::update(Data &data)
+void DigOutItem::update(Data& data)
 {
     set_bits(data[offset], mask, value);
 }
@@ -96,11 +93,11 @@ void OutputItem::send()
     busOutControl->update(idx, *this);
 }
 
-void DigiInItem::update(const Data &data, std::size_t len)
+void DigiInItem::update(const Data& data, std::size_t len)
 {
-    if( offset < len){
+    if(offset < len) {
         bool newVal = data[offset] & mask;
-        if(newVal != value){
+        if(newVal != value) {
             value = newVal;
             LogDBG("can::DigiInItem {} {}", name, value);
             Changed.notify(value);
@@ -108,29 +105,29 @@ void DigiInItem::update(const Data &data, std::size_t len)
     }
 }
 
-void OwTempItem::update(const Data &data, std::size_t len)
+void OwTempItem::update(const Data& data, std::size_t len)
 {
     int16_t owval = ow::cInvalidValue;
-    if( offset+sizeof(owval) <= len){
+    if(offset + sizeof(owval) <= len) {
         owval = *reinterpret_cast<const int16_t*>(&data[offset]);
         sens.setValue(owval);
     }
 }
 
-template<typename Sensor>
-struct SensorionItem : public IInputItem
-{
+template <typename Sensor>
+struct SensorionItem : public IInputItem {
     explicit SensorionItem(std::string name, unsigned offset, IMqttPublisherSPtr mqtt)
         : offset(offset)
         , sens(name, mqtt)
-    {}
-    SensorionItem(OwTempItem &other) = delete;
+    {
+    }
+    SensorionItem(OwTempItem& other) = delete;
     unsigned offset;
-    void update(const Data &data, std::size_t len) override
+    void update(const Data& data, std::size_t len) override
     {
         int16_t owval = Sensorion::cInvalidValue;
-        if (offset + sizeof(owval) <= len) {
-            owval = *reinterpret_cast<const int16_t *>(&data[offset]);
+        if(offset + sizeof(owval) <= len) {
+            owval = *reinterpret_cast<const int16_t*>(&data[offset]);
             sens.setValue(owval);
         }
     }
@@ -139,16 +136,16 @@ struct SensorionItem : public IInputItem
 };
 
 std::unique_ptr<IInputItem> createSensorion(std::string ToDo,
-                                            std::string name,
-                                            unsigned offset,
-                                            IMqttPublisherSPtr mqtt)
+    std::string name,
+    unsigned offset,
+    IMqttPublisherSPtr mqtt)
 {
-    if (ToDo == "ToDo") {
+    if(ToDo == "ToDo") {
         throw std::runtime_error("sensorion invalid type");
     }
 
     return std::make_unique<SensorionItem<Sensorion::Sensor<Sensorion::convToDo>>>(name,
-                                                                                   offset,
-                                                                                   mqtt);
+        offset,
+        mqtt);
 }
 }

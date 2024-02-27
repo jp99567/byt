@@ -1,23 +1,21 @@
 #pragma once
 
+#include "IMqttPublisher.h"
+#include <atomic>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <atomic>
 #include <functional>
+#include <map>
 #include <mosquittopp.h>
 #include <string>
-#include <map>
-#include "IMqttPublisher.h"
 
-class MqttWrapper
-{
+class MqttWrapper {
 public:
     MqttWrapper() noexcept;
     ~MqttWrapper();
 };
 
-class MqttClient : public mosqpp::mosquittopp, public IMqttPublisher
-{
+class MqttClient : public mosqpp::mosquittopp, public IMqttPublisher {
     boost::asio::io_service& io_context;
     std::unique_ptr<boost::asio::ip::tcp::socket> mqtt_socket;
     constexpr static int reconnect_delay_countdown_init = 60;
@@ -26,6 +24,7 @@ class MqttClient : public mosqpp::mosquittopp, public IMqttPublisher
     bool connecting = false;
     std::map<std::string, std::string> ensure_publish;
     SensorDict registeredSensors;
+
 public:
     explicit MqttClient(boost::asio::io_service& io_context);
     ~MqttClient() override;
@@ -37,12 +36,12 @@ public:
     void registerSensor(std::string name, ISensorInput& sens) override;
     SensorDict& sensors() override;
 
-    std::function<void(std::string &&topic, std::string &&msg)> OnMsgRecv;
+    std::function<void(std::string&& topic, std::string&& msg)> OnMsgRecv;
 
 private:
     void on_connect(int rc) override;
     void on_disconnect(int rc) override;
-    void on_message(const struct mosquitto_message * message) override;
+    void on_message(const struct mosquitto_message* message) override;
     bool do_read();
     bool do_write();
     void check_connect_attempt(int rv);
@@ -50,4 +49,3 @@ private:
     void sched_write_mqtt_socket();
     void new_conn_init_wait();
 };
-

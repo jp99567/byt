@@ -1,23 +1,22 @@
 #pragma once
 
-#include <vector>
-#include <map>
-#include <memory>
-#include <exception>
-#include <linux/can.h>
-#include <cstring>
-#include "canbus.h"
 #include "IIo.h"
 #include "IMqttPublisher.h"
 #include "OwTempSensor.h"
+#include "canbus.h"
+#include <cstring>
+#include <exception>
+#include <linux/can.h>
+#include <map>
+#include <memory>
+#include <vector>
 
 namespace can {
 
 using Id = canid_t;
 using Data = decltype(can_frame::data);
 
-struct Frame
-{
+struct Frame {
     explicit Frame(Id id, std::size_t len)
     {
         frame.can_id = id;
@@ -48,42 +47,39 @@ struct Frame
 
 Frame mkMsgSetAllStageOperating();
 
-struct OutputMsg
-{
-    OutputMsg(Id id, std::size_t len):msg(id, len){}
+struct OutputMsg {
+    OutputMsg(Id id, std::size_t len)
+        : msg(id, len)
+    {
+    }
     bool needUpdate = false;
     Frame msg;
 };
 
-struct IInputItem
-{
+struct IInputItem {
     virtual void update(const Data& data, std::size_t len) = 0;
-    virtual ~IInputItem(){}
+    virtual ~IInputItem() { }
 };
 
-struct IOutputItem
-{
+struct IOutputItem {
     virtual void update(Data& data) = 0;
-    virtual ~IOutputItem(){}
+    virtual ~IOutputItem() { }
 };
 
-class IOutputControl
-{
+class IOutputControl {
 public:
     virtual void update(std::size_t idx, IOutputItem& item) = 0;
-    virtual ~IOutputControl(){}
+    virtual ~IOutputControl() { }
 };
 
-struct OutputItem : IOutputItem
-{
+struct OutputItem : IOutputItem {
     std::size_t idx;
     std::shared_ptr<IOutputControl> busOutControl;
 
     void send();
 };
 
-struct DigOutItem : OutputItem
-{
+struct DigOutItem : OutputItem {
     uint8_t mask;
     unsigned offset;
     bool value = false;
@@ -92,9 +88,13 @@ struct DigOutItem : OutputItem
     void update(Data& data) override;
 };
 
-struct DigiInItem : public IInputItem, DigInput
-{
-    explicit DigiInItem(std::string name, uint8_t mask, unsigned offset): DigInput({name}), mask(mask), offset(offset){}
+struct DigiInItem : public IInputItem, DigInput {
+    explicit DigiInItem(std::string name, uint8_t mask, unsigned offset)
+        : DigInput({ name })
+        , mask(mask)
+        , offset(offset)
+    {
+    }
     DigiInItem(DigiInItem& other) = delete;
     uint8_t mask;
     unsigned offset;
@@ -102,40 +102,41 @@ struct DigiInItem : public IInputItem, DigInput
 };
 
 std::unique_ptr<IInputItem> createSensorion(std::string ToDo,
-                                            std::string name,
-                                            unsigned offset,
-                                            IMqttPublisherSPtr mqtt);
+    std::string name,
+    unsigned offset,
+    IMqttPublisherSPtr mqtt);
 
-struct OwTempItem : public IInputItem
-{
+struct OwTempItem : public IInputItem {
     explicit OwTempItem(std::string name, unsigned offset, IMqttPublisherSPtr mqtt, float factor)
         : offset(offset)
         , sens(name, mqtt, factor)
-    {}
+    {
+    }
     OwTempItem(OwTempItem& other) = delete;
     unsigned offset;
     void update(const Data& data, std::size_t len) override;
     ow::Sensor sens;
 };
 
-class OutputControl : public IOutputControl
-{
+class OutputControl : public IOutputControl {
 public:
     explicit OutputControl(CanBus& bus);
     void update(std::size_t idx, IOutputItem& item) override;
     void writeReady();
     void setOutputs(std::vector<OutputMsg> outputs);
-private:
 
+private:
     std::vector<OutputMsg> outputs;
     CanBus& canbus;
 };
 
 using CanInputItemsMap = std::map<Id, std::vector<std::unique_ptr<IInputItem>>>;
-class InputControl
-{
+class InputControl {
 public:
-    explicit InputControl(CanInputItemsMap&& inputsMap):inputs(std::move(inputsMap)){}
+    explicit InputControl(CanInputItemsMap&& inputsMap)
+        : inputs(std::move(inputsMap))
+    {
+    }
     void onRecvMsg(const can_frame& msg);
 
 private:
@@ -144,9 +145,9 @@ private:
 
 }
 
-class CanDigiOut : public IDigiOut
-{
+class CanDigiOut : public IDigiOut {
     can::DigOutItem item;
+
 public:
     operator bool() const override
     {
@@ -157,5 +158,5 @@ public:
         item.set(value);
         return value;
     }
-    can::DigOutItem& getCanItem(){return item;}
+    can::DigOutItem& getCanItem() { return item; }
 };

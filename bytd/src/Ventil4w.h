@@ -1,23 +1,22 @@
 #pragma once
-#include <atomic>
-#include <gpiod.hpp>
-#include <functional>
 #include "IMqttPublisher.h"
+#include <atomic>
+#include <functional>
+#include <gpiod.hpp>
 
-class Ventil4w
-{
+class Ventil4w {
 public:
     using powerFnc = std::function<void(bool)>;
     Ventil4w(powerFnc power, IMqttPublisherSPtr mqtt);
     void moveTo(std::string target);
 
-  private:
+private:
     bool waitEvent(std::chrono::steady_clock::time_point deadline);
 
-    template<typename _Rep, typename _Period>
+    template <typename _Rep, typename _Period>
     bool waitEvent(const std::chrono::duration<_Rep, _Period>& timeout)
     {
-      return waitEvent(std::chrono::steady_clock::now() + timeout);
+        return waitEvent(std::chrono::steady_clock::now() + timeout);
     }
 
     void flush_spurios_signals();
@@ -42,4 +41,3 @@ public:
     IMqttPublisherSPtr mqtt;
     bool flush_gpio_events_flag = false;
 };
-

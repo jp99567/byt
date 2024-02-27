@@ -8,31 +8,30 @@
 #ifndef PGDBWRAPPER_H_
 #define PGDBWRAPPER_H_
 
-#include <vector>
+#include "data.h"
+#include <libpq-fe.h>
 #include <map>
 #include <string>
 #include <utility>
-#include <libpq-fe.h>
-#include "data.h"
+#include <vector>
 
-class PgDbWrapper
-{
+class PgDbWrapper {
 public:
-	typedef std::pair<std::string, unsigned> SqlCmd;
+    typedef std::pair<std::string, unsigned> SqlCmd;
 
-	explicit PgDbWrapper();
-	~PgDbWrapper();
+    explicit PgDbWrapper();
+    ~PgDbWrapper();
 
-	bool connect();
-	bool connectionOK() const;
-	bool insertSamples(const SqlCmd& sqlcmd) const;
-	SqlCmd createSqlCmd(const std::vector<ow::Sample>& v) const;
+    bool connect();
+    bool connectionOK() const;
+    bool insertSamples(const SqlCmd& sqlcmd) const;
+    SqlCmd createSqlCmd(const std::vector<ow::Sample>& v) const;
 
 private:
-	const std::string& encodeRomCode(const ow::RomCode &rc) const;
+    const std::string& encodeRomCode(const ow::RomCode& rc) const;
 
-	PGconn* mConn;
-	mutable std::map<uint64_t, std::string> mRomCodeCache;
+    PGconn* mConn;
+    mutable std::map<uint64_t, std::string> mRomCodeCache;
 };
 
 #endif /* PGDBWRAPPER_H_ */

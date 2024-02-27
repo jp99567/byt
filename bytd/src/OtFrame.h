@@ -3,12 +3,9 @@
 #include <cstdint>
 #include <string_view>
 
-namespace opentherm
-{
-namespace msg
-{
-    enum class type
-    {
+namespace opentherm {
+namespace msg {
+    enum class type {
         Mrd = 0b000'0000,
         Mwr = 0b001'0000,
         Minvalid = 0b010'0000,
@@ -23,8 +20,7 @@ namespace msg
     std::string_view msgToStr(type m);
 }
 
-struct Frame
-{
+struct Frame {
     void setType(opentherm::msg::type type);
 
     opentherm::msg::type getType() const;
@@ -40,7 +36,9 @@ struct Frame
     Frame(opentherm::msg::type type, int id, uint16_t val);
 
     Frame(uint32_t data)
-    :data(data){}
+        : data(data)
+    {
+    }
 
     bool isValid() const { return data != invalid; }
 
@@ -49,4 +47,3 @@ struct Frame
 };
 
 }
-

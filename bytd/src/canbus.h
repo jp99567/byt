@@ -1,12 +1,11 @@
 #pragma once
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/posix/stream_descriptor.hpp>
+#include <functional>
 #include <linux/can.h>
 #include <mutex>
-#include <functional>
 
-class CanBus
-{
+class CanBus {
     boost::asio::posix::stream_descriptor canStream;
     can_frame frame_wr;
     can_frame frame_rd;
@@ -19,9 +18,9 @@ public:
     bool send(const can_frame& frame);
     void setOnRecv(std::function<void(const can_frame& frame)> cbk);
     void setWrReadyCbk(std::function<void()> cbk);
+
 private:
     void read();
     std::function<void(const can_frame& frame)> onRecv;
     std::function<void()> wrReady;
 };
-

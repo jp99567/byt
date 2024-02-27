@@ -1,14 +1,13 @@
 #pragma once
 
 #include "Subscription.h"
-#include <vector>
-#include <mutex>
 #include <algorithm>
+#include <mutex>
+#include <vector>
 
 namespace event {
 
-class IObserverConnection
-{
+class IObserverConnection {
 public:
     virtual ~IObserverConnection() = 0;
     virtual std::unique_ptr<IObserverConnection> makeScopedDestructor() = 0;
@@ -18,40 +17,39 @@ using IObserverConnectionHandler = std::unique_ptr<IObserverConnection>;
 
 inline IObserverConnection::~IObserverConnection() = default;
 
-template<typename... Args>
-struct IEvent
-{
-    virtual ~IEvent(){}
+template <typename... Args>
+struct IEvent {
+    virtual ~IEvent() { }
     virtual IObserverConnectionHandler subscribe(std::unique_ptr<ISubscription<void, Args...>>) = 0;
     virtual void unsubscribe(std::unique_ptr<ISubscription<void, Args...>>) = 0;
     virtual void unsubscribe() = 0;
 };
 
-template<typename... Args>
-class Event : public IEvent<Args...>
-{
+template <typename... Args>
+class Event : public IEvent<Args...> {
 public:
-    using ISubscr    = ISubscription<void, Args...>;
+    using ISubscr = ISubscription<void, Args...>;
     using ISubscrPtr = std::unique_ptr<ISubscr>;
 
-    struct ObserversContainer
-    {
-        std::mutex              lock;
+    struct ObserversContainer {
+        std::mutex lock;
         std::vector<ISubscrPtr> observers;
     };
 
-    struct HandlerImpl : public IObserverConnection
-    {
+    struct HandlerImpl : public IObserverConnection {
         std::weak_ptr<ObserversContainer> observers;
-        ISubscr*                          thisObserver = nullptr;
+        ISubscr* thisObserver = nullptr;
         bool releaseInDestructor = false;
 
         explicit HandlerImpl(std::weak_ptr<ObserversContainer> observers, ISubscr* thisObserver, bool release)
-            :observers(observers), thisObserver(thisObserver), releaseInDestructor(release)
-        {}
+            : observers(observers)
+            , thisObserver(thisObserver)
+            , releaseInDestructor(release)
+        {
+        }
 
         IObserverConnectionHandler makeScopedDestructor() override
-        { 
+        {
             this->releaseInDestructor = false;
             auto handler = std::make_unique<HandlerImpl>(*this);
             handler->releaseInDestructor = true;
@@ -60,12 +58,10 @@ public:
 
         virtual ~HandlerImpl()
         {
-            if (releaseInDestructor)
-            {
+            if(releaseInDestructor) {
                 auto o = observers.lock();
 
-                if(o)
-                {
+                if(o) {
                     unsubscr(o, [this](const ISubscrPtr& uPtr) { return uPtr.get() == this->thisObserver; });
                 }
             }
@@ -78,7 +74,7 @@ public:
         mObservers = std::make_shared<ObserversContainer>();
     }
 
-    IObserverConnectionHandler subscribe (std::unique_ptr<ISubscription<void, Args...>> observer) override
+    IObserverConnectionHandler subscribe(std::unique_ptr<ISubscription<void, Args...>> observer) override
     {
         auto handler = std::make_unique<HandlerImpl>(mObservers, observer.get(), false);
         std::lock_guard<std::mutex> lock(mObservers->lock);
@@ -86,7 +82,7 @@ public:
         return handler;
     }
 
-    void unsubscribe (std::unique_ptr<ISubscription<void, Args...>> observer) override
+    void unsubscribe(std::unique_ptr<ISubscription<void, Args...>> observer) override
     {
         unsubscr(this->mObservers, [&observer](const ISubscrPtr& uPtr) { return uPtr->isSame(*observer); });
     }
@@ -110,16 +106,14 @@ public:
     }
 
 private:
-
-    template<typename Predicate>
+    template <typename Predicate>
     static void unsubscr(std::shared_ptr<ObserversContainer> observers, Predicate predicate)
     {
         std::lock_guard<std::mutex> lock(observers->lock);
         observers->observers.erase(
             std::remove_if(observers->observers.begin(),
-                           observers->observers.end(),
-                           predicate
-            ),
+                observers->observers.end(),
+                predicate),
             observers->observers.end());
     }
 

@@ -1,22 +1,22 @@
 #include "I2cDiOut.h"
 
 #include <errno.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <linux/i2c-dev.h>
-#include <sys/ioctl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
+#include <linux/i2c-dev.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "Log.h"
 
 void I2CDiOut::i2cwrite(const char* buf, unsigned len)
 {
     int rv = ::write(fd, buf, len);
-    if(rv == -1){
+    if(rv == -1) {
         LogSYSDIE("I2CDiOut write");
     }
 }
@@ -32,7 +32,7 @@ void I2CDiOut::i2cwreg(int addr, uint8_t v)
 void I2CDiOut::i2cread(char* buf, unsigned len)
 {
     int rv = ::read(fd, buf, len);
-    if(rv == -1){
+    if(rv == -1) {
         LogSYSDIE("I2CDiOut read");
     }
 }
@@ -53,16 +53,16 @@ I2CDiOut::I2CDiOut()
         LogSYSDIE("I2CDiOut");
     }
 
-//    constexpr unsigned addr = 0x20;
+    //    constexpr unsigned addr = 0x20;
     int rv = ::ioctl(fd, I2C_SLAVE, 0x20);
-    if (rv < 0) {
+    if(rv < 0) {
         LogSYSDIE("I2CDiOut");
     }
 
-    uint8_t iocon = (1<<2) | (1<<5);
+    uint8_t iocon = (1 << 2) | (1 << 5);
     i2cwreg(5, iocon);
     value(0);
-    i2cwreg(0x0, 0x0); //dir output
+    i2cwreg(0x0, 0x0); // dir output
 #endif
 }
 

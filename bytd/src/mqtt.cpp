@@ -1,14 +1,14 @@
 #include "mqtt.h"
-#include "Log.h"
 #include "IIo.h"
+#include "Log.h"
 
-namespace{
+namespace {
 const char* hostname()
 {
-  auto env_hostname = ::getenv("BYTD_MQTT_BROKER_HOSTNAME");
-  if(env_hostname)
-    return env_hostname;
-  return "localhost";
+    auto env_hostname = ::getenv("BYTD_MQTT_BROKER_HOSTNAME");
+    if(env_hostname)
+        return env_hostname;
+    return "localhost";
 }
 }
 
@@ -23,20 +23,19 @@ MqttWrapper::~MqttWrapper()
 }
 
 MqttClient::MqttClient(boost::asio::io_service& io_context)
-    :mosqpp::mosquittopp("bbb", false)
-    ,io_context(io_context)
+    : mosqpp::mosquittopp("bbb", false)
+    , io_context(io_context)
 {
     threaded_set(true);
-  LogINFO("mqtt connect to {}", hostname());
-  auto rv = connect_async(hostname(), 1883, 900);
+    LogINFO("mqtt connect to {}", hostname());
+    auto rv = connect_async(hostname(), 1883, 900);
     check_connect_attempt(rv);
 }
 
 void MqttClient::new_conn_init_wait()
 {
     auto sfd = socket();
-    if(sfd >= 0)
-    {
+    if(sfd >= 0) {
         mqtt_socket = std::make_unique<boost::asio::ip::tcp::socket>(io_context, boost::asio::ip::tcp::v4(), sfd);
         sched_read_mqtt_socket();
         sched_write_mqtt_socket();
@@ -50,12 +49,10 @@ MqttClient::~MqttClient()
 namespace {
 bool handleIOreturnCode(int rv, const char* iosrc)
 {
-    if( rv != MOSQ_ERR_SUCCESS){
-        if( rv == MOSQ_ERR_ERRNO)
-        {
+    if(rv != MOSQ_ERR_SUCCESS) {
+        if(rv == MOSQ_ERR_ERRNO) {
             LogSYSERR("mosquitto loop io");
-        }
-        else{
+        } else {
             LogERR("mosquitto_loop_{} error ({}) {}", iosrc, rv, mosqpp::strerror(rv));
         }
         return false;
@@ -78,16 +75,13 @@ bool MqttClient::do_write()
 
 void MqttClient::check_connect_attempt(int rv)
 {
-    if( rv != MOSQ_ERR_SUCCESS){
-        if( rv == MOSQ_ERR_ERRNO)
-        {
+    if(rv != MOSQ_ERR_SUCCESS) {
+        if(rv == MOSQ_ERR_ERRNO) {
             LogSYSERR("mosquitto_connect syserr");
-        }
-        else{
+        } else {
             LogERR("mosquitto_connect: ({}) {}", rv, mosqpp::strerror(rv));
         }
-    }
-    else{
+    } else {
         new_conn_init_wait();
     }
 }
@@ -95,9 +89,9 @@ void MqttClient::check_connect_attempt(int rv)
 void MqttClient::do_misc()
 {
     auto rv = loop_misc();
-    if( rv != MOSQ_ERR_SUCCESS){
-        if( rv == MOSQ_ERR_NO_CONN){
-            if(--reconnect_delay_countdown < 0){
+    if(rv != MOSQ_ERR_SUCCESS) {
+        if(rv == MOSQ_ERR_NO_CONN) {
+            if(--reconnect_delay_countdown < 0) {
                 LogERR("mosquitto_loop_misc: reconnect");
                 reconnect_delay_countdown = reconnect_delay_countdown_init;
                 check_connect_attempt(reconnect_async());
@@ -105,33 +99,32 @@ void MqttClient::do_misc()
             }
         }
         LogERR("mosquitto_loop_misc: ({}) {}", rv, mosqpp::strerror(rv));
-    }
-    else{
+    } else {
         sched_write_mqtt_socket();
     }
 }
 
-bool MqttClient::publish(const std::string &topic, const std::string &value, bool retain, int qos)
+bool MqttClient::publish(const std::string& topic, const std::string& value, bool retain, int qos)
 {
-    //LogDBG("MqttClient::publish {} {} {}", topic, value, retain);
+    // LogDBG("MqttClient::publish {} {} {}", topic, value, retain);
     auto rv = mosqpp::mosquittopp::publish(nullptr, topic.c_str(), value.length(), value.c_str(), qos, retain);
-    if(rv != MOSQ_ERR_SUCCESS){
-        if( rv != MOSQ_ERR_NO_CONN)
+    if(rv != MOSQ_ERR_SUCCESS) {
+        if(rv != MOSQ_ERR_NO_CONN)
             LogERR("mosqpp::mosquittopp::publish {}", mosqpp::strerror(rv));
         return false;
     }
     sched_write_mqtt_socket();
-    return  true;
+    return true;
 }
 
-void MqttClient::registerSensor(std::string name, ISensorInput &sens)
+void MqttClient::registerSensor(std::string name, ISensorInput& sens)
 {
-  registeredSensors.emplace(name, sens);
+    registeredSensors.emplace(name, sens);
 }
 
-SensorDict &MqttClient::sensors()
+SensorDict& MqttClient::sensors()
 {
-  return registeredSensors;
+    return registeredSensors;
 }
 
 bool MqttClient::publish(const std::string& topic, const double value, bool retain)
@@ -146,13 +139,12 @@ bool MqttClient::publish(const std::string& topic, const int value, bool retain)
 
 void MqttClient::on_connect(int rc)
 {
-    if(rc == 0){
+    if(rc == 0) {
         LogINFO("on mqtt connect");
         auto rv = mosqpp::mosquittopp::subscribe(nullptr, std::string(mqtt::rootTopic).append("#").c_str());
         if(rv != MOSQ_ERR_SUCCESS)
             LogERR("mosquitto_subscribe: ({}) {}", rv, mosqpp::strerror(rv));
-    }
-    else{
+    } else {
         LogERR("on mqtt connect: ({}) {}", rc, mosqpp::strerror(rc));
     }
 }
@@ -163,7 +155,7 @@ void MqttClient::on_disconnect(int rc)
     mqtt_socket = nullptr;
 }
 
-void MqttClient::on_message(const mosquitto_message *msg)
+void MqttClient::on_message(const mosquitto_message* msg)
 {
     std::string s((const char*)msg->payload, msg->payloadlen);
     OnMsgRecv(std::string(msg->topic), std::move(s));
@@ -171,17 +163,16 @@ void MqttClient::on_message(const mosquitto_message *msg)
 
 void MqttClient::sched_read_mqtt_socket()
 {
-    if(not mqtt_socket){
+    if(not mqtt_socket) {
         LogDIE("unexpected MqttClient::sched_read_mqtt_socket nullptr");
     }
-    mqtt_socket->async_wait(boost::asio::socket_base::wait_read, [this](const boost::system::error_code& error){
-        if(!error){
-            if(do_read()){
+    mqtt_socket->async_wait(boost::asio::socket_base::wait_read, [this](const boost::system::error_code& error) {
+        if(!error) {
+            if(do_read()) {
                 sched_read_mqtt_socket();
                 sched_write_mqtt_socket();
             }
-        }
-        else{
+        } else {
             LogERR("async wait_read cbk:({}){}", error.value(), error.message());
         }
     });
@@ -189,20 +180,19 @@ void MqttClient::sched_read_mqtt_socket()
 
 void MqttClient::sched_write_mqtt_socket()
 {
-    if(want_write()){
+    if(want_write()) {
         auto isAlreadyPending = mqtt_pending_write.exchange(true);
         if(isAlreadyPending)
             return;
-        if(not mqtt_socket){
+        if(not mqtt_socket) {
             LogDIE("unexpected MqttClient::sched_write_mqtt_socket nullptr");
         }
-        mqtt_socket->async_wait(boost::asio::socket_base::wait_write, [this](const boost::system::error_code& error){
+        mqtt_socket->async_wait(boost::asio::socket_base::wait_write, [this](const boost::system::error_code& error) {
             mqtt_pending_write = false;
-            if(!error){
+            if(!error) {
                 if(do_write())
                     sched_write_mqtt_socket();
-            }
-            else{
+            } else {
                 LogERR("async wait_write cbk:({}){}", error.value(), error.message());
             }
         });
