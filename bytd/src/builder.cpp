@@ -176,6 +176,13 @@ std::unique_ptr<can::InputControl> Builder::buildCan(CanBus &canbus)
                 digiOutputs.emplace(name, std::move(digiOut));
             }
         }
+        if (it->second["SensorionSHT11"]) {
+            const auto &sht = it->second["SensorionSHT11"];
+            auto canAddr = sht["addr"].as<can::Id>();
+            auto sensor = can::createSensorion("todo", sht["nameT"].as<std::string>(), 0, mqtt);
+            // ToDo sensors.emplace_back(sensor->sens);
+            insertInputItem(inputsMap, canAddr, std::move(sensor));
+        }
     }
 
     outputControl->setOutputs(std::move(outObj.outputObjects));

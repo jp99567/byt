@@ -1,7 +1,8 @@
 #include "candata.h"
+#include "Log.h"
+#include "Sensorion.h"
 #include "avr/fw/OwResponseCode_generated.h"
 #include "avr/fw/SvcProtocol_generated.h"
-#include "Log.h"
 
 namespace {
 template<typename T>
@@ -116,4 +117,38 @@ void OwTempItem::update(const Data &data, std::size_t len)
     }
 }
 
+template<typename Sensor>
+struct SensorionItem : public IInputItem
+{
+    explicit SensorionItem(std::string name, unsigned offset, IMqttPublisherSPtr mqtt)
+        : offset(offset)
+        , sens(name, mqtt)
+    {}
+    SensorionItem(OwTempItem &other) = delete;
+    unsigned offset;
+    void update(const Data &data, std::size_t len) override
+    {
+        int16_t owval = Sensorion::cInvalidValue;
+        if (offset + sizeof(owval) <= len) {
+            owval = *reinterpret_cast<const int16_t *>(&data[offset]);
+            sens.setValue(owval);
+        }
+    }
+
+    Sensor sens;
+};
+
+std::unique_ptr<IInputItem> createSensorion(std::string ToDo,
+                                            std::string name,
+                                            unsigned offset,
+                                            IMqttPublisherSPtr mqtt)
+{
+    if (ToDo == "ToDo") {
+        throw std::runtime_error("sensorion invalid type");
+    }
+
+    return std::make_unique<SensorionItem<Sensorion::Sensor<Sensorion::convToDo>>>(name,
+                                                                                   offset,
+                                                                                   mqtt);
+}
 }

@@ -101,6 +101,11 @@ struct DigiInItem : public IInputItem, DigInput
     void update(const Data& data, std::size_t len) override;
 };
 
+std::unique_ptr<IInputItem> createSensorion(std::string ToDo,
+                                            std::string name,
+                                            unsigned offset,
+                                            IMqttPublisherSPtr mqtt);
+
 struct OwTempItem : public IInputItem
 {
     explicit OwTempItem(std::string name, unsigned offset, IMqttPublisherSPtr mqtt, float factor)
@@ -154,4 +159,3 @@ public:
     }
     can::DigOutItem& getCanItem(){return item;}
 };
-
