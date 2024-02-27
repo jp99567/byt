@@ -7,6 +7,7 @@
 #include "SvcProtocol_generated.h"
 #include "gpio.h"
 #include "log_debug.h"
+#include "sensirion_common.h"
 
 uint32_t gCounter;
 uint8_t gEvents;
@@ -68,20 +69,41 @@ struct OwT_Obj : Base_Obj
 {
 };
 
+enum Features {
+	eFeatureSCD41 = (1<<0),
+	eFeatureSHT11 = (1<<1)
+};
+
 static uint8_t gDigIN_count;
 static uint8_t gDigOUT_count;
 static uint8_t gOwT_count;
 static uint8_t gIOData_count;
 static uint8_t gMobFirstTx;
 static uint8_t gMobCount;
+static uint8_t gFeatures;
 
+struct SHT11_Obj;
+struct SCD41_Obj;
 DigIN_Obj* gDigIN_Obj;
 DigOUT_Obj* gDigOUT_Obj;
 OwT_Obj* gOwT_Obj;
 ow::RomData* gOwTempSensors;
+SCD41_Obj* gSCD41_Obj;
+SHT11_Obj* gSHT11_Obj;
 uint8_t* gIOData;
 uint8_t* gMobEndIdx;
 uint16_t gMobMarkedTx;
+
+struct SHT11_Obj : Base_Obj
+{
+	uint16_t& valueT() {return reinterpret_cast<uint16_t*>(&gIOData[iodataIdx])[0];}
+	uint16_t& valueRH() {return reinterpret_cast<uint16_t*>(&gIOData[iodataIdx])[1];}
+};
+
+struct SCD41_Obj : SHT11_Obj
+{
+	uint16_t& valueCO2() {return reinterpret_cast<uint16_t*>(&gIOData[iodataIdx])[2];}
+};
 
 namespace ow {
 int gOwBitsCount;
@@ -191,6 +213,8 @@ void svc(bool broadcast) {
 		gIOData_count = svc_msg[4];
 		gMobFirstTx = svc_msg[5];
 		gMobCount = svc_msg[6];
+		//gFeatures = svc_msg[7];
+		gFeatures = eFeatureSCD41|eFeatureSHT11; //Todo
 		svc_msglen = 1;
 		break;
 	case Svc::Protocol::CmdGetAllocCounts:
@@ -201,6 +225,7 @@ void svc(bool broadcast) {
 		svc_msg[svc_msglen++] = gIOData_count;
 		svc_msg[svc_msglen++] = gMobFirstTx;
 		svc_msg[svc_msglen++] = gMobCount;
+		svc_msg[svc_msglen++] = gFeatures;
 		break;
 	case Svc::Protocol::CmdSetStage:
 	{
@@ -258,6 +283,24 @@ void svc(bool broadcast) {
 	{
 		auto& obj = gDigOUT_Obj[svc_msg[1]];
 		obj.setParams(svc_msg);
+		svc_msglen = 1;
+	}
+		break;
+	case Svc::Protocol::CmdSetSCD41Params:
+	{
+		auto& obj = gSCD41_Obj[svc_msg[1]];
+		obj.mobIdx = svc_msg[2];
+		obj.iodataIdx = svc_msg[3];
+		obj.valueT() = obj.valueRH() = obj.valueCO2() = Sensorion::cInvalidValue;
+		svc_msglen = 1;
+	}
+		break;
+	case Svc::Protocol::CmdSetSHT11Params:
+	{
+		auto& obj = gSHT11_Obj[svc_msg[1]];
+		obj.mobIdx = svc_msg[2];
+		obj.iodataIdx = svc_msg[3];
+		obj.valueT() = obj.valueRH() = Sensorion::cInvalidValue;
 		svc_msglen = 1;
 	}
 		break;
@@ -540,6 +583,21 @@ void run()
 	}
 }
 
+uint16_t sizeOfOwT()
+{
+	return ((gOwT_count > 1) ? gOwT_count*sizeof(ow::RomData) : 0);
+}
+
+uint16_t sizeOfSCD41()
+{
+	return (gFeatures & eFeatureSCD41) ? sizeof(*gSCD41_Obj) : 0;
+}
+
+uint16_t sizeOfSHT11()
+{
+	return (gFeatures & eFeatureSHT11) ? sizeof(*gSHT11_Obj) : 0;
+}
+
 int main() {
 
 	init();
@@ -560,7 +618,9 @@ int main() {
 		  + gDigIN_count * sizeof(DigIN_Obj)
 		  + gDigOUT_count * sizeof(DigOUT_Obj)
 		  + gOwT_count * sizeof(OwT_Obj)
-		  + ((gOwT_count > 1) ? gOwT_count*sizeof(ow::RomData) : 0);
+		  + sizeOfOwT();
+		  + sizeOfSCD41()
+		  + sizeOfSHT11();
 
 	uint8_t allocGData[allocSize];
 	uint8_t* ptr = allocGData;
@@ -582,6 +642,12 @@ int main() {
 	ptr += gOwT_count * sizeof(OwT_Obj);
 
 	gOwTempSensors = (ow::RomData*)ptr;
+	ptr += sizeOfOwT();
+
+	gSCD41_Obj = (SCD41_Obj*)ptr;
+	ptr += sizeOfSCD41();
+
+	gSHT11_Obj = (SHT11_Obj*)ptr;
 
 	while(gFwStage == cFwStageInit2){
 		auto id = can_rx_svc();

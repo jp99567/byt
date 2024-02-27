@@ -59,6 +59,8 @@ class SvcProtocol(enum.IntEnum):
     CmdOwSearch = enum.auto()
     CmdOwGetReplyCode = enum.auto()
     CmdOwGetData = enum.auto()
+    CmdSetSCD41Params = enum.auto()
+    CmdSetSHT11Params = enum.auto()
     CmdStatus = ord('s')
     CmdInvalid = ord('X')
 

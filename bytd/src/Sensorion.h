@@ -1,10 +1,9 @@
 #pragma once
 
 #include "SimpleSensor.h"
+#include "avr/fw/sensirion_common.h"
 
 namespace Sensorion {
-
-constexpr uint16_t cInvalidValue = 0xFFFE;
 
 using Conversion = float(uint16_t);
 
