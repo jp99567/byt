@@ -287,39 +287,12 @@ class ClassOwtInfo(ClassInfo):
             idx += 1
 
 
-class ClassSensorionCO2Info(ClassInfo):
+class ClassSensorionSCD41Info(ClassInfo):
     def info(self):
-        inf = ClassInfo.info(self)
-        items = {}
-        for i in self.node.keys():
-            canid = self.node[i]['addr'][0]
-            if canid not in items:
-                items[canid] = []
-            byte = self.node[i]['addr'][1]
-            items[canid].append([8 * byte, 16])
-        inf['items'] = items
-        return inf
-
-    def initNodeObject(self, nodebus, mobs, mobSize):
-        idx = 0
-        for i in self.node.keys():
-            canid = self.node[i]['addr'][0]
-            mobidx = mobs.index(canid)
-            byte = self.node[i]['addr'][1] + mobSize[canid]['start']
-            nodebus.svcTransfer(SvcProtocol.CmdSetOwObjParams, [idx, mobidx, byte])
-            if len(self.node.keys()) > 1:
-                rc = bytearray.fromhex(self.node[i]['owRomCode'])
-                if len(rc) != 8:
-                    raise f'Invalid rc length {rc}'
-                rsp = nodebus.svcTransfer(SvcProtocol.CmdSetOwObjRomCode, [idx, *rc[1:7]])
-                if SvcProtocol(rsp[0]) != SvcProtocol.CmdSetOwObjRomCode:
-                    raise f'Invalid response {rc} {rsp[1]}'
-                if rsp[1] != rc[7]:
-                    raise f'Inwalid crc {rc} {rsp[1]}'
-            idx += 1
+        return {'ids': {self.node['addr']}, 'count': 1, 'items': {self.node['addr']: [[0, 3*16]]}}
 
 
-class ClassInfoUniq(ClassInfo):
+class ClassSensorionSHT11Info(ClassInfo):
     def info(self):
         return {'ids': {self.node['addr']}, 'count': 1, 'items': {self.node['addr']: [[0, 4 * 8]]}}
 
@@ -331,10 +304,12 @@ def buildClassInfo(trieda, node):
         return ClassDigInOutInfo(node, SvcProtocol.CmdSetDigOUTObjParams)
     elif trieda == 'OwT':
         return ClassOwtInfo(node)
-    elif triead == 'SensorionCO2':
-        return ClassSensorionCO2Info(node)
+    elif trieda == 'SensorionSCD41':
+        return ClassSensorionSCD41Info(node)
+    elif trieda == 'SensorionSHT11':
+        return ClassSensorionSHT11Info(node)
     else:
-        return ClassInfoUniq(node)
+        return None
 
 
 def configure_node(node):
@@ -345,7 +320,7 @@ def configure_node(node):
     triedyInfo = dict()
     triedy = []
 
-    for trieda in ('DigIN', 'OwT', 'SensorionCO2', 'Vlhkomer'):
+    for trieda in ('DigIN', 'OwT', 'SensorionSCD41', 'SensorionSHT11'):
         if trieda in node:
             triedaInfo = buildClassInfo(trieda, node[trieda])
             info = triedaInfo.info()
