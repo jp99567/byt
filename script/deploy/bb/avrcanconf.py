@@ -37,6 +37,7 @@ canid_bcast_mask = ((1 << 20) - 1) << 9
 
 fw_build_epoch_base = 1675604744   # 5.feb 20231 14:45:44 CET
 
+
 class SvcProtocol(enum.IntEnum):
     CmdSetAllocCounts = enum.auto()
     CmdGetAllocCounts = enum.auto()
@@ -114,6 +115,15 @@ def canIdCheck(canid):
         hostid = idnet & 0b11
         return nodeId, hostid
     return None
+
+
+def dallas_crc8(data):
+    crc = 0
+    for c in data:
+        for i in range(0, 8):
+            b = (crc & 1) ^ (((int(c) & (1 << i))) >> i)
+            crc = (crc ^ (b * 0x118)) >> 1
+    return crc
 
 
 def sendBlocking(canbus, messageTx):
@@ -273,6 +283,38 @@ class ClassOwtInfo(ClassInfo):
                 if SvcProtocol(rsp[0]) != SvcProtocol.CmdSetOwObjRomCode:
                     raise f'Invalid response {rc} {rsp[1]}'
                 if rsp[1] != rc[7]:
+                    raise RuntimeError(f'Inwalid crc {list(rc)} {rc[7]} {rsp[1]}')
+            idx += 1
+
+
+class ClassSensorionCO2Info(ClassInfo):
+    def info(self):
+        inf = ClassInfo.info(self)
+        items = {}
+        for i in self.node.keys():
+            canid = self.node[i]['addr'][0]
+            if canid not in items:
+                items[canid] = []
+            byte = self.node[i]['addr'][1]
+            items[canid].append([8 * byte, 16])
+        inf['items'] = items
+        return inf
+
+    def initNodeObject(self, nodebus, mobs, mobSize):
+        idx = 0
+        for i in self.node.keys():
+            canid = self.node[i]['addr'][0]
+            mobidx = mobs.index(canid)
+            byte = self.node[i]['addr'][1] + mobSize[canid]['start']
+            nodebus.svcTransfer(SvcProtocol.CmdSetOwObjParams, [idx, mobidx, byte])
+            if len(self.node.keys()) > 1:
+                rc = bytearray.fromhex(self.node[i]['owRomCode'])
+                if len(rc) != 8:
+                    raise f'Invalid rc length {rc}'
+                rsp = nodebus.svcTransfer(SvcProtocol.CmdSetOwObjRomCode, [idx, *rc[1:7]])
+                if SvcProtocol(rsp[0]) != SvcProtocol.CmdSetOwObjRomCode:
+                    raise f'Invalid response {rc} {rsp[1]}'
+                if rsp[1] != rc[7]:
                     raise f'Inwalid crc {rc} {rsp[1]}'
             idx += 1
 
@@ -289,6 +331,8 @@ def buildClassInfo(trieda, node):
         return ClassDigInOutInfo(node, SvcProtocol.CmdSetDigOUTObjParams)
     elif trieda == 'OwT':
         return ClassOwtInfo(node)
+    elif triead == 'SensorionCO2':
+        return ClassSensorionCO2Info(node)
     else:
         return ClassInfoUniq(node)
 
@@ -522,19 +566,36 @@ if args.exit_bootloader:
     msg = can.Message(arbitration_id=id, is_extended_id=True, data=[ord('c')])
     sendBlocking(openBus(), msg)
 
-if args.simulator:
-    bus = openBus()
+
+def devsimulator():
+    mybus = openBus()
     stage = 0b01000000
     while True:
-        msg = bus.recv()
-        print(msg)
-        if msg.data[0] == SvcProtocol.CmdStatus:
-            sendBlocking(bus, can.Message(arbitration_id=msg.arbitration_id + 1, is_extended_id=True,
-                                          data=[msg.data[0], 0, 0, stage]))
+        mymsg = mybus.recv()
+        print(mymsg)
+        if mymsg.data[0] == SvcProtocol.CmdStatus:
+            sendBlocking(mybus, can.Message(arbitration_id=mymsg.arbitration_id + 1, is_extended_id=True,
+                                            data=[mymsg.data[0], 0, 0, stage]))
             continue
-        elif msg.data[0] == SvcProtocol.CmdSetStage:
-            stage = msg.data[1]
-        sendBlocking(bus, can.Message(arbitration_id=msg.arbitration_id + 1, is_extended_id=True, data=[msg.data[0]]))
+        elif mymsg.data[0] == SvcProtocol.CmdSetStage:
+            stage = mymsg.data[1]
+        elif mymsg.data[0] == SvcProtocol.CmdSetOwObjRomCode:
+            if len(mymsg.data) == 8:
+                crc = dallas_crc8([0x28, *mymsg.data[2:8]])
+                print(f"rom code: {list(mymsg.data[2:8])} crc {crc:02X}")
+                sendBlocking(mybus, can.Message(arbitration_id=mymsg.arbitration_id + 1, is_extended_id=True,
+                                                data=[mymsg.data[0], crc]))
+                continue
+            else:
+                print("invalid ow rom code")
+                mymsg.data[0] == SvcProtocol.CmdInvalid
+
+        sendBlocking(mybus,
+                     can.Message(arbitration_id=mymsg.arbitration_id + 1, is_extended_id=True, data=[mymsg.data[0]]))
+
+
+if args.simulator:
+    devsimulator()
 
 
 def sniff():
@@ -581,7 +642,7 @@ def sniff():
                             data.append(0)
                             git_ver32bit, build_time = struct.unpack('II', bytearray(data[1:]))
                             dirty = build_time & 1 == 1
-                            build_epoch = fw_build_epoch_base + (build_time >> 1)*60
+                            build_epoch = fw_build_epoch_base + (build_time >> 1) * 60
                             build_datetime = datetime.datetime.fromtimestamp(build_epoch)
                             rest = f'build time:{build_datetime} git version:{git_ver32bit:08x}'
                             if dirty:
@@ -597,15 +658,6 @@ def sniff():
 
 if args.sniffer:
     sniff()
-
-
-def dallas_crc8(data):
-    crc = 0
-    for c in data:
-        for i in range(0, 8):
-            b = (crc & 1) ^ (((int(c) & (1 << i))) >> i)
-            crc = (crc ^ (b * 0x118)) >> 1
-    return crc
 
 
 def owRequest(nodebus):
