@@ -17,7 +17,7 @@ void enable()
 #else
 void enable()
 {
-    \\ToDo
+    //ToDo
 }
 #endif
 
@@ -88,11 +88,10 @@ State do_smL1()
     case State::Send8bitHiPluseAckClk0: {
         bool ack = !data();
         clk0();
-        SPDLOG_INFO("sendbyte ack:{}", ack);
         if(ack)
             state = State::Send8bitWaitMeas;
         else
-            state = state = State::Error;
+            state = State::Error;
     } break;
     case State::Send8bitWaitMeas:
         if(!data())
@@ -180,7 +179,6 @@ void reset()
     bit_cnt = 0;
     data_release();
     clk0();
-    SPDLOG_INFO("sw reset sht11");
     state = State::Reset;
 }
 }
