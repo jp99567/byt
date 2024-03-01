@@ -374,13 +374,19 @@ def configure_node(node):
     print(canmobsList)
 
     trans = NodeBus(bus, nodeId)
+    features = 0
+    if triedyNr['SensorionSCD41']:
+        features |= 1
+    if triedyNr['SensorionSHT11']:
+        features |= 2
     trans.svcTransfer(SvcProtocol.CmdSetAllocCounts,
                       [triedyNr['DigIN'],
                        triedyNr['DigOUT'],
                        triedyNr['OwT'],
                        sum(canmob_size.values()),
                        len(inputCanIds),
-                       len(canmobsList)])
+                       len(canmobsList),
+                       features])
 
     trans.svcTransfer(SvcProtocol.CmdSetStage, [NodeStage.stage2.value])
 
