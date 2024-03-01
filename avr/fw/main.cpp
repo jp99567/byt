@@ -10,7 +10,6 @@
 #include "sensirion_common.h"
 #include "clock.h"
 #include "sht11_sm.h"
-#include "sht11_swi2c.h"
 
 uint32_t gCounter;
 uint8_t gEvents;
@@ -512,8 +511,8 @@ constexpr bool isSvcRx(uint8_t mobid)
 }
 
 namespace sht11{
-void enable();
 void do_sm();
+void enableL2();
 }
 
 void run()
@@ -521,7 +520,7 @@ void run()
 	DBG("running %02X %02X mcusr:%02X cant:%u", CANGIT, gEvents, MCUCR, CANTIM);
 
 	if(gFeatures & eFeatureSHT11){
-		sht11::enable();
+		sht11::enableL2();
 	}
 
 	sei();
@@ -663,7 +662,7 @@ int main() {
 	gSHT11_Obj = (SHT11_Obj*)ptr;
 
 	if(gFeatures & eFeatureSHT11){
-		sht11::init_hw();
+		sht11::enable();
 	}
 
 	while(gFwStage == cFwStageInit2){
@@ -931,7 +930,7 @@ bool eval_state_helper()
     return false;
 }
 
-void enable()
+void enableL2()
 {
 	state = StateL2::Relax;
 }

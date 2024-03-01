@@ -17,7 +17,7 @@ void enable()
 #else
 void enable()
 {
-    //ToDo
+	init_hw();
 }
 #endif
 
