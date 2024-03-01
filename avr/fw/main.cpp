@@ -10,6 +10,7 @@
 #include "sensirion_common.h"
 #include "clock.h"
 #include "sht11_sm.h"
+#include "sht11_swi2c.h"
 
 uint32_t gCounter;
 uint8_t gEvents;
@@ -215,8 +216,7 @@ void svc(bool broadcast) {
 		gIOData_count = svc_msg[4];
 		gMobFirstTx = svc_msg[5];
 		gMobCount = svc_msg[6];
-		//gFeatures = svc_msg[7];
-		gFeatures = eFeatureSCD41|eFeatureSHT11; //Todo
+		gFeatures = svc_msg[7];
 		svc_msglen = 1;
 		break;
 	case Svc::Protocol::CmdGetAllocCounts:
@@ -511,9 +511,19 @@ constexpr bool isSvcRx(uint8_t mobid)
 	return mobid==13 || mobid==14;
 }
 
+namespace sht11{
+void enable();
+void do_sm();
+}
+
 void run()
 {
 	DBG("running %02X %02X mcusr:%02X cant:%u", CANGIT, gEvents, MCUCR, CANTIM);
+
+	if(gFeatures & eFeatureSHT11){
+		sht11::enable();
+	}
+
 	sei();
 
 	uint8_t prevCANTIML_5b = CANTIML & 0xF8;
@@ -581,6 +591,7 @@ void run()
 		if(curCANTIML_5b != prevCANTIML_5b){
 			prevCANTIML_5b = curCANTIML_5b;
 			onTimer4ms096();
+			sht11::do_sm();
 		}
 	}
 }
@@ -651,6 +662,10 @@ int main() {
 
 	gSHT11_Obj = (SHT11_Obj*)ptr;
 
+	if(gFeatures & eFeatureSHT11){
+		sht11::init_hw();
+	}
+
 	while(gFwStage == cFwStageInit2){
 		auto id = can_rx_svc();
 		if(id){
@@ -668,8 +683,6 @@ int main() {
 
 struct ClockTimer255US {
 };
-
-
 
 namespace meas{
 enum class State {
@@ -892,9 +905,19 @@ enum class StateL2 {
     ClearError
 };
 
-static auto state = StateL2::Relax;
+static auto state = StateL2::Disabled;
 static uint16_t sTemp;
 static uint16_t sRH;
+
+void update_pvs()
+{
+	if(gSHT11_Obj->valueT() != sTemp
+	|| gSHT11_Obj->valueRH() != sRH){
+		gSHT11_Obj->valueT() = sTemp;
+		gSHT11_Obj->valueRH() = sRH;
+		markMobTx(gSHT11_Obj->mobIdx);
+	}
+}
 
 bool eval_state_helper()
 {
@@ -906,6 +929,11 @@ bool eval_state_helper()
         state = StateL2::Relax;
     }
     return false;
+}
+
+void enable()
+{
+	state = StateL2::Relax;
 }
 
 void do_sm()
@@ -1018,6 +1046,7 @@ void do_sm()
             crc = reverse_bits(crc);
             if(crc == getByte()) {
                 reset_time();
+                update_pvs();
                 state = StateL2::Relax;
             } else {
                 reset();
@@ -1027,6 +1056,8 @@ void do_sm()
         break;
         /////////////////////
     case StateL2::ClearError: {
+    	sRH = sTemp = Sensorion::cInvalidValue;
+    	update_pvs();
         auto stateL1 = do_smL1();
         if(stateL1 == State::Idle || stateL1 == State::Error) {
             reset_time();
