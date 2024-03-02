@@ -213,6 +213,9 @@ class ClassInfo:
     def initNodeObject(self, nodebus, mobs, mobSize):
         pass
 
+    def checkPinConflits(self, isSCD41, isSHT11, isOw):
+        pass
+
 
 def pinStr2Num(pin):
     pin = pin.upper()
@@ -253,6 +256,21 @@ class ClassDigInOutInfo(ClassInfo):
             pin = pinStr2Num(self.node[i]['pin'])
             nodebus.svcTransfer(self.initObjCmd, [idx, mobidx, byte, mask, pin])
             idx += 1
+
+    def checkPinConflits(self, isSCD41=False, isSHT11=False, isOw=False):
+        usedPins = []
+        if isSCD41:
+            usedPins.extend(['PD0', 'PD1'])
+        if isSHT11:
+            usedPins.extend(['PC3', 'PC5'])
+        if isOw:
+            usedPins.append('PA0')
+
+        for i in self.node.keys():
+            pin = self.node[i]['pin']
+            if pin in usedPins:
+                errmsg = f"pin conflict {pin}"
+                raise RuntimeError(errmsg)
 
 
 class ClassOwtInfo(ClassInfo):
@@ -322,7 +340,7 @@ class ConfigNode:
         self.inputCanIds = set()
         self.triedyNr = dict()
         triedyInfo = dict()
-        self.triedy = []
+        self.triedy = dict()
 
         for trieda in ('DigIN', 'OwT', 'SensorionSCD41', 'SensorionSHT11'):
             if trieda in node:
@@ -331,7 +349,7 @@ class ConfigNode:
                 outputCanIds.update(info['ids'])
                 self.triedyNr[trieda] = info['count']
                 triedyInfo[trieda] = info
-                self.triedy.append(triedaInfo)
+                self.triedy[trieda] = triedaInfo
             else:
                 self.triedyNr[trieda] = 0
 
@@ -342,7 +360,7 @@ class ConfigNode:
                 self.inputCanIds.update(info['ids'])
                 self.triedyNr[trieda] = info['count']
                 triedyInfo[trieda] = info
-                self.triedy.append(triedaInfo)
+                self.triedy[trieda] = triedaInfo
             else:
                 self.triedyNr[trieda] = 0
 
@@ -384,7 +402,16 @@ class ConfigNode:
         print(f"sum: {sum([ self.canmobSize[i]['size'] for i in self.canmobSize])}")
 
     def check(self):
-        pass
+        def checkIt(trieda):
+            self.triedy[trieda].checkPinConflits(isSCD41=self.triedyNr['SensorionSCD41'],
+                                                 isSHT11=self.triedyNr['SensorionSHT11'],
+                                                 isOw=self.triedyNr['OwT'])
+
+        if self.triedyNr['DigIN']:
+            checkIt('DigIN')
+        if self.triedyNr['DigOUT']:
+            checkIt('DigOUT')
+
 
     def uploadNode(self, trans):
         features = 0
@@ -404,7 +431,7 @@ class ConfigNode:
         trans.svcTransfer(SvcProtocol.CmdSetStage, [NodeStage.stage2.value])
 
         for trieda in self.triedy:
-            trieda.initNodeObject(trans, self.canmobsList, self.canmobSize)
+            self.triedy[trieda].initNodeObject(trans, self.canmobsList, self.canmobSize)
 
         for idx, canid in enumerate(self.canmobsList):
             endIoIdx = self.canmobSize[canid]['start'] + self.canmobSize[canid]['size']
