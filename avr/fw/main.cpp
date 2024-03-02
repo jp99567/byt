@@ -289,18 +289,18 @@ void svc(bool broadcast) {
 		break;
 	case Svc::Protocol::CmdSetSCD41Params:
 	{
-		auto& obj = gSCD41_Obj[svc_msg[1]];
-		obj.mobIdx = svc_msg[2];
-		obj.iodataIdx = svc_msg[3];
+		auto& obj = *gSCD41_Obj;
+		obj.mobIdx = svc_msg[1];
+		obj.iodataIdx = svc_msg[2];
 		obj.valueT() = obj.valueRH() = obj.valueCO2() = Sensorion::cInvalidValue;
 		svc_msglen = 1;
 	}
 		break;
 	case Svc::Protocol::CmdSetSHT11Params:
 	{
-		auto& obj = gSHT11_Obj[svc_msg[1]];
-		obj.mobIdx = svc_msg[2];
-		obj.iodataIdx = svc_msg[3];
+		auto& obj = *gSHT11_Obj;
+		obj.mobIdx = svc_msg[1];
+		obj.iodataIdx = svc_msg[2];
 		obj.valueT() = obj.valueRH() = Sensorion::cInvalidValue;
 		svc_msglen = 1;
 	}

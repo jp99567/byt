@@ -212,7 +212,8 @@ class ClassInfo:
         return {'ids': ids, 'count': count}
 
     def initNodeObject(self, nodebus, mobs, mobSize):
-        pass
+        errmsg = f"initNodeObject {self.node}"
+        raise NotImplementedError(errmsg)
 
     def checkPinConflits(self, isSCD41, isSHT11, isOw):
         pass
@@ -315,14 +316,28 @@ class ClassOwtInfo(ClassInfo):
             idx += 1
 
 
-class ClassSensorionSCD41Info(ClassInfo):
+class ClassSensorionInfo(ClassInfo):
+    def initNodeObjectSensorion(self, nodebus, mobs, mobSize, cmd):
+        canid = self.node['addr']
+        mobidx = mobs.index(canid)
+        byteidx = mobSize[canid]['start']
+        nodebus.svcTransfer(cmd, [mobidx, byteidx])
+
+
+class ClassSensorionSCD41Info(ClassSensorionInfo):
     def info(self):
         return {'ids': {self.node['addr']}, 'count': 1, 'items': {self.node['addr']: [[0, 3*16]]}}
 
+    def initNodeObject(self, nodebus, mobs, mobSize):
+        self.initNodeObjectSensorion(nodebus, mobs, mobSize, SvcProtocol.CmdSetSCD41Params)
 
-class ClassSensorionSHT11Info(ClassInfo):
+
+class ClassSensorionSHT11Info(ClassSensorionInfo):
     def info(self):
         return {'ids': {self.node['addr']}, 'count': 1, 'items': {self.node['addr']: [[0, 4 * 8]]}}
+
+    def initNodeObject(self, nodebus, mobs, mobSize):
+        self.initNodeObjectSensorion(nodebus, mobs, mobSize, SvcProtocol.CmdSetSHT11Params)
 
 
 def buildClassInfo(trieda, node):
