@@ -10,6 +10,7 @@
 #include "sensirion_common.h"
 #include "clock.h"
 #include "sht11_sm.h"
+#include "scd4x_sm.h"
 
 uint32_t gCounter;
 uint8_t gEvents;
@@ -475,6 +476,16 @@ void iterateOutputObjs(uint8_t mobidx)
 	}
 }
 
+namespace sht11{
+void do_sm();
+void enableL2();
+}
+
+namespace scd4x {
+void do_smL2();
+void enableL2();
+}
+
 void onTimer16s7()
 {
 }
@@ -482,6 +493,8 @@ void onTimer16s7()
 void onTimer4ms096()
 {
 	meas::measure_ow_temp_sm();
+	sht11::do_sm();
+	scd4x::do_smL2();
 
 	for(int i=0; i<gDigIN_count; ++i){
 		bool v = getDigInVal(gDigIN_Obj[i].pin);
@@ -510,17 +523,15 @@ constexpr bool isSvcRx(uint8_t mobid)
 	return mobid==13 || mobid==14;
 }
 
-namespace sht11{
-void do_sm();
-void enableL2();
-}
-
 void run()
 {
 	DBG("running %02X %02X mcusr:%02X cant:%u", CANGIT, gEvents, MCUCR, CANTIM);
 
 	if(gFeatures & eFeatureSHT11){
 		sht11::enableL2();
+	}
+	if(gFeatures & eFeatureSHT11){
+		scd4x::enableL2();
 	}
 
 	sei();
@@ -590,7 +601,6 @@ void run()
 		if(curCANTIML_5b != prevCANTIML_5b){
 			prevCANTIML_5b = curCANTIML_5b;
 			onTimer4ms096();
-			sht11::do_sm();
 		}
 	}
 }
@@ -663,6 +673,9 @@ int main() {
 
 	if(gFeatures & eFeatureSHT11){
 		sht11::enable();
+	}
+	if(gFeatures & eFeatureSCD41){
+		scd4x::enable();
 	}
 
 	while(gFwStage == cFwStageInit2){
@@ -1067,4 +1080,121 @@ void do_sm()
         break;
     }
 }
+}
+
+namespace scd4x{
+enum class StateL2
+{
+	Disabled,
+	Initializing,
+	Relaxing,
+	WaitingForReady,
+	Reading
+};
+
+static StateL2 stateL2 = StateL2::Disabled;
+
+uint8_t t0 = 0;
+
+template<unsigned dur>
+bool timeout()
+{
+	return ClockTimer65MS::isTimeout(t0, ClockTimer65MS::durMs<dur>());
+}
+
+void reset_time()
+{
+    t0 = ClockTimer65MS::now();
+}
+
+constexpr auto timeout1s = 1000u;
+
+void enableL2()
+{
+	init_start_periodic_meas();
+	stateL2 = StateL2::Initializing;
+}
+
+void update_pvs()
+{
+	if(gSCD41_Obj->valueT() != get_temp()
+	|| gSCD41_Obj->valueRH() != get_rh()
+	|| gSCD41_Obj->valueCO2() != get_co2()){
+		gSCD41_Obj->valueT() = get_temp();
+		gSCD41_Obj->valueRH() = get_rh();
+		gSCD41_Obj->valueCO2() = get_co2();
+		markMobTx(gSCD41_Obj->mobIdx);
+	}
+}
+
+void update_pvs_with_invalid()
+{
+	if(gSCD41_Obj->valueT() != Sensorion::cInvalidValue
+	|| gSCD41_Obj->valueRH() != Sensorion::cInvalidValue
+	|| gSCD41_Obj->valueCO2() != Sensorion::cInvalidValue){
+		gSCD41_Obj->valueT() = Sensorion::cInvalidValue;
+		gSCD41_Obj->valueRH() = Sensorion::cInvalidValue;
+		gSCD41_Obj->valueCO2() = Sensorion::cInvalidValue;
+		markMobTx(gSCD41_Obj->mobIdx);
+	}
+}
+
+void do_smL2()
+{
+	switch(stateL2){
+	case StateL2::Disabled:
+		break;
+	case StateL2::Initializing:
+		if(State::Pending_IO != getState()){
+			reset_time();
+			stateL2 = StateL2::Relaxing;
+		}
+		break;
+	case StateL2::Relaxing:
+		if(timeout<timeout1s>()){
+			init_get_status();
+			stateL2 = StateL2::WaitingForReady;
+		}
+	    break;
+	case StateL2::WaitingForReady:
+		if(State::Pending_IO != getState()){
+			bool ok = false;
+			if(State::Idle != getState()){
+				if(check_crc_single_item()){
+					if(data_ready()){
+						init_read_meas();
+						stateL2 = StateL2::Reading;
+						break;
+					}
+					else{
+						ok = true;
+					}
+				}
+			}
+			if(not ok){
+				update_pvs_with_invalid();
+			}
+			reset_time();
+			stateL2 = StateL2::Relaxing;
+		}
+	    break;
+	case StateL2::Reading:
+		if(State::Pending_IO != getState()){
+			bool ok = false;
+			if(State::Idle != getState()){
+				if(check_crc_meas_data()){
+					update_pvs();
+					ok = true;
+				}
+			}
+			if(not ok){
+				update_pvs_with_invalid();
+			}
+			reset_time();
+			stateL2 = StateL2::Relaxing;
+		}
+		break;
+	}
+}
+
 }
