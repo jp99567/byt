@@ -217,6 +217,15 @@ class ClassInfo:
         pass
 
 
+def pinNum2Str(num):
+    if 0 <= num < 6 * 8 + 5:
+        byte = num // 8
+        bit = num % 8
+        p = ord('A') + byte
+        return 'P' + chr(p) + f"{bit}"
+    raise "pin id out fo range"
+
+
 def pinStr2Num(pin):
     pin = pin.upper()
     if len(pin) != 3 or pin[0] != 'P':
@@ -869,27 +878,6 @@ if args.ow_read_all:
         print(f"{sens.hex()} teplota: {v16 * factor}deg  (0x{v16:04X} tH:0x{tH:02X} tL:0x{tL:02X} conf:0b{conf:08b})")
 
 
-def pinId2Str(id):
-    if 0 <= id < 6 * 8 + 5:
-        byte = id // 8
-        bit = id % 8
-        p = ord('A') + byte
-        return 'P' + chr(p) + f"{bit}"
-    raise "pin id out fo range"
-
-
-def pinStr2Id(str):
-    if len(str) != 3 or str[0] != 'P':
-        raise f"invalid pin {str}"
-
-    byte = ord(str[1]) - ord('A')
-    bit = int(str[2])
-    id = 8 * byte + bit
-    if 0 <= id < 6 * 8 + 5:
-        return id
-    raise f"pin {str} out fo range"
-
-
 def setByteArrayBit(data, id, value):
     byte = id // 8
     mask = 1 << (id % 8)
@@ -924,9 +912,9 @@ def test_gpios():
     sayPort('DDR', ddr)
     sayPort('PORT', port)
 
-    pinlist = list(range(0, pinStr2Id('PG4') + 1))
-    pinlist.remove(pinStr2Id('PD5'))
-    pinlist.remove(pinStr2Id('PD6'))
+    pinlist = list(range(0, pinStr2Num('PG4') + 1))
+    pinlist.remove(pinStr2Num('PD5'))
+    pinlist.remove(pinStr2Num('PD6'))
 
     expectedPin = bytearray(7)
 
@@ -958,10 +946,10 @@ def test_gpios():
         setIoData(SvcProtocol.CmdTestSetPORT, port)
         setIoData(SvcProtocol.CmdTestSetDDR, ddr)
         pin = getIoData(SvcProtocol.CmdTestGetPIN)
-        sayPort(f'test PIN {i} {pinId2Str(i)}', pin)
+        sayPort(f'test PIN {i} {pinNum2Str(i)}', pin)
         if not compareBits(pin, expectedPin):
             Okej = False
-            print(f"error at {i} {pinId2Str(i)}")
+            print(f"error at {i} {pinNum2Str(i)}")
         setByteArrayBit(port, i, True)
         setByteArrayBit(expectedPin, i, True)
         setByteArrayBit(ddr, i, False)
