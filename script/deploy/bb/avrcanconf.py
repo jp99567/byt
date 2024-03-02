@@ -395,7 +395,7 @@ class ConfigNode:
                 raise Exception(f"canid:{id:X} exceeds 8B items:({canmobs[id]})")
             self.canmobSize[id] = {'size' : (prev_end + 7) // 8}
 
-        if self.inputCanIds.intersection(outputCanIds):
+        if not self.inputCanIds.isdisjoint(outputCanIds):
             raise Exception(f"IN/OUT can ids mixed {self.inputCanIds} {outputCanIds}")
 
         self.canmobsList = sorted(self.inputCanIds)
@@ -453,11 +453,16 @@ def configure_all():
     with open(args.yamlfile, "r") as stream:
         config = yaml.safe_load(stream)
         nodesConfs = dict()
+        allMobsIds = set()
         for node in config['NodeCAN']:
             print(f"node name: {node}")
             nodeConf = ConfigNode(config['NodeCAN'][node])
             nodeConf.check()
             nodesConfs[config['NodeCAN'][node]['id']] = nodeConf
+            if not allMobsIds.isdisjoint(nodeConf.canmobsList):
+                errmsg = f"duplicitne ids {nodeConf.canmobsList} v {node}"
+                raise RuntimeError(errmsg)
+            allMobsIds.update(nodeConf.canmobsList)
 
         if not args.dry_run:
             for nodeId in nodesConfs:
