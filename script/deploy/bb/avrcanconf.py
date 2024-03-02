@@ -313,9 +313,10 @@ def buildClassInfo(trieda, node):
 
 
 class ConfigNode:
-    canmobsList = set()
 
     def __init__(self, node):
+        self.canmobsList = set()
+        self.canmobSize = dict()
         nodeId = node['id']
         outputCanIds = set()
         inputCanIds = set()
@@ -355,7 +356,6 @@ class ConfigNode:
                 else:
                     canmobs[canid].extend(items)
 
-        canmob_size = dict()
         for id in canmobs:
             canmobs[id].sort(key=lambda e: e[0])
             prev_end = 0
@@ -365,9 +365,7 @@ class ConfigNode:
                 prev_end = i[0] + i[1]
             if prev_end > 8 * 8:
                 raise Exception(f"canid:{id:X} exceeds 8B items:({canmobs[id]})")
-            canmob_size[id] = (prev_end + 7) // 8
-
-        print(f"canmob_size: {canmob_size} {sum(canmob_size.values())}")
+            self.canmobSize[id] = {'size' : (prev_end + 7) // 8}
 
         if inputCanIds.intersection(outputCanIds):
             raise Exception(f"IN/OUT can ids mixed {inputCanIds} {outputCanIds}")
@@ -386,7 +384,7 @@ class ConfigNode:
                           [triedyNr['DigIN'],
                            triedyNr['DigOUT'],
                            triedyNr['OwT'],
-                           sum(canmob_size.values()),
+                           sum([self.canmobSize[i]['size'] for i in self.canmobSize]),
                            len(inputCanIds),
                            len(self.canmobsList),
                            features])
@@ -395,17 +393,18 @@ class ConfigNode:
 
         startOffset = 0
         for mobcanid in self.canmobsList:
-            size = canmob_size[mobcanid]
-            canmob_size[mobcanid] = {'start': startOffset, 'size': size}
+            size = self.canmobSize[mobcanid]['size']
+            self.canmobSize[mobcanid]['start'] = startOffset
             startOffset += size
 
-        print(canmob_size)
+        print(self.canmobSize)
+        print(f"sum: {sum([ self.canmobSize[i]['size'] for i in self.canmobSize])}")
 
         for trieda in triedy:
-            trieda.initNodeObject(trans, self.canmobsList, canmob_size)
+            trieda.initNodeObject(trans, self.canmobsList, self.canmobSize)
 
         for idx, canid in enumerate(self.canmobsList):
-            endIoIdx = canmob_size[canid]['start'] + canmob_size[canid]['size']
+            endIoIdx = self.canmobSize[canid]['start'] + self.canmobSize[canid]['size']
             data = pack('BBH', idx, endIoIdx, canid)
             trans.svcTransfer(SvcProtocol.CmdSetCanMob, data)
 
