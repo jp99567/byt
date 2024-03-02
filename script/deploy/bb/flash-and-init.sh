@@ -6,7 +6,7 @@ id=$1
 echo flashing avr node:$id
 
 config-pin p9.28 low
-sleep 0.1
+sleep 2
 config-pin p9.28 high
 sleep 0.1
 ./avrcanconf.py --fw_upload --candev can1 --id $id

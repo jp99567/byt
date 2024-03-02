@@ -31,3 +31,8 @@ fi
 
 echo start > $RPROC_CTRL_FILE
 
+RPROC_DEV='/dev/rpmsg_pru30'
+while [[ ! -c $RPROC_DEV ]]; do
+	echo waiting for $RPROC_DEV
+	sleep 1
+done
