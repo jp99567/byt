@@ -312,99 +312,105 @@ def buildClassInfo(trieda, node):
         return None
 
 
-def configure_node(node):
-    nodeId = node['id']
-    outputCanIds = set()
-    inputCanIds = set()
-    triedyNr = dict()
-    triedyInfo = dict()
-    triedy = []
+class ConfigNode:
+    canmobsList = set()
 
-    for trieda in ('DigIN', 'OwT', 'SensorionSCD41', 'SensorionSHT11'):
-        if trieda in node:
-            triedaInfo = buildClassInfo(trieda, node[trieda])
-            info = triedaInfo.info()
-            outputCanIds.update(info['ids'])
-            triedyNr[trieda] = info['count']
-            triedyInfo[trieda] = info
-            triedy.append(triedaInfo)
-        else:
-            triedyNr[trieda] = 0
+    def __init__(self, node):
+        nodeId = node['id']
+        outputCanIds = set()
+        inputCanIds = set()
+        triedyNr = dict()
+        triedyInfo = dict()
+        triedy = []
 
-    for trieda in ('DigOUT',):
-        if trieda in node:
-            triedaInfo = buildClassInfo(trieda, node[trieda])
-            info = triedaInfo.info()
-            inputCanIds.update(info['ids'])
-            triedyNr[trieda] = info['count']
-            triedyInfo[trieda] = info
-            triedy.append(triedaInfo)
-        else:
-            triedyNr[trieda] = 0
-
-    print(f"nodeId:{nodeId} {triedyNr} outputCanIdNr:{len(outputCanIds)} inputCanIdNr:{len(inputCanIds)}")
-    print(triedyInfo)
-    canmobs = dict()
-    for trieda in triedyInfo:
-        for canid, items in triedyInfo[trieda]['items'].items():
-            if canid not in canmobs:
-                canmobs[canid] = items
+        for trieda in ('DigIN', 'OwT', 'SensorionSCD41', 'SensorionSHT11'):
+            if trieda in node:
+                triedaInfo = buildClassInfo(trieda, node[trieda])
+                info = triedaInfo.info()
+                outputCanIds.update(info['ids'])
+                triedyNr[trieda] = info['count']
+                triedyInfo[trieda] = info
+                triedy.append(triedaInfo)
             else:
-                canmobs[canid].extend(items)
+                triedyNr[trieda] = 0
 
-    canmob_size = dict()
-    for id in canmobs:
-        canmobs[id].sort(key=lambda e: e[0])
-        prev_end = 0
-        for i in canmobs[id]:
-            if prev_end > i[0]:
-                raise Exception(f"canid:{id:X} overlaps at bit {i[0]} items {canmobs[id]}")
-            prev_end = i[0] + i[1]
-        if prev_end > 8 * 8:
-            raise Exception(f"canid:{id:X} exceeds 8B items:({canmobs[id]})")
-        canmob_size[id] = (prev_end + 7) // 8
+        for trieda in ('DigOUT',):
+            if trieda in node:
+                triedaInfo = buildClassInfo(trieda, node[trieda])
+                info = triedaInfo.info()
+                inputCanIds.update(info['ids'])
+                triedyNr[trieda] = info['count']
+                triedyInfo[trieda] = info
+                triedy.append(triedaInfo)
+            else:
+                triedyNr[trieda] = 0
 
-    print(canmob_size)
+        print(f"nodeId:{nodeId} {triedyNr} outputCanIdNr:{len(outputCanIds)} inputCanIdNr:{len(inputCanIds)}")
+        print(triedyInfo)
+        canmobs = dict()
+        for trieda in triedyInfo:
+            for canid, items in triedyInfo[trieda]['items'].items():
+                if canid not in canmobs:
+                    canmobs[canid] = items
+                else:
+                    canmobs[canid].extend(items)
 
-    if inputCanIds.intersection(outputCanIds):
-        raise Exception(f"IN/OUT can ids mixed {inputCanIds} {outputCanIds}")
+        canmob_size = dict()
+        for id in canmobs:
+            canmobs[id].sort(key=lambda e: e[0])
+            prev_end = 0
+            for i in canmobs[id]:
+                if prev_end > i[0]:
+                    raise Exception(f"canid:{id:X} overlaps at bit {i[0]} items {canmobs[id]}")
+                prev_end = i[0] + i[1]
+            if prev_end > 8 * 8:
+                raise Exception(f"canid:{id:X} exceeds 8B items:({canmobs[id]})")
+            canmob_size[id] = (prev_end + 7) // 8
 
-    canmobsList = sorted(inputCanIds)
-    canmobsList.extend(sorted(outputCanIds))
-    print(canmobsList)
+        print(f"canmob_size: {canmob_size} {sum(canmob_size.values())}")
 
-    trans = NodeBus(bus, nodeId)
-    features = 0
-    if triedyNr['SensorionSCD41']:
-        features |= 1
-    if triedyNr['SensorionSHT11']:
-        features |= 2
-    trans.svcTransfer(SvcProtocol.CmdSetAllocCounts,
-                      [triedyNr['DigIN'],
-                       triedyNr['DigOUT'],
-                       triedyNr['OwT'],
-                       sum(canmob_size.values()),
-                       len(inputCanIds),
-                       len(canmobsList),
-                       features])
+        if inputCanIds.intersection(outputCanIds):
+            raise Exception(f"IN/OUT can ids mixed {inputCanIds} {outputCanIds}")
 
-    trans.svcTransfer(SvcProtocol.CmdSetStage, [NodeStage.stage2.value])
+        self.canmobsList = sorted(inputCanIds)
+        self.canmobsList.extend(sorted(outputCanIds))
+        print(self.canmobsList)
 
-    startOffset = 0
-    for mobcanid in canmobsList:
-        size = canmob_size[mobcanid]
-        canmob_size[mobcanid] = {'start': startOffset, 'size': size}
-        startOffset += size
+        trans = NodeBus(bus, nodeId)
+        features = 0
+        if triedyNr['SensorionSCD41']:
+            features |= 1
+        if triedyNr['SensorionSHT11']:
+            features |= 2
+        trans.svcTransfer(SvcProtocol.CmdSetAllocCounts,
+                          [triedyNr['DigIN'],
+                           triedyNr['DigOUT'],
+                           triedyNr['OwT'],
+                           sum(canmob_size.values()),
+                           len(inputCanIds),
+                           len(self.canmobsList),
+                           features])
 
-    print(canmob_size)
+        trans.svcTransfer(SvcProtocol.CmdSetStage, [NodeStage.stage2.value])
 
-    for trieda in triedy:
-        trieda.initNodeObject(trans, canmobsList, canmob_size)
+        startOffset = 0
+        for mobcanid in self.canmobsList:
+            size = canmob_size[mobcanid]
+            canmob_size[mobcanid] = {'start': startOffset, 'size': size}
+            startOffset += size
 
-    for idx, canid in enumerate(canmobsList):
-        endIoIdx = canmob_size[canid]['start'] + canmob_size[canid]['size']
-        data = pack('BBH', idx, endIoIdx, canid)
-        trans.svcTransfer(SvcProtocol.CmdSetCanMob, data)
+        print(canmob_size)
+
+        for trieda in triedy:
+            trieda.initNodeObject(trans, self.canmobsList, canmob_size)
+
+        for idx, canid in enumerate(self.canmobsList):
+            endIoIdx = canmob_size[canid]['start'] + canmob_size[canid]['size']
+            data = pack('BBH', idx, endIoIdx, canid)
+            trans.svcTransfer(SvcProtocol.CmdSetCanMob, data)
+
+    def check(self):
+        pass
 
 
 def configure_all():
@@ -412,7 +418,8 @@ def configure_all():
         config = yaml.safe_load(stream)
         for node in config['NodeCAN']:
             print(f"node name: {node}")
-            configure_node(config['NodeCAN'][node])
+            nodeConf = ConfigNode(config['NodeCAN'][node])
+            nodeConf.check()
 
 
 def upload_fw(nodeid):
