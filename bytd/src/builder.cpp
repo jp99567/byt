@@ -181,9 +181,25 @@ std::unique_ptr<can::InputControl> Builder::buildCan(CanBus& canbus)
         if(it->second["SensorionSHT11"]) {
             const auto& sht = it->second["SensorionSHT11"];
             auto canAddr = sht["addr"].as<can::Id>();
-            auto sensor = can::createSensorion("todo", sht["nameT"].as<std::string>(), 0, mqtt);
-            // ToDo sensors.emplace_back(sensor->sens);
-            insertInputItem(inputsMap, canAddr, std::move(sensor));
+            auto canItem = std::make_unique<can::SensorionItem<Sensorion::Sensor<Sensorion::convSHT11_T>>>(sht["nameT"].as<std::string>(), 0, mqtt);
+            sensors.emplace_back(canItem->sens);
+            insertInputItem(inputsMap, canAddr, std::move(canItem));
+            auto canItemRH = std::make_unique<can::SensorionItem<Sensorion::Sensor<Sensorion::convSHT11_RH>>>(sht["nameRH"].as<std::string>(), 2, mqtt);
+            sensors.emplace_back(canItemRH->sens);
+            insertInputItem(inputsMap, canAddr, std::move(canItemRH));
+        }
+        if(it->second["SensorionSCD41"]) {
+            const auto& sht = it->second["SensorionSCD41"];
+            auto canAddr = sht["addr"].as<can::Id>();
+            auto canItem = std::make_unique<can::SensorionItem<Sensorion::Sensor<Sensorion::convSCD41_T>>>(sht["nameT"].as<std::string>(), 0, mqtt);
+            sensors.emplace_back(canItem->sens);
+            insertInputItem(inputsMap, canAddr, std::move(canItem));
+            auto canItemRH = std::make_unique<can::SensorionItem<Sensorion::Sensor<Sensorion::convSCD41_RH>>>(sht["nameRH"].as<std::string>(), 2, mqtt);
+            sensors.emplace_back(canItemRH->sens);
+            insertInputItem(inputsMap, canAddr, std::move(canItemRH));
+            auto canItemCO2 = std::make_unique<can::SensorionItem<Sensorion::Sensor<Sensorion::convSCD41_CO2>>>(sht["nameCO2"].as<std::string>(), 4, mqtt);
+            sensors.emplace_back(canItemCO2->sens);
+            insertInputItem(inputsMap, canAddr, std::move(canItemCO2));
         }
     }
 

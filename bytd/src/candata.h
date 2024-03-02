@@ -3,6 +3,7 @@
 #include "IIo.h"
 #include "IMqttPublisher.h"
 #include "OwTempSensor.h"
+#include "Sensorion.h"
 #include "canbus.h"
 #include <cstring>
 #include <exception>
@@ -101,11 +102,6 @@ struct DigiInItem : public IInputItem, DigInput {
     void update(const Data& data, std::size_t len) override;
 };
 
-std::unique_ptr<IInputItem> createSensorion(std::string ToDo,
-    std::string name,
-    unsigned offset,
-    IMqttPublisherSPtr mqtt);
-
 struct OwTempItem : public IInputItem {
     explicit OwTempItem(std::string name, unsigned offset, IMqttPublisherSPtr mqtt, float factor)
         : offset(offset)
@@ -143,6 +139,26 @@ private:
     CanInputItemsMap inputs;
 };
 
+template <typename Sensor>
+struct SensorionItem : public IInputItem {
+    explicit SensorionItem(std::string name, unsigned offset, IMqttPublisherSPtr mqtt)
+        : offset(offset)
+        , sens(name, mqtt)
+    {
+    }
+    SensorionItem(SensorionItem& other) = delete;
+    unsigned offset;
+    void update(const Data& data, std::size_t len) override
+    {
+        int16_t owval = Sensorion::cInvalidValue;
+        if(offset + sizeof(owval) <= len) {
+            owval = *reinterpret_cast<const int16_t*>(&data[offset]);
+            sens.setValue(owval);
+        }
+    }
+
+    Sensor sens;
+};
 }
 
 class CanDigiOut : public IDigiOut {
