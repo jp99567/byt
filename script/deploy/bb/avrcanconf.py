@@ -19,6 +19,7 @@ parser.add_argument('--all', action='store_true')
 parser.add_argument('--fw_upload', action='store_true')
 parser.add_argument('--stat', action='store_true')
 parser.add_argument('--config', action='store_true')
+parser.add_argument('--dry_run', action='store_true', help='do not send config to bus, check only')
 parser.add_argument('--yamlfile', default='config.yaml')
 parser.add_argument('--generate', action='store_true', help='header file for can fw')
 parser.add_argument('--cmd', help='svc command send to node')
@@ -458,9 +459,10 @@ def configure_all():
             nodeConf.check()
             nodesConfs[config['NodeCAN'][node]['id']] = nodeConf
 
-        for nodeId in nodesConfs:
-            nodeTrans = NodeBus(bus, nodeId)
-            nodesConfs[nodeId].uploadNode(nodeTrans)
+        if not args.dry_run:
+            for nodeId in nodesConfs:
+                nodeTrans = NodeBus(bus, nodeId)
+                nodesConfs[nodeId].uploadNode(nodeTrans)
 
 
 def upload_fw(nodeid):
