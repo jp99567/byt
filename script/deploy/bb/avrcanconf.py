@@ -4,7 +4,7 @@ import struct
 import can
 import os
 from math import ceil
-from struct import pack, unpack
+from struct import pack
 import argparse
 import time
 import yaml
@@ -121,7 +121,7 @@ def dallas_crc8(data):
     crc = 0
     for c in data:
         for i in range(0, 8):
-            b = (crc & 1) ^ (((int(c) & (1 << i))) >> i)
+            b = (crc & 1) ^ ((int(c) & (1 << i)) >> i)
             crc = (crc ^ (b * 0x118)) >> 1
     return crc
 
@@ -484,7 +484,7 @@ def statusRsp(rsp):
         rest = [f"{v:02X}" for v in rsp[3:]]
         return f"status {stat} {flags} {rest}"
     else:
-        return f"unknown: {messagein}"
+        return f"unknown: {rsp[0]:X}"
 
 
 def commandStatus():
@@ -585,7 +585,7 @@ def devsimulator():
                 continue
             else:
                 print("invalid ow rom code")
-                mymsg.data[0] == SvcProtocol.CmdInvalid
+                mymsg.data[0] = SvcProtocol.CmdInvalid
 
         sendBlocking(mybus,
                      can.Message(arbitration_id=mymsg.arbitration_id + 1, is_extended_id=True, data=[mymsg.data[0]]))
