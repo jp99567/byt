@@ -50,9 +50,7 @@ void Builder::buildMisc(slowswi2cpwm& ioexpander, OpenTherm& ot)
     components.pumpa = std::make_unique<Pumpa>(std::move(pumpaDigOut), mqtt);
 
     kurenie::HW::SensorsT sensTrooms;
-    auto ss = std::make_unique<SimpleSensor>("dummyKupelka", mqtt);
-    ss->setValue(20);
-    components.dummyKupelnaT = std::move(ss);
+
     auto assignSensor = [&sensTrooms](kurenie::ROOM room, ISensorInput& sens) {
         if((std::size_t)room != sensTrooms.size())
             throw std::runtime_error("sensorT kurenie vytvoreny mimo poradia");
@@ -63,7 +61,7 @@ void Builder::buildMisc(slowswi2cpwm& ioexpander, OpenTherm& ot)
     assignSensor(kurenie::ROOM::Spalna, findSensor("tSpalna2"));
     assignSensor(kurenie::ROOM::Kuchyna, findSensor("tZadverie"));
     assignSensor(kurenie::ROOM::Izba, findSensor("tIzba"));
-    assignSensor(kurenie::ROOM::Kupelka, *components.dummyKupelnaT);
+    assignSensor(kurenie::ROOM::Kupelka, findSensor("KupelnaT"));
     assignSensor(kurenie::ROOM::Podlahovka, findSensor("tPodlahovka"));
 
     kurenie::HW::SensorsT sensTpodlaha_privod;

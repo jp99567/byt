@@ -23,7 +23,6 @@ class chip;
 class OpenTherm;
 
 struct AppComponents {
-    std::unique_ptr<ISensorInput> dummyKupelnaT;
     VypinaceDuoList vypinaceDuo;
     VypinaceSingleList vypinaceSingle;
     OnOffDeviceList devicesOnOff;
