@@ -44,9 +44,9 @@ NodeCAN:
       OwT:
         tVodaKupelka: { addr: [ 0x119, 0 ], owRomCode: 28d50a0a06000046 }
         tPodlahovka: { addr: [ 0x119, 2 ], owRomCode: 287fc80a06000074, type: DS18S20}
-        tSpalna: { addr: [ 0x119, 4 ], owRomCode: 28469e780c0000c3 }
-      #SensorionCO2: { addr: 0x11A }
-      #Vlhkomer: { addr: 0x11B }
+        tSpalna2: { addr: [ 0x119, 4 ], owRomCode: 28469e780c0000c3 }
+      SensorionSCD41: { addr: 0x11A, nameT: "tSpalna", nameRH: "SpalnaRH", nameCO2: "SpalnaCO2"}
+      SensorionSHT11: { addr: 0x11B , nameT: "KupelnaT", nameRH: "KupelnaRH"}
   Spalna:
     id: 7
     DigIN:

@@ -60,7 +60,7 @@ void Builder::buildMisc(slowswi2cpwm& ioexpander, OpenTherm& ot)
     };
 
     assignSensor(kurenie::ROOM::Obyvka, findSensor("tObyvka"));
-    assignSensor(kurenie::ROOM::Spalna, findSensor("tSpalna"));
+    assignSensor(kurenie::ROOM::Spalna, findSensor("tSpalna2"));
     assignSensor(kurenie::ROOM::Kuchyna, findSensor("tZadverie"));
     assignSensor(kurenie::ROOM::Izba, findSensor("tIzba"));
     assignSensor(kurenie::ROOM::Kupelka, *components.dummyKupelnaT);
@@ -178,6 +178,7 @@ std::unique_ptr<can::InputControl> Builder::buildCan(CanBus& canbus)
                 digiOutputs.emplace(name, std::move(digiOut));
             }
         }
+
         if(it->second["SensorionSHT11"]) {
             const auto& sht = it->second["SensorionSHT11"];
             auto canAddr = sht["addr"].as<can::Id>();
