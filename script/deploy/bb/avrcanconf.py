@@ -319,34 +319,34 @@ class ConfigNode:
         self.canmobSize = dict()
         nodeId = node['id']
         outputCanIds = set()
-        inputCanIds = set()
-        triedyNr = dict()
+        self.inputCanIds = set()
+        self.triedyNr = dict()
         triedyInfo = dict()
-        triedy = []
+        self.triedy = []
 
         for trieda in ('DigIN', 'OwT', 'SensorionSCD41', 'SensorionSHT11'):
             if trieda in node:
                 triedaInfo = buildClassInfo(trieda, node[trieda])
                 info = triedaInfo.info()
                 outputCanIds.update(info['ids'])
-                triedyNr[trieda] = info['count']
+                self.triedyNr[trieda] = info['count']
                 triedyInfo[trieda] = info
-                triedy.append(triedaInfo)
+                self.triedy.append(triedaInfo)
             else:
-                triedyNr[trieda] = 0
+                self.triedyNr[trieda] = 0
 
         for trieda in ('DigOUT',):
             if trieda in node:
                 triedaInfo = buildClassInfo(trieda, node[trieda])
                 info = triedaInfo.info()
-                inputCanIds.update(info['ids'])
-                triedyNr[trieda] = info['count']
+                self.inputCanIds.update(info['ids'])
+                self.triedyNr[trieda] = info['count']
                 triedyInfo[trieda] = info
-                triedy.append(triedaInfo)
+                self.triedy.append(triedaInfo)
             else:
-                triedyNr[trieda] = 0
+                self.triedyNr[trieda] = 0
 
-        print(f"nodeId:{nodeId} {triedyNr} outputCanIdNr:{len(outputCanIds)} inputCanIdNr:{len(inputCanIds)}")
+        print(f"nodeId:{nodeId} {self.triedyNr} outputCanIdNr:{len(outputCanIds)} inputCanIdNr:{len(self.inputCanIds)}")
         print(triedyInfo)
         canmobs = dict()
         for trieda in triedyInfo:
@@ -367,29 +367,12 @@ class ConfigNode:
                 raise Exception(f"canid:{id:X} exceeds 8B items:({canmobs[id]})")
             self.canmobSize[id] = {'size' : (prev_end + 7) // 8}
 
-        if inputCanIds.intersection(outputCanIds):
-            raise Exception(f"IN/OUT can ids mixed {inputCanIds} {outputCanIds}")
+        if self.inputCanIds.intersection(outputCanIds):
+            raise Exception(f"IN/OUT can ids mixed {self.inputCanIds} {outputCanIds}")
 
-        self.canmobsList = sorted(inputCanIds)
+        self.canmobsList = sorted(self.inputCanIds)
         self.canmobsList.extend(sorted(outputCanIds))
         print(self.canmobsList)
-
-        trans = NodeBus(bus, nodeId)
-        features = 0
-        if triedyNr['SensorionSCD41']:
-            features |= 1
-        if triedyNr['SensorionSHT11']:
-            features |= 2
-        trans.svcTransfer(SvcProtocol.CmdSetAllocCounts,
-                          [triedyNr['DigIN'],
-                           triedyNr['DigOUT'],
-                           triedyNr['OwT'],
-                           sum([self.canmobSize[i]['size'] for i in self.canmobSize]),
-                           len(inputCanIds),
-                           len(self.canmobsList),
-                           features])
-
-        trans.svcTransfer(SvcProtocol.CmdSetStage, [NodeStage.stage2.value])
 
         startOffset = 0
         for mobcanid in self.canmobsList:
@@ -400,7 +383,27 @@ class ConfigNode:
         print(self.canmobSize)
         print(f"sum: {sum([ self.canmobSize[i]['size'] for i in self.canmobSize])}")
 
-        for trieda in triedy:
+    def check(self):
+        pass
+
+    def uploadNode(self, trans):
+        features = 0
+        if self.triedyNr['SensorionSCD41']:
+            features |= 1
+        if self.triedyNr['SensorionSHT11']:
+            features |= 2
+        trans.svcTransfer(SvcProtocol.CmdSetAllocCounts,
+                          [self.triedyNr['DigIN'],
+                           self.triedyNr['DigOUT'],
+                           self.triedyNr['OwT'],
+                           sum([self.canmobSize[i]['size'] for i in self.canmobSize]),
+                           len(self.inputCanIds),
+                           len(self.canmobsList),
+                           features])
+
+        trans.svcTransfer(SvcProtocol.CmdSetStage, [NodeStage.stage2.value])
+
+        for trieda in self.triedy:
             trieda.initNodeObject(trans, self.canmobsList, self.canmobSize)
 
         for idx, canid in enumerate(self.canmobsList):
@@ -408,17 +411,20 @@ class ConfigNode:
             data = pack('BBH', idx, endIoIdx, canid)
             trans.svcTransfer(SvcProtocol.CmdSetCanMob, data)
 
-    def check(self):
-        pass
-
 
 def configure_all():
     with open(args.yamlfile, "r") as stream:
         config = yaml.safe_load(stream)
+        nodesConfs = dict()
         for node in config['NodeCAN']:
             print(f"node name: {node}")
             nodeConf = ConfigNode(config['NodeCAN'][node])
             nodeConf.check()
+            nodesConfs[config['NodeCAN'][node]['id']] = nodeConf
+
+        for nodeId in nodesConfs:
+            nodeTrans = NodeBus(bus, nodeId)
+            nodesConfs[nodeId].uploadNode(nodeTrans)
 
 
 def upload_fw(nodeid):
@@ -481,7 +487,7 @@ def statusRsp(rsp):
         return f"unknown: {messagein}"
 
 
-if args.stat:
+def commandStatus():
     if args.all:
         tran = NodeBus(bus)
         rsp = tran.svcTransferBroadcast(SvcProtocol.CmdStatus)
@@ -494,6 +500,10 @@ if args.stat:
             print("No response")
         else:
             print(f"{statusRsp(rsp)}")
+
+
+if args.stat:
+    commandStatus()
 
 if args.fw_upload:
     upload_fw(args.id)
