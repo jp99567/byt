@@ -63,6 +63,8 @@ class SvcProtocol(enum.IntEnum):
     CmdOwGetData = enum.auto()
     CmdSetSCD41Params = enum.auto()
     CmdSetSHT11Params = enum.auto()
+    CmdSCD41Test = enum.auto()
+    CmdFlushAll = enum.auto()
     CmdStatus = ord('s')
     CmdInvalid = ord('X')
 
@@ -464,6 +466,21 @@ class ConfigNode:
             trans.svcTransfer(SvcProtocol.CmdSetCanMob, data)
 
 
+def configure_one(node_id):
+    with open(args.yamlfile, "r") as stream:
+        config = yaml.safe_load(stream)
+        for node in config['NodeCAN']:
+            if config['NodeCAN'][node]['id'] != node_id:
+                continue
+            print(f"node name: {node}")
+            nodeConf = ConfigNode(config['NodeCAN'][node])
+            nodeConf.check()
+
+            if not args.dry_run:
+                nodeConf.uploadNode(nodeTrans)
+            break
+
+
 def configure_all():
     with open(args.yamlfile, "r") as stream:
         config = yaml.safe_load(stream)
@@ -567,7 +584,11 @@ if args.fw_upload:
     upload_fw(args.id)
 
 if args.config:
-    configure_all()
+    if args.id is None or args.all:
+        configure_all()
+    else:
+        configure_one(args.id)
+
 
 
 def generateCppHeader():
@@ -613,6 +634,12 @@ if args.cmd:
     if SvcProtocol(rsp[0]) in (SvcProtocol.CmdTestGetPIN, SvcProtocol.CmdTestGetPORT, SvcProtocol.CmdTestGetDDR):
         out = [f"{v:08b}" for v in rsp[1:]]
         print(f"{out}")
+    elif SvcProtocol(rsp[0]) == SvcProtocol.CmdInvalid:
+        out = [f"{v:02X}" for v in rsp[1:]]
+        print(f"invalid resonse {out}")
+    else:
+        out = [f"{v:02X}" for v in rsp]
+        print(f"not handled yet: {out}")
 
 if args.exit_bootloader:
     id = canid_bcast
