@@ -24,6 +24,7 @@ struct MeasData
 #pragma pack(pop)
 
 void enable();
+void disable();
 State getState();
 void init_start_periodic_meas();
 void init_read_meas();
@@ -34,5 +35,7 @@ bool data_ready();
 uint16_t get_temp();
 uint16_t get_rh();
 uint16_t get_co2();
+uint8_t* get_buf();
+void init_i2c_generic_wr_rd(uint8_t len_wr, uint8_t len_rd);
 }
 

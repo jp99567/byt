@@ -117,8 +117,8 @@ namespace meas{
 void measure_ow_temp_sm();
 }
 
-static uint8_t svc_msg[8] __attribute__ ((section (".noinit")));
 static uint8_t svc_msglen __attribute__ ((section (".noinit")));
+static uint8_t svc_msg[8] __attribute__ ((section (".noinit")));
 
 uint8_t can_rx_svc()
 {
@@ -202,6 +202,27 @@ void enableCanPvExchange()
 		CANCDMOB = size;
 		CANIE |= _BV(mobidx++);
 	}
+}
+
+namespace sht11{
+void do_sm();
+void enableL2();
+}
+
+namespace scd4x {
+enum class StateL2
+{
+	Disabled,
+	Initializing,
+	Relaxing,
+	WaitingForReady,
+	Reading
+};
+
+static StateL2 stateL2 = StateL2::Disabled;
+void do_smL2();
+void enableL2();
+void disableL2();
 }
 
 void svc(bool broadcast) {
@@ -441,6 +462,101 @@ void svc(bool broadcast) {
 		svc_msglen = 1;
 	}
 		break;
+	case Svc::Protocol::CmdSCD41Test:
+	{
+		switch(svc_msg[1]){
+		case 0: //Enable twi on/off
+		{
+			if(svc_msglen == 3 && svc_msg[2] == 1){
+				scd4x::enable();
+			}
+			else if(svc_msglen == 3 && svc_msg[2] == 2){
+				scd4x::enableL2();
+			}
+			else if(svc_msglen == 3 && svc_msg[2] == 0){
+				scd4x::disable();
+				scd4x::disableL2();
+			}
+			else {
+				svc_msg[0] = Svc::Protocol::CmdInvalid;
+			}
+			svc_msglen = 2;
+		}
+			break;
+		case 1: //i2c WR
+		{
+			int8_t in=2;
+			int8_t out=0;
+			while(in < svc_msglen){
+				scd4x::get_buf()[out++] = svc_msg[in++];
+			}
+			scd4x::init_i2c_generic_wr_rd(out, 0);
+			svc_msglen = 1;
+		}
+			break;
+		case 2: //i2c WR RD
+		{
+			int8_t in=3;
+			int8_t out=0;
+			int8_t len_rd = svc_msg[2];
+			if(len_rd <= 9 && len_rd > 0){
+				while(in < svc_msglen){
+					scd4x::get_buf()[out++] = svc_msg[in++];
+				}
+				scd4x::init_i2c_generic_wr_rd(out, len_rd);
+			}
+			else{
+				svc_msg[0] = Svc::Protocol::CmdInvalid;
+			}
+			svc_msglen = 1;
+		}
+			break;
+		case 3: // read data
+		{
+			int8_t len = svc_msg[2];
+			int8_t offset = svc_msg[3];
+			if( svc_msglen < 3 || len == 0)
+				len = 7;
+			if( svc_msglen < 4)
+				offset = 0;
+			svc_msglen = 1;
+			if(len + offset > 9 || offset < 0 || len < 0 || len > 7){
+				svc_msg[0] = Svc::Protocol::CmdInvalid;
+			}
+			else{
+				int8_t out = offset;
+				const int8_t maxsize = offset + len;
+				while( out < maxsize){
+					 svc_msg[svc_msglen++] = scd4x::get_buf()[out++];
+				}
+			}
+		}
+			break;
+		case 4: //get diag
+		{
+			svc_msglen = 1;
+			svc_msg[svc_msglen++] = (int8_t)scd4x::getState();
+			svc_msg[svc_msglen++] = (uint8_t)scd4x::check_crc_meas_data() << 0
+					| (uint8_t)scd4x::check_crc_single_item() << 1;
+			svc_msg[svc_msglen++] = (int8_t)scd4x::stateL2;
+		}
+			break;
+		case 5:
+			scd4x::init_start_periodic_meas();
+		  break;
+		case 6:
+			scd4x::init_get_status();
+		  break;
+		case 7:
+			scd4x::init_read_meas();
+		  break;
+		default:
+			svc_msglen = 2;
+			svc_msg[0] = Svc::Protocol::CmdInvalid;
+			break;
+		}
+	}
+	break;
 	default:
 		svc_msg[1] = Svc::Protocol::CmdInvalid;
 		svc_msglen = broadcast ? 0 : 1;
@@ -474,16 +590,6 @@ void iterateOutputObjs(uint8_t mobidx)
 			setDigOut(obj.pin, v);
 		}
 	}
-}
-
-namespace sht11{
-void do_sm();
-void enableL2();
-}
-
-namespace scd4x {
-void do_smL2();
-void enableL2();
 }
 
 void onTimer16s7()
@@ -530,7 +636,7 @@ void run()
 	if(gFeatures & eFeatureSHT11){
 		sht11::enableL2();
 	}
-	if(gFeatures & eFeatureSHT11){
+	if(gFeatures & eFeatureSCD41){
 		scd4x::enableL2();
 	}
 
@@ -1083,16 +1189,8 @@ void do_sm()
 }
 
 namespace scd4x{
-enum class StateL2
-{
-	Disabled,
-	Initializing,
-	Relaxing,
-	WaitingForReady,
-	Reading
-};
 
-static StateL2 stateL2 = StateL2::Disabled;
+
 
 uint8_t t0 = 0;
 
@@ -1111,24 +1209,36 @@ constexpr auto timeout1s = 1000u;
 
 void enableL2()
 {
+	DBG("scdx enableL2");
 	init_start_periodic_meas();
 	stateL2 = StateL2::Initializing;
 }
 
+void disableL2()
+{
+	DBG("scdx disableL2");
+	stateL2 = StateL2::Disabled;
+}
+
 void update_pvs()
 {
-	if(gSCD41_Obj->valueT() != get_temp()
-	|| gSCD41_Obj->valueRH() != get_rh()
-	|| gSCD41_Obj->valueCO2() != get_co2()){
-		gSCD41_Obj->valueT() = get_temp();
-		gSCD41_Obj->valueRH() = get_rh();
-		gSCD41_Obj->valueCO2() = get_co2();
+	const auto temp = get_temp();
+	const auto rh = get_rh();
+	const auto co2 = get_co2();
+	DBG("update pvs");
+	if(gSCD41_Obj->valueT() != temp
+	|| gSCD41_Obj->valueRH() != rh
+	|| gSCD41_Obj->valueCO2() != co2){
+		gSCD41_Obj->valueT() = temp;
+		gSCD41_Obj->valueRH() = rh;
+		gSCD41_Obj->valueCO2() = co2;
 		markMobTx(gSCD41_Obj->mobIdx);
 	}
 }
 
 void update_pvs_with_invalid()
 {
+	DBG("invalidate pvs");
 	if(gSCD41_Obj->valueT() != Sensorion::cInvalidValue
 	|| gSCD41_Obj->valueRH() != Sensorion::cInvalidValue
 	|| gSCD41_Obj->valueCO2() != Sensorion::cInvalidValue){
@@ -1159,7 +1269,7 @@ void do_smL2()
 	case StateL2::WaitingForReady:
 		if(State::Pending_IO != getState()){
 			bool ok = false;
-			if(State::Idle != getState()){
+			if(State::Idle == getState()){
 				if(check_crc_single_item()){
 					if(data_ready()){
 						init_read_meas();
@@ -1181,7 +1291,7 @@ void do_smL2()
 	case StateL2::Reading:
 		if(State::Pending_IO != getState()){
 			bool ok = false;
-			if(State::Idle != getState()){
+			if(State::Idle == getState()){
 				if(check_crc_meas_data()){
 					update_pvs();
 					ok = true;

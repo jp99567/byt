@@ -6,7 +6,7 @@
 
 namespace scd4x {
 namespace {
-constexpr uint8_t address = 0x62;
+constexpr uint8_t address = 0x62 << 1;
 constexpr uint8_t meas_start[] = { 0x21, 0xb1 };
 constexpr uint8_t get_data_ready_status[] = { 0xe4, 0xb8 };
 constexpr uint8_t read_measurement[] = {0xec, 0x05};
@@ -21,6 +21,11 @@ union {
 }theData;
 
 #pragma pack(pop)
+
+uint16_t swap_bytes(uint16_t val)
+{
+	return (val >> 8) | (val << 8);
+}
 
 bool check_crc_word(const Item& msg){
 	constexpr uint8_t len=2;
@@ -61,9 +66,9 @@ void load_command_read_meas_data()
 
 void enable()
 {
-	TWBR = 255;
-	TWSR = 0x03;
-	TWCR = TWEN;
+	TWBR = 124;
+	TWSR = 0x02;
+	TWCR = _BV(TWEN);
 }
 
 static State state;
@@ -73,9 +78,19 @@ State getState()
 	return state;
 }
 
+void disable()
+{
+	TWCR = _BV(TWINT);
+}
+
+uint8_t* get_buf()
+{
+	return theData.buf;
+}
+
 void start()
 {
-	TWCR = TWEN|TWIE|TWINT|TWSTA;
+	TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT)|_BV(TWSTA);
 	state = State::Pending_IO;
 }
 
@@ -106,6 +121,14 @@ void init_read_meas()
 	start();
 }
 
+void init_i2c_generic_wr_rd(uint8_t len_wr, uint8_t len_rd)
+{
+	byte_req_wr = len_wr;
+	byte_req_rd = len_rd;
+	byte_in = 0;
+	start();
+}
+
 bool check_crc_single_item()
 {
 	return check_crc_word(theData.singleItem);
@@ -120,22 +143,22 @@ bool check_crc_meas_data()
 
 bool data_ready()
 {
-	return theData.singleItem.val & ((1 << 11)-1);
+	return swap_bytes(theData.singleItem.val) & ((1 << 11)-1);
 }
 
 uint16_t get_temp()
 {
-	return theData.data.temp.val;
+	return swap_bytes(theData.data.temp.val);
 }
 
 uint16_t get_rh()
 {
-	return theData.data.rh.val;
+	return swap_bytes(theData.data.rh.val);
 }
 
 uint16_t get_co2()
 {
-	return theData.data.co2.val;
+	return swap_bytes(theData.data.co2.val);
 }
 
 }
@@ -144,56 +167,63 @@ ISR(TWI_vect){
 	switch(TW_STATUS){
 	case TW_START:
 		TWDR = scd4x::address|TW_WRITE;
-		TWCR = TWEN|TWIE|TWINT;
+		TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT);
 		break;
 	case TW_REP_START:
 		TWDR = scd4x::address|TW_READ;
-		TWCR = TWEN|TWIE|TWINT;
+		TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT);
 		break;
 	case TW_MT_SLA_ACK:
 	case TW_MT_DATA_ACK:
 		if(scd4x::byte_in < scd4x::byte_req_wr){
 			TWDR = scd4x::theData.buf[scd4x::byte_in++];
-			TWCR = TWEN|TWIE|TWINT;
+			TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT);
 		}
 		else{
 			scd4x::byte_in = 0;
 			if(scd4x::byte_req_rd){
-				TWCR = TWEN|TWIE|TWINT|TWSTA;
+				TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT)|_BV(TWSTA);
 			}
 			else{
-				TWCR = TWEN|TWINT|TWSTO;
+				TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT)|_BV(TWSTO);
 				scd4x::state = scd4x::State::Idle;
 			}
 		}
 		break;
 	case TW_MR_SLA_ACK:
+		TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT)|_BV(TWEA);
+		break;
 	case TW_MR_DATA_ACK:
+	{
 		if(scd4x::byte_in < scd4x::byte_req_rd){
-			TWDR = scd4x::theData.buf[scd4x::byte_in++];
-			if(scd4x::byte_in < scd4x::byte_req_rd)
-				TWCR = TWEN|TWIE|TWINT|TWEA;
+			scd4x::theData.buf[scd4x::byte_in++] = TWDR;
+			if(scd4x::byte_in+1 != scd4x::byte_req_rd)
+				TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT)|_BV(TWEA);
 			else
-				TWCR = TWEN|TWIE|TWINT;
+				TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT);
 		}
 		else{
 			scd4x::byte_in = 0;
-			TWCR = TWEN|TWINT|TWSTO;
-			scd4x::state = scd4x::State::Idle;
+			TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT)|_BV(TWSTO);
+			scd4x::state = scd4x::State::Error;
 		}
+	}
 		break;
 	case TW_MR_DATA_NACK:
-		if(scd4x::byte_in < scd4x::byte_req_rd){
+	{
+		scd4x::theData.buf[scd4x::byte_in++] = TWDR;
+		if(scd4x::byte_in == scd4x::byte_req_rd){
 			scd4x::state = scd4x::State::Idle;
 		}
 		else{
 			scd4x::state = scd4x::State::Error;
 		}
 		scd4x::byte_in = 0;
-		TWCR = TWEN|TWINT|TWSTO;
+		TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT)|_BV(TWSTO);
+	}
 		break;
 	default:
-		TWCR = TWEN|TWINT|TWSTO;
+		TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT)|_BV(TWSTO);
 		scd4x::state = scd4x::State::Error;
 		break;
 	}
