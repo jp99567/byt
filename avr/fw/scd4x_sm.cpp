@@ -8,6 +8,7 @@ namespace scd4x {
 namespace {
 constexpr uint8_t address = 0x62 << 1;
 constexpr uint8_t meas_start[] = { 0x21, 0xb1 };
+constexpr uint8_t meas_stop[] = { 0x3f, 0x86 };
 constexpr uint8_t get_data_ready_status[] = { 0xe4, 0xb8 };
 constexpr uint8_t read_measurement[] = {0xec, 0x05};
 }
@@ -58,6 +59,12 @@ void load_command_meas_start()
 	theData.buf[1] = meas_start[1];
 }
 
+void load_command_meas_stop()
+{
+	theData.buf[0] = meas_start[0];
+	theData.buf[1] = meas_start[1];
+}
+
 void load_command_read_meas_data()
 {
 	theData.buf[0] = read_measurement[0];
@@ -66,6 +73,7 @@ void load_command_read_meas_data()
 
 void enable()
 {
+	DDRD &= ~(_BV(PD0) | _BV(PD1));
 	TWBR = 124;
 	TWSR = 0x02;
 	TWCR = _BV(TWEN);
@@ -110,6 +118,28 @@ void init_start_periodic_meas()
 	load_command_meas_start();
 	byte_in = 0;
 	start();
+}
+
+void init_stop_periodic_meas()
+{
+	byte_req_wr = sizeof(theData.singleItem.val);
+	byte_req_rd = 0;
+	load_command_meas_stop();
+	byte_in = 0;
+	start();
+}
+
+void power_off()
+{
+	TWCR = 0;
+	PORTD &= ~(_BV(PD0) | _BV(PD1));
+	DDRD |= (_BV(PD0) | _BV(PD1));
+	DDRG |= _BV(PG3);
+}
+
+void power_on()
+{
+	DDRG &= ~_BV(PG3);
 }
 
 void init_read_meas()
