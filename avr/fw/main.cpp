@@ -225,6 +225,9 @@ enum class StateL2
 };
 
 static StateL2 stateL2 = StateL2::Disabled;
+#ifdef LOG_DEBUG
+static StateL2 stateL2prev = StateL2::Disabled;
+#endif
 void do_smL2();
 void start_periodic_meas();
 void disableL2();
@@ -1195,8 +1198,6 @@ void do_sm()
 
 namespace scd4x{
 
-
-
 uint8_t t0 = 0;
 
 template<unsigned dur>
@@ -1213,8 +1214,10 @@ void reset_time()
 constexpr auto timeout1s = 1000u;
 constexpr auto timeout8s = 8000u;
 
-int8_t first_n = 0;
+static int8_t first_n = 0;
+static int8_t waitReadyCount = 0;
 constexpr int8_t skip_first_n = 5;
+constexpr int8_t waitReadyCountMax = 10;
 
 void start_periodic_meas()
 {
@@ -1284,8 +1287,12 @@ void error_handle()
 
 void do_smL2()
 {
-	int8_t waitReadyCount = 0;
-	constexpr int8_t waitReadyCountMax = 10;
+#ifdef LOG_DEBUG
+    if(stateL2 != stateL2prev){
+        DBG("scd41 stateL2: %d", (int8_t)stateL2);
+        stateL2prev = stateL2;
+    }
+#endif
 	switch(stateL2){
 	case StateL2::Disabled:
 		break;
@@ -1343,6 +1350,9 @@ void do_smL2()
 					}
 					errCount = 0;
 					ok = true;
+				}
+				else{
+				    DBG("crc BAD");
 				}
 			}
 			if(not ok){

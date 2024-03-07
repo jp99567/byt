@@ -3,6 +3,7 @@
 #include <avr/interrupt.h>
 #include <util/delay_basic.h>
 #include <util/twi.h>
+#include "log_debug.h"
 
 namespace scd4x {
 namespace {
@@ -57,12 +58,14 @@ void load_command_meas_start()
 {
 	theData.buf[0] = meas_start[0];
 	theData.buf[1] = meas_start[1];
+	DBG("loaded start %04X", theData.singleItem.val);
 }
 
 void load_command_meas_stop()
 {
 	theData.buf[0] = meas_start[0];
 	theData.buf[1] = meas_start[1];
+	DBG("loaded stop %04X", theData.singleItem.val);
 }
 
 void load_command_read_meas_data()
@@ -210,8 +213,8 @@ ISR(TWI_vect){
 			TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT);
 		}
 		else{
-			scd4x::byte_in = 0;
 			if(scd4x::byte_req_rd){
+			    scd4x::byte_in = 0;
 				TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT)|_BV(TWSTA);
 			}
 			else{
@@ -225,6 +228,7 @@ ISR(TWI_vect){
 		break;
 	case TW_MR_DATA_ACK:
 	{
+	    DBG("mr Ack(%u) %02X", scd4x::byte_in, TWDR);
 		if(scd4x::byte_in < scd4x::byte_req_rd){
 			scd4x::theData.buf[scd4x::byte_in++] = TWDR;
 			if(scd4x::byte_in+1 != scd4x::byte_req_rd)
@@ -241,6 +245,7 @@ ISR(TWI_vect){
 		break;
 	case TW_MR_DATA_NACK:
 	{
+	    DBG("mr Nack(%u) %02X", scd4x::byte_in, TWDR);
 		scd4x::theData.buf[scd4x::byte_in++] = TWDR;
 		if(scd4x::byte_in == scd4x::byte_req_rd){
 			scd4x::state = scd4x::State::Idle;
