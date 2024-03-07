@@ -3,7 +3,7 @@
 
 namespace scd4x {
 
-enum class State
+enum class State : int8_t
 {
 	Idle,
 	Pending_IO,

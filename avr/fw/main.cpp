@@ -15,7 +15,7 @@
 uint32_t gCounter;
 uint8_t gEvents;
 namespace Event {
-enum {
+enum  : int8_t {
 	timer = _BV(0)
 };}
 
@@ -72,7 +72,7 @@ struct OwT_Obj : Base_Obj
 {
 };
 
-enum Features {
+enum Features : int8_t {
 	eFeatureSCD41 = (1<<0),
 	eFeatureSHT11 = (1<<1)
 };
@@ -210,7 +210,7 @@ void enableL2();
 }
 
 namespace scd4x {
-enum class StateL2
+enum class StateL2 : int8_t
 {
 	Disabled,
 	Initializing,
@@ -811,7 +811,7 @@ struct ClockTimer255US {
 };
 
 namespace meas{
-enum class State {
+enum class State : int8_t {
 	idling,
 	ow_initing_before_convert,
 	ow_requesting_conver,
@@ -1015,7 +1015,7 @@ void reset_time()
 constexpr auto timeout5s = 5000u;
 constexpr auto timeout500ms = 500u;
 
-enum class StateL2 {
+enum class StateL2  : int8_t{
     Disabled,
     Relax,
     MeasT_Init,
