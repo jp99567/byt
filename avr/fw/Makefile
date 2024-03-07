@@ -8,6 +8,7 @@ $(shell git diff --quiet)
 FW_GIT_IS_DIRTY := $(.SHELLSTATUS)
 
 DEFS           = -DFW_GIT_HASH_SHORT=0x$(FW_GIT_HASH_SHORT) -DFW_GIT_IS_DIRTY=$(FW_GIT_IS_DIRTY) -DFW_BUID_EPOCH=$(FW_BUID_EPOCH)
+#DEFS += -DLOG_DEBUG=1
 LIBS           =
 BOOTSTART = 0x0
 # You should not have to change anything below here.
