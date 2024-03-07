@@ -131,10 +131,12 @@ void power_off()
     PORTD &= ~(_BV(PD0) | _BV(PD1));
     DDRD |= (_BV(PD0) | _BV(PD1));
     DDRG |= _BV(PG3);
+    PORTG |= _BV(PG3);
 }
 
 void power_on()
 {
+    PORTG &= ~_BV(PG3);
     DDRG &= ~_BV(PG3);
 }
 

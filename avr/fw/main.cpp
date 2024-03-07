@@ -216,6 +216,7 @@ enum class StateL2 : int8_t
 	Initializing,
 	Relaxing,
 	WaitingForReady,
+	RelaxingBeforeRead,
 	Reading,
 	RecoverError,
 	RecoverErrorRestartMeas,
@@ -1211,6 +1212,8 @@ void reset_time()
     t0 = ClockTimer65MS::now();
 }
 
+constexpr auto timeout5s = 5000u;
+constexpr auto timeout100ms = 100u;
 constexpr auto timeout1s = 1000u;
 constexpr auto timeout8s = 8000u;
 
@@ -1273,9 +1276,12 @@ void recoverError()
 static int8_t errCount = 0;
 constexpr int8_t errCountMax = 5;
 
-void error_handle()
+bool error_handle()
 {
-	if(errCount == errCountMax){
+	if(++errCount < errCountMax){
+		return false;
+	}
+	else if(errCount == errCountMax){
 		recoverError();
 	}
 	else{
@@ -1283,6 +1289,12 @@ void error_handle()
 		stateL2 = StateL2::RecoverErrorPowerOff;
 		reset_time();
 	}
+	return true;
+}
+
+void reset_error_counter()
+{
+	errCount = 0;
 }
 
 void do_smL2()
@@ -1300,12 +1312,13 @@ void do_smL2()
 		if(State::Pending_IO != getState()){
 			reset_time();
 			if(getState() == State::Error)
-				++errCount;
+				if(error_handle())
+					break;
 			stateL2 = StateL2::Relaxing;
 		}
 		break;
 	case StateL2::Relaxing:
-		if(timeout<timeout1s>()){
+		if(timeout<timeout5s>()){
 			init_get_status();
 			stateL2 = StateL2::WaitingForReady;
 			waitReadyCount = 0;
@@ -1317,8 +1330,8 @@ void do_smL2()
 			if(State::Idle == getState()){
 				if(check_crc_single_item()){
 					if(data_ready()){
-						init_read_meas();
-						stateL2 = StateL2::Reading;
+						reset_time();
+						stateL2 = StateL2::RelaxingBeforeRead;
 						break;
 					}
 					else{
@@ -1331,12 +1344,19 @@ void do_smL2()
 			}
 			if(not ok){
 				update_pvs_with_invalid();
-				++errCount;
+				if(error_handle())
+					break;
 			}
 			reset_time();
 			stateL2 = StateL2::Relaxing;
 		}
 	    break;
+	case StateL2::RelaxingBeforeRead:
+		if(timeout<timeout100ms>()){
+			init_read_meas();
+			stateL2 = StateL2::Reading;
+		}
+		break;
 	case StateL2::Reading:
 		if(State::Pending_IO != getState()){
 			bool ok = false;
@@ -1348,7 +1368,7 @@ void do_smL2()
 					else{
 						update_pvs();
 					}
-					errCount = 0;
+					reset_error_counter();
 					ok = true;
 				}
 				else{
@@ -1357,7 +1377,8 @@ void do_smL2()
 			}
 			if(not ok){
 				update_pvs_with_invalid();
-				++errCount;
+				if(error_handle())
+					break;
 			}
 			reset_time();
 			stateL2 = StateL2::Relaxing;
@@ -1366,11 +1387,12 @@ void do_smL2()
 	case StateL2::RecoverError:
 		if(timeout<timeout1s>()){
 			init_stop_periodic_meas();
+			reset_time();
 			stateL2 = StateL2::RecoverErrorRestartMeas;
 		}
 		break;
 	case StateL2::RecoverErrorRestartMeas:
-		if(timeout<timeout1s>()){
+		if(timeout<timeout8s>() && State::Pending_IO != getState()){
 			start_periodic_meas();
 		}
 		break;
