@@ -4,6 +4,7 @@
 #include "kurenieIHw.h"
 #include <memory>
 #include <vector>
+#include <array>
 
 class OpenTherm;
 class slowswi2cpwm;
