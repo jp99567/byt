@@ -130,14 +130,14 @@ void power_off()
     TWCR = 0;
     PORTD &= ~(_BV(PD0) | _BV(PD1));
     DDRD |= (_BV(PD0) | _BV(PD1));
-    DDRG |= _BV(PG3);
-    PORTG |= _BV(PG3);
+    DDRG |= _BV(PG4);
+    PORTG |= _BV(PG4);
 }
 
 void power_on()
 {
-    PORTG &= ~_BV(PG3);
-    DDRG &= ~_BV(PG3);
+    PORTG &= ~_BV(PG4);
+    DDRG &= ~_BV(PG4);
 }
 
 bool check_crc_single_item()
