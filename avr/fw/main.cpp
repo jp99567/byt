@@ -475,6 +475,10 @@ void svc(bool broadcast) {
 		break;
 	case Svc::Protocol::CmdSCD41Test:
 	{
+		if(not gFeatures & eFeatureSCD41){
+			svc_msg[0] = Svc::Protocol::CmdInvalid;
+			break;
+		}
 		switch(svc_msg[1]){
 		case 0: //Enable twi on/off
 		{
