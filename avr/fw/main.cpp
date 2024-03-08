@@ -97,6 +97,8 @@ uint8_t* gIOData;
 uint8_t* gMobEndIdx;
 uint16_t gMobMarkedTx;
 
+void markMobTx(uint8_t idx);
+
 struct SHT11_Obj : Base_Obj
 {
 	uint16_t& valueT() {return reinterpret_cast<uint16_t*>(&gIOData[iodataIdx])[0];}
@@ -565,6 +567,11 @@ void svc(bool broadcast) {
 			break;
 		}
 	}
+	break;
+	case Svc::Protocol::CmdFlushAll:
+		for(uint8_t mobidx = gMobFirstTx; mobidx < gMobCount; ++mobidx){
+			markMobTx(mobidx);
+		}
 	break;
 	default:
 		svc_msg[1] = Svc::Protocol::CmdInvalid;
