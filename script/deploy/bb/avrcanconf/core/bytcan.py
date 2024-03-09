@@ -42,7 +42,7 @@ class NodeBus:
         self.nodeid = nodeid
 
     def svcTransfer(self, cmd, data=None):
-        if self.nodeid == canid_bcast:
+        if self.canid == canid_bcast:
             return self.svcTransferBroadcast(cmd, data)
         txdata = [cmd.value] if data is None else [cmd.value, *data, ]
         messageTx = can.Message(arbitration_id=self.canid, is_extended_id=True, data=txdata)

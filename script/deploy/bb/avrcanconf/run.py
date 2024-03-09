@@ -41,9 +41,6 @@ args = parser.parse_args()
 fw_build_epoch_base = 1675604744   # 5.feb 20231 14:45:44 CET
 
 
-
-
-
 class OwResponseCode(enum.IntEnum):
     eBusy = enum.auto()
     eRspError = enum.auto()
@@ -85,6 +82,16 @@ bus = None
 if args.stat or args.config or args.fw_upload:
     bus = bytcan.openBus(args.candev)
 
+
+def decode_git_version(data):
+    if len(data) == 7:
+        data.append(0)
+        git_ver32bit, build_time = struct.unpack('II', bytearray(data))
+        dirty = build_time & 1 == 1
+        build_epoch = fw_build_epoch_base + (build_time >> 1) * 60
+        build_datetime = datetime.datetime.fromtimestamp(build_epoch)
+        return {'dirty': bool(dirty), 'build_epoch': build_epoch, 'build_time': build_datetime, 'rev': git_ver32bit}
+    return None
 
 
 def upload_fw(nodeid):
@@ -212,19 +219,42 @@ namespace ow {
 if args.generate:
     generateCppHeader()
 
-if args.cmd:
-    trans = bytcan.NodeBus(bytcan.openBus(args.candev), args.id)
-    data = [int(v, 0) for v in args.msg]
-    rsp = trans.svcTransfer(SvcProtocol[args.cmd], data)
+def commandResponse(id, rsp):
     if SvcProtocol(rsp[0]) in (SvcProtocol.CmdTestGetPIN, SvcProtocol.CmdTestGetPORT, SvcProtocol.CmdTestGetDDR):
         out = [f"{v:08b}" for v in rsp[1:]]
         print(f"{out}")
     elif SvcProtocol(rsp[0]) == SvcProtocol.CmdInvalid:
         out = [f"{v:02X}" for v in rsp[1:]]
-        print(f"invalid resonse {out}")
+        print(f"invalid response {out}")
+    elif SvcProtocol(rsp[0]) == SvcProtocol.CmdGetGitVersion:
+        rev = decode_git_version(rsp[1:])
+        if rev is not None:
+            rest = f"build time:{rev['build_time']} git version:{rev['rev']:08x}"
+            if rev['dirty']:
+                rest += '-DIRTY'
+            print(f"ID:{id} {rest}")
+        else:
+            out = [f"{v:02X}" for v in rsp]
+            print(f"ID:{id} corrupted git version {out}")
     else:
         out = [f"{v:02X}" for v in rsp]
         print(f"not handled yet: {out}")
+
+
+if args.cmd:
+    if args.all and not args.id:
+        trans = bytcan.NodeBus(bytcan.openBus(args.candev), 0)
+        data = [int(v, 0) for v in args.msg]
+        rsp_list = trans.svcTransfer(SvcProtocol[args.cmd], data)
+        for node_id, rsp in rsp_list:
+            commandResponse(node_id, rsp)
+    else:
+        node_id = args.id
+        trans = bytcan.NodeBus(bytcan.openBus(args.candev), node_id)
+        data = [int(v, 0) for v in args.msg]
+        rsp = trans.svcTransfer(SvcProtocol[args.cmd], data)
+        commandResponse(node_id, rsp)
+
 
 if args.exit_bootloader:
     id = bytcan.canid_bcast
@@ -237,11 +267,17 @@ if args.exit_bootloader:
 def devsimulator():
     mybus = bytcan.openBus(args.candev)
     stage = 0b01000000
+    this_can_id = bytcan.canIdFromNodeId(args.id)
+    rsp_can_id = this_can_id + 1
     while True:
         mymsg = mybus.recv()
         print(mymsg)
+        can_id = arbitration_id=mymsg.arbitration_id
+        if this_can_id != can_id and can_id != bytcan.canid_bcast:
+            continue
+
         if mymsg.data[0] == SvcProtocol.CmdStatus:
-            bytcan.sendBlocking(mybus, can.Message(arbitration_id=mymsg.arbitration_id + 1, is_extended_id=True,
+            bytcan.sendBlocking(mybus, can.Message(arbitration_id=rsp_can_id, is_extended_id=True,
                                             data=[mymsg.data[0], 0, 0, stage]))
             continue
         elif mymsg.data[0] == SvcProtocol.CmdSetStage:
@@ -250,7 +286,7 @@ def devsimulator():
             if len(mymsg.data) == 8:
                 crc = dallas_crc8([0x28, *mymsg.data[2:8]])
                 print(f"rom code: {list(mymsg.data[2:8])} crc {crc:02X}")
-                bytcan.sendBlocking(mybus, can.Message(arbitration_id=mymsg.arbitration_id + 1, is_extended_id=True,
+                bytcan.sendBlocking(mybus, can.Message(arbitration_id=rsp_can_id, is_extended_id=True,
                                                 data=[mymsg.data[0], crc]))
                 continue
             else:
@@ -258,11 +294,12 @@ def devsimulator():
                 mymsg.data[0] = SvcProtocol.CmdInvalid
 
         bytcan.sendBlocking(mybus,
-                     can.Message(arbitration_id=mymsg.arbitration_id + 1, is_extended_id=True, data=[mymsg.data[0]]))
+                     can.Message(arbitration_id=mymsg.rsp_can_id, is_extended_id=True, data=[mymsg.data[0]]))
 
 
 if args.simulator:
     devsimulator()
+
 
 
 def sniff():
@@ -305,14 +342,10 @@ def sniff():
                             if len(data) > 2:
                                 rest = f"{OwResponseCode(data[1]).name} bitcount:{data[2]}"
                     elif SvcProtocol(data[0]) == SvcProtocol.CmdGetGitVersion and type == 'rsp':
-                        if len(data) == 8:
-                            data.append(0)
-                            git_ver32bit, build_time = struct.unpack('II', bytearray(data[1:]))
-                            dirty = build_time & 1 == 1
-                            build_epoch = fw_build_epoch_base + (build_time >> 1) * 60
-                            build_datetime = datetime.datetime.fromtimestamp(build_epoch)
-                            rest = f'build time:{build_datetime} git version:{git_ver32bit:08x}'
-                            if dirty:
+                        rev = decode_git_version(data[1:])
+                        if rev is not None:
+                            rest = f"build time:{rev['build_time']} git version:{rev['rev']:08x}"
+                            if rev['dirty']:
                                 rest += '-DIRTY'
 
                     print(f"({nodeid},{minor}) {type} {SvcProtocol(data[0]).name} {rest}")
