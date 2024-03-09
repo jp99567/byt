@@ -3,7 +3,7 @@
 
 namespace sht11 {
 
-enum class State {
+enum class State : int8_t {
     Idle,
     Error,
     Finising,

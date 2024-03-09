@@ -188,9 +188,9 @@ if args.config:
 def generateCppHeader():
     head1 = '''# pragma once
 // GENERATED
-namespace Svc {
+namespace Svc : int8_t {
     constexpr uint32_t fw_build_epoch_base = 1675604744; // Ne  5. február 2023, 14:45:44 CET
-namespace Protocol {
+namespace Protocol : int8_t {
     enum Cmd  {
 '''
     foot1 = ''' };

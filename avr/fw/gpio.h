@@ -7,7 +7,7 @@ void setDirOut(uint8_t pin);
 void setDigOut(uint8_t pin, bool v);
 
 namespace test {
-enum PortList {
+enum PortList : uint8_t {
 	PA,PB,PC,PD,PE,PF,PG,_IoPortNr
 };
 void setDDR(uint8_t portid, uint8_t val);

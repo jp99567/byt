@@ -111,7 +111,7 @@ class ClassDigInOutInfo(ClassInfo):
     def checkPinConflits(self, isSCD41=False, isSHT11=False, isOw=False):
         usedPins = []
         if isSCD41:
-            usedPins.extend(['PD0', 'PD1'])
+            usedPins.extend(['PD0', 'PD1', 'PG4'])
         if isSHT11:
             usedPins.extend(['PC3', 'PC5'])
         if isOw:

@@ -15,7 +15,7 @@
 uint32_t gCounter;
 uint8_t gEvents;
 namespace Event {
-enum {
+enum  : int8_t {
 	timer = _BV(0)
 };}
 
@@ -72,7 +72,7 @@ struct OwT_Obj : Base_Obj
 {
 };
 
-enum Features {
+enum Features : int8_t {
 	eFeatureSCD41 = (1<<0),
 	eFeatureSHT11 = (1<<1)
 };
@@ -96,6 +96,8 @@ SHT11_Obj* gSHT11_Obj;
 uint8_t* gIOData;
 uint8_t* gMobEndIdx;
 uint16_t gMobMarkedTx;
+
+void markMobTx(uint8_t idx);
 
 struct SHT11_Obj : Base_Obj
 {
@@ -210,18 +212,27 @@ void enableL2();
 }
 
 namespace scd4x {
-enum class StateL2
+enum class StateL2 : int8_t
 {
 	Disabled,
 	Initializing,
 	Relaxing,
 	WaitingForReady,
-	Reading
+	RelaxingBeforeRead,
+	Reading,
+	RecoverError,
+	RecoverErrorRestartMeas,
+	RecoverErrorPowerOff,
+	RecoverErrorPowerOn,
+	RecoverErrorPowerOnRelaxing,
 };
 
 static StateL2 stateL2 = StateL2::Disabled;
+#ifdef LOG_DEBUG
+static StateL2 stateL2prev = StateL2::Disabled;
+#endif
 void do_smL2();
-void enableL2();
+void start_periodic_meas();
 void disableL2();
 }
 
@@ -464,6 +475,10 @@ void svc(bool broadcast) {
 		break;
 	case Svc::Protocol::CmdSCD41Test:
 	{
+		if(not gFeatures & eFeatureSCD41){
+			svc_msg[0] = Svc::Protocol::CmdInvalid;
+			break;
+		}
 		switch(svc_msg[1]){
 		case 0: //Enable twi on/off
 		{
@@ -471,7 +486,7 @@ void svc(bool broadcast) {
 				scd4x::enable();
 			}
 			else if(svc_msglen == 3 && svc_msg[2] == 2){
-				scd4x::enableL2();
+				scd4x::start_periodic_meas();
 			}
 			else if(svc_msglen == 3 && svc_msg[2] == 0){
 				scd4x::disable();
@@ -557,6 +572,11 @@ void svc(bool broadcast) {
 		}
 	}
 	break;
+	case Svc::Protocol::CmdFlushAll:
+		for(uint8_t mobidx = gMobFirstTx; mobidx < gMobCount; ++mobidx){
+			markMobTx(mobidx);
+		}
+	break;
 	default:
 		svc_msg[1] = Svc::Protocol::CmdInvalid;
 		svc_msglen = broadcast ? 0 : 1;
@@ -637,7 +657,7 @@ void run()
 		sht11::enableL2();
 	}
 	if(gFeatures & eFeatureSCD41){
-		scd4x::enableL2();
+		scd4x::start_periodic_meas();
 	}
 
 	sei();
@@ -803,7 +823,7 @@ struct ClockTimer255US {
 };
 
 namespace meas{
-enum class State {
+enum class State : int8_t {
 	idling,
 	ow_initing_before_convert,
 	ow_requesting_conver,
@@ -1007,7 +1027,7 @@ void reset_time()
 constexpr auto timeout5s = 5000u;
 constexpr auto timeout500ms = 500u;
 
-enum class StateL2 {
+enum class StateL2  : int8_t{
     Disabled,
     Relax,
     MeasT_Init,
@@ -1190,8 +1210,6 @@ void do_sm()
 
 namespace scd4x{
 
-
-
 uint8_t t0 = 0;
 
 template<unsigned dur>
@@ -1205,13 +1223,22 @@ void reset_time()
     t0 = ClockTimer65MS::now();
 }
 
+constexpr auto timeout5s = 5000u;
+constexpr auto timeout100ms = 100u;
 constexpr auto timeout1s = 1000u;
+constexpr auto timeout8s = 8000u;
 
-void enableL2()
+static int8_t first_n = 0;
+static int8_t waitReadyCount = 0;
+constexpr int8_t skip_first_n = 5;
+constexpr int8_t waitReadyCountMax = 10;
+
+void start_periodic_meas()
 {
 	DBG("scdx enableL2");
 	init_start_periodic_meas();
 	stateL2 = StateL2::Initializing;
+	first_n = 0;
 }
 
 void disableL2()
@@ -1233,6 +1260,7 @@ void update_pvs()
 		gSCD41_Obj->valueRH() = rh;
 		gSCD41_Obj->valueCO2() = co2;
 		markMobTx(gSCD41_Obj->mobIdx);
+		DBG("check %u %u %u", temp, rh, co2);
 	}
 }
 
@@ -1249,21 +1277,62 @@ void update_pvs_with_invalid()
 	}
 }
 
+void recoverError()
+{
+	DBG("recoverError");
+	reset_time();
+	stateL2 = StateL2::RecoverError;
+}
+
+static int8_t errCount = 0;
+constexpr int8_t errCountMax = 5;
+
+bool error_handle()
+{
+	if(++errCount < errCountMax){
+		return false;
+	}
+	else if(errCount == errCountMax){
+		recoverError();
+	}
+	else{
+		power_off();
+		stateL2 = StateL2::RecoverErrorPowerOff;
+		reset_time();
+	}
+	return true;
+}
+
+void reset_error_counter()
+{
+	errCount = 0;
+}
+
 void do_smL2()
 {
+#ifdef LOG_DEBUG
+    if(stateL2 != stateL2prev){
+        DBG("scd41 stateL2: %d", (int8_t)stateL2);
+        stateL2prev = stateL2;
+    }
+#endif
 	switch(stateL2){
 	case StateL2::Disabled:
 		break;
 	case StateL2::Initializing:
 		if(State::Pending_IO != getState()){
 			reset_time();
+			if(getState() == State::Error)
+				if(error_handle())
+					break;
 			stateL2 = StateL2::Relaxing;
 		}
 		break;
 	case StateL2::Relaxing:
-		if(timeout<timeout1s>()){
+		if(timeout<timeout5s>()){
 			init_get_status();
 			stateL2 = StateL2::WaitingForReady;
+			waitReadyCount = 0;
 		}
 	    break;
 	case StateL2::WaitingForReady:
@@ -1272,37 +1341,92 @@ void do_smL2()
 			if(State::Idle == getState()){
 				if(check_crc_single_item()){
 					if(data_ready()){
-						init_read_meas();
-						stateL2 = StateL2::Reading;
+						reset_time();
+						stateL2 = StateL2::RelaxingBeforeRead;
 						break;
 					}
 					else{
-						ok = true;
+						if(waitReadyCount++ < waitReadyCountMax)
+							ok = true;
+						else
+							recoverError();
 					}
 				}
 			}
 			if(not ok){
 				update_pvs_with_invalid();
+				if(error_handle())
+					break;
 			}
 			reset_time();
 			stateL2 = StateL2::Relaxing;
 		}
 	    break;
+	case StateL2::RelaxingBeforeRead:
+		if(timeout<timeout100ms>()){
+			init_read_meas();
+			stateL2 = StateL2::Reading;
+		}
+		break;
 	case StateL2::Reading:
 		if(State::Pending_IO != getState()){
 			bool ok = false;
 			if(State::Idle == getState()){
 				if(check_crc_meas_data()){
-					update_pvs();
+					if(first_n < skip_first_n){
+						first_n++;
+					}
+					else{
+						update_pvs();
+					}
+					reset_error_counter();
 					ok = true;
+				}
+				else{
+				    DBG("crc BAD");
 				}
 			}
 			if(not ok){
 				update_pvs_with_invalid();
+				if(error_handle())
+					break;
 			}
 			reset_time();
 			stateL2 = StateL2::Relaxing;
 		}
+		break;
+	case StateL2::RecoverError:
+		if(timeout<timeout1s>()){
+			init_stop_periodic_meas();
+			reset_time();
+			stateL2 = StateL2::RecoverErrorRestartMeas;
+		}
+		break;
+	case StateL2::RecoverErrorRestartMeas:
+		if(timeout<timeout8s>() && State::Pending_IO != getState()){
+			start_periodic_meas();
+		}
+		break;
+	case StateL2::RecoverErrorPowerOff:
+		if(timeout<timeout8s>()){
+			power_on();
+			reset_time();
+			stateL2 = StateL2::RecoverErrorPowerOn;
+		}
+		break;
+	case StateL2::RecoverErrorPowerOn:
+		if(timeout<timeout1s>()){
+			reset_time();
+			enable();
+			stateL2 = StateL2::RecoverErrorPowerOnRelaxing;
+		}
+		break;
+	case StateL2::RecoverErrorPowerOnRelaxing:
+		if(timeout<timeout8s>()){
+			start_periodic_meas();
+		}
+		break;
+	default:
 		break;
 	}
 }

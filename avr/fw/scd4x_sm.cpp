@@ -3,13 +3,21 @@
 #include <avr/interrupt.h>
 #include <util/delay_basic.h>
 #include <util/twi.h>
+#include "log_debug.h"
 
 namespace scd4x {
+
+constexpr uint16_t swap_bytes(uint16_t val)
+{
+    return (val >> 8) | (val << 8);
+}
+
 namespace {
 constexpr uint8_t address = 0x62 << 1;
-constexpr uint8_t meas_start[] = { 0x21, 0xb1 };
-constexpr uint8_t get_data_ready_status[] = { 0xe4, 0xb8 };
-constexpr uint8_t read_measurement[] = {0xec, 0x05};
+constexpr uint16_t meas_start = swap_bytes(0x21b1);
+constexpr uint16_t meas_stop = swap_bytes(0x3f86);
+constexpr uint16_t get_data_ready_status = swap_bytes(0xe4b8);
+constexpr uint16_t read_measurement = swap_bytes(0xec05);
 }
 
 #pragma pack(push,1)
@@ -21,11 +29,6 @@ union {
 }theData;
 
 #pragma pack(pop)
-
-uint16_t swap_bytes(uint16_t val)
-{
-	return (val >> 8) | (val << 8);
-}
 
 bool check_crc_word(const Item& msg){
 	constexpr uint8_t len=2;
@@ -46,26 +49,9 @@ int8_t byte_in;
 int8_t byte_req_wr;
 int8_t byte_req_rd;
 
-void load_command_get_data_ready_status()
-{
-	theData.buf[0] = get_data_ready_status[0];
-	theData.buf[1] = get_data_ready_status[1];
-}
-
-void load_command_meas_start()
-{
-	theData.buf[0] = meas_start[0];
-	theData.buf[1] = meas_start[1];
-}
-
-void load_command_read_meas_data()
-{
-	theData.buf[0] = read_measurement[0];
-	theData.buf[1] = read_measurement[1];
-}
-
 void enable()
 {
+	DDRD &= ~(_BV(PD0) | _BV(PD1));
 	TWBR = 124;
 	TWSR = 0x02;
 	TWCR = _BV(TWEN);
@@ -98,7 +84,7 @@ void init_get_status()
 {
 	byte_req_wr = sizeof(theData.singleItem.val);
 	byte_req_rd = sizeof(theData.singleItem);
-	load_command_get_data_ready_status();
+	theData.singleItem.val = get_data_ready_status;
 	byte_in = 0;
 	start();
 }
@@ -107,7 +93,16 @@ void init_start_periodic_meas()
 {
 	byte_req_wr = sizeof(theData.singleItem.val);
 	byte_req_rd = 0;
-	load_command_meas_start();
+	theData.singleItem.val = meas_start;
+	byte_in = 0;
+	start();
+}
+
+void init_stop_periodic_meas()
+{
+	byte_req_wr = sizeof(theData.singleItem.val);
+	byte_req_rd = 0;
+	theData.singleItem.val = meas_stop;
 	byte_in = 0;
 	start();
 }
@@ -116,7 +111,7 @@ void init_read_meas()
 {
 	byte_req_wr = sizeof(theData.singleItem.val);
 	byte_req_rd = sizeof(theData.data);
-	load_command_read_meas_data();
+	theData.singleItem.val = read_measurement;
 	byte_in = 0;
 	start();
 }
@@ -127,6 +122,22 @@ void init_i2c_generic_wr_rd(uint8_t len_wr, uint8_t len_rd)
 	byte_req_rd = len_rd;
 	byte_in = 0;
 	start();
+}
+
+
+void power_off()
+{
+    TWCR = 0;
+    PORTD &= ~(_BV(PD0) | _BV(PD1));
+    DDRD |= (_BV(PD0) | _BV(PD1));
+    DDRG |= _BV(PG4);
+    PORTG |= _BV(PG4);
+}
+
+void power_on()
+{
+    PORTG &= ~_BV(PG4);
+    DDRG &= ~_BV(PG4);
 }
 
 bool check_crc_single_item()
@@ -180,8 +191,8 @@ ISR(TWI_vect){
 			TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT);
 		}
 		else{
-			scd4x::byte_in = 0;
 			if(scd4x::byte_req_rd){
+			    scd4x::byte_in = 0;
 				TWCR = _BV(TWEN)|_BV(TWIE)|_BV(TWINT)|_BV(TWSTA);
 			}
 			else{
@@ -195,6 +206,7 @@ ISR(TWI_vect){
 		break;
 	case TW_MR_DATA_ACK:
 	{
+	    DBG("mr Ack(%u) %02X", scd4x::byte_in, TWDR);
 		if(scd4x::byte_in < scd4x::byte_req_rd){
 			scd4x::theData.buf[scd4x::byte_in++] = TWDR;
 			if(scd4x::byte_in+1 != scd4x::byte_req_rd)
@@ -211,6 +223,7 @@ ISR(TWI_vect){
 		break;
 	case TW_MR_DATA_NACK:
 	{
+	    DBG("mr Nack(%u) %02X", scd4x::byte_in, TWDR);
 		scd4x::theData.buf[scd4x::byte_in++] = TWDR;
 		if(scd4x::byte_in == scd4x::byte_req_rd){
 			scd4x::state = scd4x::State::Idle;

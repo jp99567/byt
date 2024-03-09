@@ -1,7 +1,5 @@
 #pragma once
 
-//#define LOG_DEBUG 1
-
 void init_log_debug();
 #ifdef LOG_DEBUG
 

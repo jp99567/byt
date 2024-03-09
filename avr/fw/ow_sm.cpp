@@ -12,7 +12,7 @@ extern uint8_t gOwData[12];
 
 namespace {
 
-enum OwState
+enum OwState : int8_t
 {
 	eOwIdle,
 	eOwInitWaitResetPulseFinished,
@@ -24,7 +24,7 @@ enum OwState
 	eOwSearch,
 };
 
-enum OwBitIoState
+enum OwBitIoState : int8_t
 {
     eOwBitIoFinishedOk,
     eOwBitIoFinishedError,
@@ -32,7 +32,7 @@ enum OwBitIoState
 	eOwBitIoWaitSlotEnd,
 };
 
-enum OwStrongPowerRequest
+enum OwStrongPowerRequest : int8_t
 {
     eOwStrongPower0,
     eOwStrongPowerReq,
