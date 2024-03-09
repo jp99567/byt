@@ -188,10 +188,10 @@ if args.config:
 def generateCppHeader():
     head1 = '''# pragma once
 // GENERATED
-namespace Svc : int8_t {
+namespace Svc {
     constexpr uint32_t fw_build_epoch_base = 1675604744; // Ne  5. február 2023, 14:45:44 CET
-namespace Protocol : int8_t {
-    enum Cmd  {
+namespace Protocol {
+    enum Cmd : int8_t {
 '''
     foot1 = ''' };
 }}'''
@@ -212,7 +212,7 @@ namespace Protocol : int8_t {
 // GENERATED
 namespace ow {
    constexpr int16_t cInvalidValue = -21931; 
-   enum ResponseCode {
+   enum ResponseCode : int8_t {
 '''
     write_header(head1, SvcProtocol, foot1)
     write_header(head2, OwResponseCode, foot1[:-1])
