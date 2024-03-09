@@ -36,7 +36,7 @@ def sendBlocking(canbus, messageTx):
 
 
 class NodeBus:
-    def __init__(self, canbus, nodeid=canid_bcast):
+    def __init__(self, canbus, nodeid):
         self.bus = canbus
         self.canid = canIdFromNodeId(nodeid)
         self.nodeid = nodeid
@@ -69,7 +69,7 @@ class NodeBus:
         abs_timeout = time.time() + timeout
         received = []
         while timeout >= 0:
-            msgRx = bus.recv(timeout)
+            msgRx = self.bus.recv(timeout)
             if msgRx is None:
                 if received:
                     break
