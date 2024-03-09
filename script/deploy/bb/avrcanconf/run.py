@@ -13,6 +13,7 @@ import core.bytcan as bytcan
 import can
 from core.config import SvcProtocol
 import core.config
+import core.scd41
 
 
 parser = argparse.ArgumentParser(description='avr can bus nodes configuration')
@@ -34,6 +35,7 @@ parser.add_argument('--test_gpios', action='store_true')
 parser.add_argument('--ow_search', action='store_true')
 parser.add_argument('--ow_read_temp_single', action='store_true')
 parser.add_argument('--ow_read_all', action='store_true', help='search ow sensors and read out temperatures')
+parser.add_argument('--scd41_read_params', action='store_true', help='stop sm, stop periodic meas, read relevant params')
 
 args = parser.parse_args()
 
@@ -504,10 +506,6 @@ if args.ow_read_temp_single:
     owReadTempSingle()
 
 
-def owReadTempAll():
-    pass
-
-
 def owMatchRom(req, t, sens):
     resp = req(SvcProtocol.CmdOwInit)
     if (OwResponseCode(resp[1]) != OwResponseCode.eOwPresenceOk):
@@ -631,3 +629,8 @@ def test_gpios():
 
 if args.test_gpios:
     test_gpios()
+
+
+if args.scd41_read_params:
+    sens = core.scd41.SCD41(args.candev, args.id)
+    sens.read_params()

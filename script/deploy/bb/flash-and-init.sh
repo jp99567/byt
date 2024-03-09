@@ -1,10 +1,10 @@
 #!/bin/bash
 
-set -e
+set -ex
 
 id=$1
 CONFIGSCRIPT=./avrcanconf/run.py
-[[ -x "$CONFIGSCRIPT"]]
+[[ -x "$CONFIGSCRIPT" ]]
 echo flashing avr node:$id
 
 config-pin p9.28 low
