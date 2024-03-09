@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 import struct
 
-import can
 import os
 from math import ceil
 from struct import pack
@@ -11,6 +10,8 @@ import yaml
 import enum
 from copy import deepcopy
 import datetime
+import core.bytcan as bytcan
+import can
 
 parser = argparse.ArgumentParser(description='avr can bus nodes configuration')
 parser.add_argument('--candev', default='vcan0')
@@ -33,8 +34,7 @@ parser.add_argument('--ow_read_temp_single', action='store_true')
 parser.add_argument('--ow_read_all', action='store_true', help='search ow sensors and read out temperatures')
 
 args = parser.parse_args()
-canid_bcast = 0xEC33F000 >> 3
-canid_bcast_mask = ((1 << 20) - 1) << 9
+
 
 fw_build_epoch_base = 1675604744   # 5.feb 20231 14:45:44 CET
 
@@ -103,23 +103,6 @@ class NodeStage(enum.Enum):
     stage3run = 0b11000000
 
 
-def canIdFromNodeId(nodeid):
-    return canid_bcast | (nodeid << 2)
-
-
-def nodeIfFromCanId(canid):
-    return (canid & ~canid_bcast_mask) >> 2
-
-
-def canIdCheck(canid):
-    if (canid & canid_bcast_mask) == canid_bcast:
-        idnet = canid & ~canid_bcast_mask
-        nodeId = idnet >> 2
-        hostid = idnet & 0b11
-        return nodeId, hostid
-    return None
-
-
 def dallas_crc8(data):
     crc = 0
     for c in data:
@@ -128,78 +111,11 @@ def dallas_crc8(data):
             crc = (crc ^ (b * 0x118)) >> 1
     return crc
 
-
-def sendBlocking(canbus, messageTx):
-    messageTx.dlc = len(messageTx.data)
-    canbus.send(messageTx)
-    timeout = 1
-    abs_timeout = time.time() + timeout
-    while timeout >= 0:
-        messageRx = canbus.recv(timeout)
-        if messageRx is None:
-            raise Exception(f"send read back failed: {messageTx}")
-        if messageTx.arbitration_id == messageRx.arbitration_id:
-            break
-        timeout = abs_timeout - time.time()
-
-
-class NodeBus:
-    def __init__(self, canbus, nodeid=canid_bcast):
-        self.bus = canbus
-        self.canid = canIdFromNodeId(nodeid)
-        self.nodeid = nodeid
-
-    def svcTransfer(self, cmd, data=None):
-        if self.nodeid == canid_bcast:
-            return self.svcTransferBroadcast(cmd, data)
-        txdata = [cmd.value] if data is None else [cmd.value, *data, ]
-        messageTx = can.Message(arbitration_id=self.canid, is_extended_id=True, data=txdata)
-        # print(f"can send {cmd.name} {txdata} {messageTx}")
-        sendBlocking(self.bus, messageTx)
-        timeout = 1.5
-        abs_timeout = time.time() + timeout
-        count = 20
-        while count and timeout >= 0:
-            count -= 1
-            messagein = self.bus.recv(timeout)
-            if messagein is None:
-                raise Exception(f"no response nodeid:{self.nodeid} canid:{self.canid:X}")
-            elif messagein.arbitration_id == self.canid + 1:
-                return messagein.data
-            timeout = abs_timeout - time.time()
-        raise Exception(f"no response (or bus flooded) nodeid:{self.nodeid} canid:{self.canid:X}")
-
-    def svcTransferBroadcast(self, cmd, data=None):
-        txdata = [cmd.value] if data is None else [cmd.value, *data, ]
-        messageTx = can.Message(arbitration_id=canid_bcast, is_extended_id=True, data=txdata)
-        sendBlocking(self.bus, messageTx)
-        timeout = 1.5
-        abs_timeout = time.time() + timeout
-        received = []
-        while timeout >= 0:
-            msgRx = bus.recv(timeout)
-            if msgRx is None:
-                if received:
-                    break
-                raise Exception(f"no response on broadcast")
-            elif canIdCheck(msgRx.arbitration_id):
-                n, h = canIdCheck(msgRx.arbitration_id)
-                if h == 1:
-                    received.append([n, msgRx.data])
-            timeout = abs_timeout - time.time()
-        if received is None: raise Exception(f"no response (or bus flooded) nodeid:{self.nodeid} canid:{self.canid:X}")
-        return received
-
-
 bus = None
 
 
-def openBus():
-    return can.Bus(interface='socketcan', channel=args.candev, receive_own_messages=True)
-
-
 if args.stat or args.config or args.fw_upload:
-    bus = openBus()
+    bus = bytcan.openBus(args.candev)
 
 
 class ClassInfo:
@@ -498,7 +414,7 @@ def configure_all():
 
         if not args.dry_run:
             for nodeId in nodesConfs:
-                nodeTrans = NodeBus(bus, nodeId)
+                nodeTrans = bytcan.NodeBus(bus, nodeId)
                 nodesConfs[nodeId].uploadNode(nodeTrans)
 
 
@@ -564,12 +480,12 @@ def statusRsp(rsp):
 
 def commandStatus():
     if args.all:
-        tran = NodeBus(bus)
+        tran = bytcan.NodeBus(bus)
         rsp = tran.svcTransferBroadcast(SvcProtocol.CmdStatus)
         for node, data in rsp:
             print(f"node:{node} {statusRsp(data)}")
     else:
-        tran = NodeBus(bus, args.id)
+        tran = bytcan.NodeBus(bus, args.id)
         rsp = tran.svcTransfer(SvcProtocol.CmdStatus)
         if rsp is None:
             print("No response")
@@ -628,7 +544,7 @@ if args.generate:
     generateCppHeader()
 
 if args.cmd:
-    trans = NodeBus(openBus(), args.id)
+    trans = bytcan.NodeBus(bytcan.openBus(args.candev), args.id)
     data = [int(v, 0) for v in args.msg]
     rsp = trans.svcTransfer(SvcProtocol[args.cmd], data)
     if SvcProtocol(rsp[0]) in (SvcProtocol.CmdTestGetPIN, SvcProtocol.CmdTestGetPORT, SvcProtocol.CmdTestGetDDR):
@@ -642,15 +558,15 @@ if args.cmd:
         print(f"not handled yet: {out}")
 
 if args.exit_bootloader:
-    id = canid_bcast
+    id = bytcan.canid_bcast
     if not args.all:
-        id = canIdFromNodeId(args.id)
+        id = bytcan.canIdFromNodeId(args.id)
     msg = can.Message(arbitration_id=id, is_extended_id=True, data=[ord('c')])
-    sendBlocking(openBus(), msg)
+    bytcan.sendBlocking(bytcan.openBus(args.candev), msg)
 
 
 def devsimulator():
-    mybus = openBus()
+    mybus = bytcan.openBus(args.candev)
     stage = 0b01000000
     while True:
         mymsg = mybus.recv()
@@ -681,7 +597,7 @@ if args.simulator:
 
 
 def sniff():
-    bus = openBus()
+    bus = bytcan.openBus(args.candev)
     while True:
         msg = bus.recv()
         data = list(msg.data)
@@ -861,7 +777,7 @@ def owReadScratchPad(req, t):
 
 
 def owReadTempSingle():
-    t = NodeBus(openBus(), args.id)
+    t = bytcan.NodeBus(bytcan.openBus(args.candev), args.id)
     req = owRequest(t)
 
     owConvert(req)
@@ -878,7 +794,7 @@ def owReadTempSingle():
 
 
 if args.ow_search:
-    t = NodeBus(openBus(), args.id)
+    t = bytcan.NodeBus(bytcan.openBus(args.candev), args.id)
     req = owRequest(t)
     owSearchRom(req)
 
@@ -914,7 +830,7 @@ def owMatchRom(req, t, sens):
 
 
 if args.ow_read_all:
-    t = NodeBus(openBus(), args.id)
+    t = bytcan.NodeBus(bytcan.openBus(args.candev), args.id)
     req = owRequest(t)
     sensors = owSearchRom(req)
     owConvert(req)
@@ -943,7 +859,7 @@ def test_gpios():
         out = [f'{v:08b}' for v in data]
         print(f"{desc}: {out}")
 
-    trans = NodeBus(openBus(), args.id)
+    trans = bytcan.NodeBus(bytcan.openBus(args.candev), args.id)
 
     def setIoData(portcmd, data):
         rsp = trans.svcTransfer(portcmd, data)
