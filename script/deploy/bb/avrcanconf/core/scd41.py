@@ -2,6 +2,7 @@ import enum
 import core.bytcan
 import core.config
 from core.config import SvcProtocol
+import time
 
 
 def conv_t_offset(val_u16):
@@ -26,7 +27,7 @@ def sensirion_common_generate_crc(data):
 
 
 class ResponseCode(enum.IntEnum):
-    Idle = enum.auto()
+    Idle = 0
     Pending_IO = enum.auto()
     Error = enum.auto()
 
@@ -53,6 +54,8 @@ class SCD41_CMD(enum.IntEnum):
 cmdDisableStateMachine = (0,0)
 cmdEnableTwi = (0,1)
 cmdEnableStateMachine = (0,2)
+cmdGetStatus = (4,)
+cmdGet3Bytes = (3,3,0)
 
 
 def cmdWriteCommand(cmd):
@@ -63,26 +66,25 @@ def cmdWriteCommand(cmd):
 
 def cmdWriteWord(cmd, val):
     req = cmdWriteCommand(cmd)
-    data = [ val >> 8, cmd & 0xFF ]
+    data = [ val >> 8, val & 0xFF ]
     req.extend(data)
     req.append(sensirion_common_generate_crc(data))
     return req
 
 
 def cmdReadWord(cmd):
-    req = cmdWriteCommand(cmd)
-    req.append(3)
+    req = data = [ 2, 3, cmd >> 8, cmd & 0xFF ]
     return req
 
 
 def requestI2C(nodebus):
-    def req(cmd, candata=None):
-        nodebus.svcTransfer(cmd, candata)
-        trsp = nodebus.svcTransfer(SvcProtocol.CmdSCD41Test)
+    def req(scd_data):
+        nodebus.svcTransfer(SvcProtocol.CmdSCD41Test, scd_data)
+        trsp = nodebus.svcTransfer(SvcProtocol.CmdSCD41Test, cmdGetStatus)
         while ResponseCode(trsp[1]) == ResponseCode.Pending_IO:
-            trsp = nodebus.svcTransfer(SvcProtocol.CmdOwGetReplyCode)
+            trsp = nodebus.svcTransfer(SvcProtocol.CmdSCD41Test, cmdGetStatus)
         if ResponseCode(trsp[1]) == ResponseCode.Error:
-            print(f"scd41 i2c {cmd} response with error {trsp}")
+            print(f"scd41 i2c {scd_data} response with error {trsp}")
         return trsp
     return req
 
@@ -94,6 +96,16 @@ def check_word(data):
     return 256*data[0] + data[1]
 
 
+def readWord(i2cReq, node, cmdvec):
+    rsp = i2cReq(cmdvec)
+    crc_ok = bool(rsp[2] & 2)
+    if crc_ok:
+        rsp = node.svcTransfer(SvcProtocol.CmdSCD41Test, cmdGet3Bytes)
+        if len(rsp) == 4:
+            return check_word(rsp[1:])
+    errmsg = f"read word failed crc:{crc_ok} {rsp}"
+    raise RuntimeError(errmsg)
+
 class SCD41:
     def __init__(self, candev, id) -> None:
         self.node = core.bytcan.NodeBus(core.bytcan.openBus(candev), id)
@@ -104,6 +116,25 @@ class SCD41:
         self.node.svcTransfer(SvcProtocol.CmdSCD41Test, cmdEnableTwi)
         i2creq = requestI2C(self.node)
         i2creq(cmdWriteCommand(SCD41_CMD.stop_periodic_measurement))
-        temp_offset = conv_t_offset(check_word(i2creq(cmdReadWord(SCD41_CMD.get_temperature_offset))))
-        altit = check_word(i2creq(cmdReadWord(SCD41_CMD.get_sensor_altitude)))
+        #i2creq(cmdWriteCommand(SCD41_CMD.reinit))
+        temp_offset = conv_t_offset(readWord(i2creq, self.node, cmdReadWord(SCD41_CMD.get_temperature_offset)))
+        altit = readWord(i2creq, self.node, cmdReadWord(SCD41_CMD.get_sensor_altitude))
         print(f"temp_offset:{temp_offset} altit:{altit}")
+
+    def write_params(self, temp_offset, altit):
+        i2creq = requestI2C(self.node)
+        i2creq(cmdWriteWord(SCD41_CMD.set_sensor_altitude, altit))
+        i2creq(cmdWriteWord(SCD41_CMD.set_temperature_offset, conv_inv_t_offset(temp_offset)))
+        i2creq(cmdWriteCommand(SCD41_CMD.persist_settings))
+        time.sleep(1)
+        rd_temp_offset = conv_t_offset(readWord(i2creq, self.node, cmdReadWord(SCD41_CMD.get_temperature_offset)))
+        rd_altit = readWord(i2creq, self.node, cmdReadWord(SCD41_CMD.get_sensor_altitude))
+        ok = abs(rd_temp_offset-temp_offset) < 0.01 and rd_altit == altit
+        print(f"read back temp_offset:{rd_temp_offset} altit:{rd_altit} ok:{ok}")
+        if not ok:
+            raise RuntimeError("parametrisation failed")
+    
+    def enable_sm(self):
+        self.node.svcTransfer(SvcProtocol.CmdSCD41Test, cmdEnableStateMachine)
+
+

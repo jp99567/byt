@@ -234,6 +234,7 @@ static StateL2 stateL2prev = StateL2::Disabled;
 void do_smL2();
 void start_periodic_meas();
 void disableL2();
+void update_pvs_with_invalid();
 }
 
 void svc(bool broadcast) {
@@ -475,7 +476,7 @@ void svc(bool broadcast) {
 		break;
 	case Svc::Protocol::CmdSCD41Test:
 	{
-		if(not gFeatures & eFeatureSCD41){
+		if(not (gFeatures & eFeatureSCD41)){
 			svc_msg[0] = Svc::Protocol::CmdInvalid;
 			break;
 		}
@@ -491,6 +492,7 @@ void svc(bool broadcast) {
 			else if(svc_msglen == 3 && svc_msg[2] == 0){
 				scd4x::disable();
 				scd4x::disableL2();
+				scd4x::update_pvs_with_invalid();
 			}
 			else {
 				svc_msg[0] = Svc::Protocol::CmdInvalid;

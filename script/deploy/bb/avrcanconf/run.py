@@ -36,6 +36,7 @@ parser.add_argument('--ow_search', action='store_true')
 parser.add_argument('--ow_read_temp_single', action='store_true')
 parser.add_argument('--ow_read_all', action='store_true', help='search ow sensors and read out temperatures')
 parser.add_argument('--scd41_read_params', action='store_true', help='stop sm, stop periodic meas, read relevant params')
+parser.add_argument('--scd41_write_params', action='store_true', help='write <temp_offst> <altitude>, persist, start sm')
 
 args = parser.parse_args()
 
@@ -416,7 +417,8 @@ def owSearchRom(req):
                 if not newval:
                     last_zero = bitidx
             elif res == OwResponseCode.eOwSearchResult11:
-                raise "search failed b11"
+                errMsg = f"search failed b11 bitidx:{bitidx} {sensors}"
+                raise Exception(errMsg)
             else:
                 newval = res == OwResponseCode.eOwSearchResult0
 
@@ -634,3 +636,11 @@ if args.test_gpios:
 if args.scd41_read_params:
     sens = core.scd41.SCD41(args.candev, args.id)
     sens.read_params()
+
+if args.scd41_write_params:
+    temp_offset = float(args.msg[0])
+    altit = int(args.msg[1])
+    sens = core.scd41.SCD41(args.candev, args.id)
+    sens.write_params(temp_offset, altit)
+    time.sleep(1)
+    sens.enable_sm()
