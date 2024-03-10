@@ -3,7 +3,7 @@
 set -e
 
 CONFIGSCRIPT=./avrcanconf/run.py
-[[ -x "$CONFIGSCRIPT" ]
+[[ -x "$CONFIGSCRIPT" ]]
 
 config-pin -f config-pin.txt
 
