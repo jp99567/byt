@@ -107,6 +107,7 @@ void AppContainer::run()
     auto meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
 
     Elektromer elektomer(*mqtt);
+    Vodomer vodomer(*mqtt);
 
     openTherm->Flame = [this](bool flameOn) {
         if(!flameOn) {
