@@ -170,21 +170,39 @@ Vodomer::~Vodomer()
 {
 }
 
+namespace vodomer{
+constexpr double LperH_2_LperMin(double lperH) { return lperH / 60.0;}
 constexpr double imp_per_liter = 1;
+constexpr double prietok_min = LperH_2_LperMin(31.25); // Zenner Q3=2.5
+constexpr std::chrono::milliseconds intervalMax((unsigned)(((1/imp_per_liter) / prietok_min) * 60e3));
+}
 
 void Vodomer::event(EventType e)
 {
     Impulzy::event(e);
 
     if(e == EventType::rising) {
+        LogINFO("vodomer imp rising");
         ++impCount;
         auto nt = Clock::now();
         lastPeriod = std::chrono::duration_cast<std::chrono::milliseconds>(nt - lastImp);
         lastImp = nt;
+        if(lastPeriod > vodomer::intervalMax){
+            prietok = vodomer::prietok_min;
+        }
+        else{
+            prietok = (1 / imp_per_liter) / (lastPeriod.count()/60e3);
+        }
+        mqtt.publish("rb/stat/prietok", std::to_string(prietok));
     } else if(e == EventType::falling) {
+        LogINFO("vodomer imp falling");
     }
-
-    //    mqtt.publish("rb/stat/prietok", std::to_string(pwr));
+    else{
+        if(prietok > 0 && std::chrono::duration_cast<std::chrono::seconds>(Clock::now() - lastImp) > std::chrono::seconds(5)){
+            prietok = 0;
+            mqtt.publish("rb/stat/prietok", std::to_string(prietok));
+        }
+    }
 }
 
 float Vodomer::calc() const

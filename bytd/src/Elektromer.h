@@ -21,6 +21,7 @@ class Impulzy {
 protected:
     explicit Impulzy(std::string chipname, unsigned line, IMqttPublisher& mqtt, const char* filename);
     virtual ~Impulzy();
+    void store(float val);
     std::thread t;
     bool active = true;
     using Clock = std::chrono::steady_clock;
@@ -38,10 +39,9 @@ protected:
 
 private:
     std::filesystem::path persistFile;
-    float lastStored = 0;
+    float lastStored = std::numeric_limits<float>::quiet_NaN();
     Clock::time_point lastStoredTime;
     void checkStore();
-    void store(float val);
     virtual float calc() const = 0;
 };
 

@@ -14,8 +14,6 @@ constexpr std::string_view positionTxt[] = { "Kotol", "StudenaVoda", "Boiler", "
 constexpr std::chrono::milliseconds nextPortTimeout(700);
 constexpr std::chrono::milliseconds exitPositionTimeout(150);
 
-#undef BYTD_SIMULATOR
-
 class ScopedExit {
     std::function<void()> onExit;
 
