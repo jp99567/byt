@@ -51,8 +51,8 @@ NodeCAN:
   Spalna:
     id: 7
     DigIN:
-      buttonSpalnaU: { addr: [ 0x118, 0, 0 ], pin: PC7 }
-      buttonSpalnaD: { addr: [ 0x118, 0, 1 ], pin: PA7 }
+      buttonSpalnaU: { addr: [ 0x118, 0, 0 ], pin: PA7 }
+      buttonSpalnaD: { addr: [ 0x118, 0, 1 ], pin: PC7 }
   KupelnaVypinac:
       id: 3
       DigIN:

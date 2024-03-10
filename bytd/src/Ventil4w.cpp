@@ -14,6 +14,8 @@ constexpr std::string_view positionTxt[] = { "Kotol", "StudenaVoda", "Boiler", "
 constexpr std::chrono::milliseconds nextPortTimeout(700);
 constexpr std::chrono::milliseconds exitPositionTimeout(150);
 
+#undef BYTD_SIMULATOR
+
 class ScopedExit {
     std::function<void()> onExit;
 
@@ -74,23 +76,7 @@ Ventil4w::Ventil4w(powerFnc power, IMqttPublisherSPtr mqtt)
 {
 #endif
     moving.clear();
-
-    try {
-        std::ifstream f((std::string(last_position_file)));
-        std::string postxt;
-        f >> postxt;
-        auto pos = std::find_if(std::cbegin(positionTxt), std::cend(positionTxt), [&postxt](auto& v) { return boost::iequals(postxt, v); });
-        if(pos == std::cend(positionTxt)) {
-            LogERR("Ventil4w invalid stored position {}", postxt);
-            lostPosition();
-        } else {
-            in_position = true;
-            cur_position = std::distance(std::cbegin(positionTxt), pos);
-            LogINFO("Ventil4w loaded position {} ({})", postxt, cur_position);
-        }
-    } catch(std::exception& e) {
-        LogERR("load last ventil position: {}", e.what());
-    }
+    loadPosition();
 }
 
 void Ventil4w::moveTo(std::string target)
@@ -136,7 +122,7 @@ bool Ventil4w::waitEvent(std::chrono::steady_clock::time_point deadline)
     auto lswe = lines_in.event_wait(std::chrono::duration_cast<std::chrono::nanoseconds>(deadline - std::chrono::steady_clock::now()));
     for(unsigned i = 0; i < lswe.size(); ++i) {
         auto e = lswe[i].event_read();
-        LogINFO("Ventil4w gpio event({}) source:{} type:{}", not flush_gpio_events_flag, e.source.offset(), e.event_type);
+        LogINFO("Ventil4w gpio event({}) source:{} type:{} {}us", not flush_gpio_events_flag, e.source.offset(), e.event_type, e.timestamp.count() / 1e3);
         if(not flush_gpio_events_flag) {
             if(e.source.offset() == line_abs_mark)
                 ev_line_abs_mark = e.event_type;
@@ -311,6 +297,7 @@ void Ventil4w::task(int target_pos)
         } else {
             std::ofstream f((std::string(last_position_file)));
             f << positionTxt[target_pos] << '\n';
+            LogINFO("Ventil4w stored position {}", positionTxt[target_pos]);
         }
     }
 
@@ -321,12 +308,35 @@ void Ventil4w::lostPosition()
 {
     ::unlink(last_position_file);
     in_position = false;
+    LogINFO("Ventil4w::lostPosition");
+}
+
+void Ventil4w::loadPosition()
+{
+    try {
+        std::ifstream f((std::string(last_position_file)));
+        std::string postxt;
+        f >> postxt;
+        auto pos = std::find_if(std::cbegin(positionTxt), std::cend(positionTxt), [&postxt](auto& v) { return boost::iequals(postxt, v); });
+        if(pos == std::cend(positionTxt)) {
+            LogERR("Ventil4w: invalid stored position {}", postxt);
+            lostPosition();
+        } else {
+            in_position = true;
+            cur_position = std::distance(std::cbegin(positionTxt), pos);
+            LogINFO("Ventil4w: loaded position {} ({})", postxt, cur_position);
+        }
+    } catch(std::exception& e) {
+        LogERR("load last ventil position: {}", e.what());
+    }
 }
 
 void Ventil4w::flush_spurios_signals()
 {
     flush_gpio_events_flag = true;
-    waitEvent(std::chrono::milliseconds(100));
+    auto wait_until = std::chrono::steady_clock::now() + exitPositionTimeout;
+    while(waitEvent(wait_until))
+        ;
     ev_line_port_mark = 0;
     ev_line_abs_mark = 0;
     flush_gpio_events_flag = false;
