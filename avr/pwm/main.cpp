@@ -1,11 +1,34 @@
 #ifdef __linux__
-#include<cinttypes>
 #include<iostream>
 #include<array>
 uint8_t TCNT0;
 #else
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <stddef.h>
+
+namespace std {
+/// Class template integer_sequence
+template<typename _Tp, _Tp... _Idx>
+struct integer_sequence
+{
+    typedef _Tp value_type;
+    static constexpr size_t size() noexcept { return sizeof...(_Idx); }
+};
+
+/// Alias template make_integer_sequence
+template<typename _Tp, _Tp _Num>
+using make_integer_sequence
+    = integer_sequence<_Tp, __integer_pack(_Num)...>;
+/// Alias template index_sequence
+template<size_t... _Idx>
+using index_sequence = integer_sequence<size_t, _Idx...>;
+
+/// Alias template make_index_sequence
+template<size_t _Num>
+using make_index_sequence = make_integer_sequence<size_t, _Num>;
+}
+
 #endif
 
 constexpr uint8_t chN = 16;
@@ -180,6 +203,27 @@ ISR(SPI_STC_vect)
     pwm_per[spi_bytes_in] = SPDR;
 }
 #endif
+
+
+namespace detail {
+template<size_t I>
+void makeForIndex() {
+    setch<I>();
+}
+
+template<size_t... Is>
+auto makeFoo(size_t nIdx, std::index_sequence<Is...>) {
+    using FuncType = void(*)();
+    constexpr FuncType arFuncs[] = {
+        detail::makeForIndex<Is>...
+    };
+    arFuncs[nIdx]();
+}
+}
+
+auto makeFoo(size_t nIdx) {
+    return detail::makeFoo(nIdx, std::make_index_sequence<chN>());
+}
 
 int main() 
 {
