@@ -2,6 +2,9 @@
 
 set -e
 
+CONFIGSCRIPT=./avrcanconf/run.py
+[[ -x "$CONFIGSCRIPT" ]]
+
 config-pin -f config-pin.txt
 
 if ip link show can1|grep -q 'state DOWN'; then
@@ -15,8 +18,8 @@ if config-pin -q 'p9.28'|grep -q 'P9_28 Mode: gpio Direction: out Value: 1'; the
 fi
 config-pin p9.28 high
 
-./avrcanconf.py --exit_bootloader --candev can1 --all
-./avrcanconf.py --config --yamlfile config.yaml --candev can1
+$CONFIGSCRIPT --exit_bootloader --candev can1 --all
+$CONFIGSCRIPT --config --yamlfile config.yaml --candev can1
 
 RPROC_CTRL_FILE='/sys/class/remoteproc/remoteproc1/state'
 while [[ ! -f $RPROC_CTRL_FILE ]]; do

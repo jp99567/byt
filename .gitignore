@@ -27,7 +27,9 @@ bytif/gen-*
 **/.project
 .metadata
 RemoteSystemsTempFiles
-core
 
 pru/gen/*
 avr/fw/SvcProtocol_generated.h
+.vscode
+.idea
+__pycache__

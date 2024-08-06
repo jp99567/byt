@@ -19,8 +19,9 @@ class Impulzy {
     unsigned chipLine = 0;
 
 protected:
-    explicit Impulzy(std::string chipname, unsigned line, IMqttPublisher& mqtt, const char* filename);
+    explicit Impulzy(std::string chipname, unsigned line, IMqttPublisher& mqtt, const char* filename, int line_req_type);
     virtual ~Impulzy();
+    void store(float val);
     std::thread t;
     bool active = true;
     using Clock = std::chrono::steady_clock;
@@ -38,10 +39,10 @@ protected:
 
 private:
     std::filesystem::path persistFile;
-    float lastStored = 0;
+    float lastStored = std::numeric_limits<float>::quiet_NaN();
     Clock::time_point lastStoredTime;
+    const int line_req_type;
     void checkStore();
-    void store(float val);
     virtual float calc() const = 0;
 };
 
@@ -68,6 +69,7 @@ public:
 private:
     void event(EventType) override;
     std::chrono::milliseconds lastPeriod = std::chrono::milliseconds::max();
+    Clock::time_point lastChangeDebounced = Clock::time_point::min();
     float calc() const override;
     float prietok = 0;
 };

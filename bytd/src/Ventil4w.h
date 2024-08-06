@@ -28,6 +28,7 @@ private:
     bool move(const int target);
     void task(int target_positon);
     void lostPosition();
+    void loadPosition();
     gpiod::chip chip;
     gpiod::line_bulk lines_in;
     gpiod::line line_out_p;

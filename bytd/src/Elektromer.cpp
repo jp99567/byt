@@ -69,7 +69,7 @@ float Elektromer::calc() const
 }
 
 Elektromer::Elektromer(IMqttPublisher& mqtt)
-    : Impulzy("1", 17, mqtt, "elektromer-kwh.txt")
+    : Impulzy("1", 17, mqtt, "elektromer-kwh.txt", gpiod::line_request::EVENT_RISING_EDGE)
 {
     threadName = "bytd-elektromer";
     svc_init();
@@ -81,11 +81,12 @@ Elektromer::~Elektromer()
 }
 
 Impulzy::Impulzy(std::string chipname, unsigned int line, IMqttPublisher& mqtt,
-    const char* filename)
+    const char* filename, int line_req_type)
     : chipName(chipname)
     , chipLine(line)
     , mqtt(mqtt)
     , persistFile(filename)
+    , line_req_type(line_req_type)
 {
     try {
         std::ifstream f(persistFile);
@@ -116,7 +117,8 @@ void Impulzy::svc_init()
                 LogERR("Impulz direction not input");
                 active = false;
             }
-            impin.request({ "bytd", gpiod::line_request::EVENT_RISING_EDGE });
+            impin.request({ "bytd", line_req_type, 0 });
+            LogINFO("impulze imp pin reqeusted: {} ({})", impin.name(), impin.get_value());
 
             while(active) {
                 constexpr unsigned long long toutns = 1e9;
@@ -161,33 +163,61 @@ void Impulzy::store(float val)
 }
 
 Vodomer::Vodomer(IMqttPublisher& mqtt)
-    : Impulzy("0", 3, mqtt, "vodomer-litre.txt")
+    : Impulzy("0", 3, mqtt, "vodomer-litre.txt", gpiod::line_request::EVENT_BOTH_EDGES)
 {
     minDeltoToSTore = 10;
+    threadName = "bytd-elektromer";
+    svc_init();
 }
 
 Vodomer::~Vodomer()
 {
 }
 
+namespace vodomer{
+constexpr double LperH_2_LperMin(double lperH) { return lperH / 60.0;}
 constexpr double imp_per_liter = 1;
+constexpr double prietok_min = LperH_2_LperMin(31.25); // Zenner Q3=2.5
+constexpr std::chrono::milliseconds intervalMax((unsigned)(((1/imp_per_liter) / prietok_min) * 60e3));
+}
 
 void Vodomer::event(EventType e)
 {
-    Impulzy::event(e);
+    auto nt = Clock::now();
+    if(e != EventType::timeout) {
+        auto check_debounce = std::chrono::duration_cast<std::chrono::milliseconds>(nt - lastChangeDebounced);
+        lastChangeDebounced = nt;
+        if(check_debounce < std::chrono::milliseconds(100)) {
+            return;
+        }
+    }
 
     if(e == EventType::rising) {
+        LogINFO("vodomer imp rising");
         ++impCount;
         auto nt = Clock::now();
         lastPeriod = std::chrono::duration_cast<std::chrono::milliseconds>(nt - lastImp);
         lastImp = nt;
+        if(lastPeriod > vodomer::intervalMax){
+            prietok = vodomer::prietok_min;
+        }
+        else{
+            prietok = (1 / vodomer::imp_per_liter) / (lastPeriod.count()/60e3);
+        }
+        mqtt.publish("rb/stat/prietok", std::to_string(prietok));
     } else if(e == EventType::falling) {
+        LogINFO("vodomer imp falling");
     }
-
-    //    mqtt.publish("rb/stat/prietok", std::to_string(pwr));
+    else{
+        if(prietok > 0 && std::chrono::duration_cast<std::chrono::seconds>(Clock::now() - lastImp) > std::chrono::seconds(15)){
+            prietok = 0;
+            mqtt.publish("rb/stat/prietok", std::to_string(prietok));
+        }
+    }
+    Impulzy::event(e);
 }
 
 float Vodomer::calc() const
 {
-    return orig + impCount / imp_per_liter;
+    return orig + impCount / vodomer::imp_per_liter;
 }

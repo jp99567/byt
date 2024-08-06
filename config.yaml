@@ -42,16 +42,17 @@ NodeCAN:
   Kupelka:
       id: 4
       OwT:
-        tVodaKupelka: { addr: [ 0x119, 0 ], owRomCode: 28d50a0a06000046 }
+        tVodaKupelka2: { addr: [ 0x119, 0 ], owRomCode: 28d50a0a06000046 }
         tPodlahovka: { addr: [ 0x119, 2 ], owRomCode: 287fc80a06000074, type: DS18S20}
         tSpalna2: { addr: [ 0x119, 4 ], owRomCode: 28469e780c0000c3 }
+        tVodaKupelka: { addr: [ 0x119, 6 ], owRomCode: 2858bb780c0000a1}
       SensorionSCD41: { addr: 0x11A, nameT: "tSpalna", nameRH: "SpalnaRH", nameCO2: "SpalnaCO2"}
       SensorionSHT11: { addr: 0x11B , nameT: "KupelnaT", nameRH: "KupelnaRH"}
   Spalna:
     id: 7
     DigIN:
-      buttonSpalnaU: { addr: [ 0x118, 0, 0 ], pin: PC7 }
-      buttonSpalnaD: { addr: [ 0x118, 0, 1 ], pin: PA7 }
+      buttonSpalnaU: { addr: [ 0x118, 0, 0 ], pin: PA7 }
+      buttonSpalnaD: { addr: [ 0x118, 0, 1 ], pin: PC7 }
   KupelnaVypinac:
       id: 3
       DigIN:

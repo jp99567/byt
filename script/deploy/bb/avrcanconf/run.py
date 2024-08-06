@@ -1,16 +1,20 @@
 #!/usr/bin/python3
 import struct
 
-import can
 import os
 from math import ceil
 from struct import pack
 import argparse
 import time
-import yaml
 import enum
 from copy import deepcopy
 import datetime
+import core.bytcan as bytcan
+import can
+from core.config import SvcProtocol
+import core.config
+import core.scd41
+
 
 parser = argparse.ArgumentParser(description='avr can bus nodes configuration')
 parser.add_argument('--candev', default='vcan0')
@@ -31,42 +35,13 @@ parser.add_argument('--test_gpios', action='store_true')
 parser.add_argument('--ow_search', action='store_true')
 parser.add_argument('--ow_read_temp_single', action='store_true')
 parser.add_argument('--ow_read_all', action='store_true', help='search ow sensors and read out temperatures')
+parser.add_argument('--scd41_read_params', action='store_true', help='stop sm, stop periodic meas, read relevant params')
+parser.add_argument('--scd41_write_params', action='store_true', help='write <temp_offst> <altitude>, persist, start sm')
 
 args = parser.parse_args()
-canid_bcast = 0xEC33F000 >> 3
-canid_bcast_mask = ((1 << 20) - 1) << 9
+
 
 fw_build_epoch_base = 1675604744   # 5.feb 20231 14:45:44 CET
-
-
-class SvcProtocol(enum.IntEnum):
-    CmdSetAllocCounts = enum.auto()
-    CmdGetAllocCounts = enum.auto()
-    CmdSetStage = enum.auto()
-    CmdSetOwObjParams = enum.auto()
-    CmdSetOwObjRomCode = enum.auto()
-    CmdSetDigINObjParams = enum.auto()
-    CmdSetDigOUTObjParams = enum.auto()
-    CmdSetCanMob = enum.auto()
-    CmdTestSetDDR = enum.auto()
-    CmdTestGetDDR = enum.auto()
-    CmdTestSetPORT = enum.auto()
-    CmdTestGetPORT = enum.auto()
-    CmdTestSetPIN = enum.auto()
-    CmdTestGetPIN = enum.auto()
-    CmdGetGitVersion = enum.auto()
-    CmdOwInit = enum.auto()
-    CmdOwReadBits = enum.auto()
-    CmdOwWriteBits = enum.auto()
-    CmdOwSearch = enum.auto()
-    CmdOwGetReplyCode = enum.auto()
-    CmdOwGetData = enum.auto()
-    CmdSetSCD41Params = enum.auto()
-    CmdSetSHT11Params = enum.auto()
-    CmdSCD41Test = enum.auto()
-    CmdFlushAll = enum.auto()
-    CmdStatus = ord('s')
-    CmdInvalid = ord('X')
 
 
 class OwResponseCode(enum.IntEnum):
@@ -96,30 +71,6 @@ class OwCmd(enum.Enum):
     SEARCH = 0xF0
 
 
-class NodeStage(enum.Enum):
-    stage0boot = 0
-    stage1 = 0b01000000
-    stage2 = 0b10000000
-    stage3run = 0b11000000
-
-
-def canIdFromNodeId(nodeid):
-    return canid_bcast | (nodeid << 2)
-
-
-def nodeIfFromCanId(canid):
-    return (canid & ~canid_bcast_mask) >> 2
-
-
-def canIdCheck(canid):
-    if (canid & canid_bcast_mask) == canid_bcast:
-        idnet = canid & ~canid_bcast_mask
-        nodeId = idnet >> 2
-        hostid = idnet & 0b11
-        return nodeId, hostid
-    return None
-
-
 def dallas_crc8(data):
     crc = 0
     for c in data:
@@ -128,385 +79,29 @@ def dallas_crc8(data):
             crc = (crc ^ (b * 0x118)) >> 1
     return crc
 
-
-def sendBlocking(canbus, messageTx):
-    messageTx.dlc = len(messageTx.data)
-    canbus.send(messageTx)
-    timeout = 1
-    abs_timeout = time.time() + timeout
-    while timeout >= 0:
-        messageRx = canbus.recv(timeout)
-        if messageRx is None:
-            raise Exception(f"send read back failed: {messageTx}")
-        if messageTx.arbitration_id == messageRx.arbitration_id:
-            break
-        timeout = abs_timeout - time.time()
-
-
-class NodeBus:
-    def __init__(self, canbus, nodeid=canid_bcast):
-        self.bus = canbus
-        self.canid = canIdFromNodeId(nodeid)
-        self.nodeid = nodeid
-
-    def svcTransfer(self, cmd, data=None):
-        if self.nodeid == canid_bcast:
-            return self.svcTransferBroadcast(cmd, data)
-        txdata = [cmd.value] if data is None else [cmd.value, *data, ]
-        messageTx = can.Message(arbitration_id=self.canid, is_extended_id=True, data=txdata)
-        # print(f"can send {cmd.name} {txdata} {messageTx}")
-        sendBlocking(self.bus, messageTx)
-        timeout = 1.5
-        abs_timeout = time.time() + timeout
-        count = 20
-        while count and timeout >= 0:
-            count -= 1
-            messagein = self.bus.recv(timeout)
-            if messagein is None:
-                raise Exception(f"no response nodeid:{self.nodeid} canid:{self.canid:X}")
-            elif messagein.arbitration_id == self.canid + 1:
-                return messagein.data
-            timeout = abs_timeout - time.time()
-        raise Exception(f"no response (or bus flooded) nodeid:{self.nodeid} canid:{self.canid:X}")
-
-    def svcTransferBroadcast(self, cmd, data=None):
-        txdata = [cmd.value] if data is None else [cmd.value, *data, ]
-        messageTx = can.Message(arbitration_id=canid_bcast, is_extended_id=True, data=txdata)
-        sendBlocking(self.bus, messageTx)
-        timeout = 1.5
-        abs_timeout = time.time() + timeout
-        received = []
-        while timeout >= 0:
-            msgRx = bus.recv(timeout)
-            if msgRx is None:
-                if received:
-                    break
-                raise Exception(f"no response on broadcast")
-            elif canIdCheck(msgRx.arbitration_id):
-                n, h = canIdCheck(msgRx.arbitration_id)
-                if h == 1:
-                    received.append([n, msgRx.data])
-            timeout = abs_timeout - time.time()
-        if received is None: raise Exception(f"no response (or bus flooded) nodeid:{self.nodeid} canid:{self.canid:X}")
-        return received
-
-
 bus = None
 
 
-def openBus():
-    return can.Bus(interface='socketcan', channel=args.candev, receive_own_messages=True)
-
-
 if args.stat or args.config or args.fw_upload:
-    bus = openBus()
+    bus = bytcan.openBus(args.candev)
 
 
-class ClassInfo:
-    def __init__(self, node):
-        self.node = node
-
-    def info(self):
-        count = len(self.node.keys())
-        ids = set()
-        for i in self.node.keys():
-            ids.add(self.node[i]['addr'][0])
-        return {'ids': ids, 'count': count}
-
-    def initNodeObject(self, nodebus, mobs, mobSize):
-        errmsg = f"initNodeObject {self.node}"
-        raise NotImplementedError(errmsg)
-
-    def checkPinConflits(self, isSCD41, isSHT11, isOw):
-        pass
-
-
-def pinNum2Str(num):
-    if 0 <= num < 6 * 8 + 5:
-        byte = num // 8
-        bit = num % 8
-        p = ord('A') + byte
-        return 'P' + chr(p) + f"{bit}"
-    raise "pin id out fo range"
-
-
-def pinStr2Num(pin):
-    pin = pin.upper()
-    if len(pin) != 3 or pin[0] != 'P':
-        raise Exception(f"invalid pin {pin}")
-    bitidx = int(pin[2])
-    portidx = ord(pin[1]) - ord('A')
-    if portidx > 6 or bitidx > 7:
-        raise Exception(f"invalid pin {pin} out of range")
-    return portidx * 8 + bitidx
-
-
-class ClassDigInOutInfo(ClassInfo):
-    def __init__(self, node, initCmd):
-        super().__init__(node)
-        self.initObjCmd = initCmd
-
-    def info(self):
-        inf = ClassInfo.info(self)
-        items = {}
-        for i in self.node.keys():
-            canid = self.node[i]['addr'][0]
-            if canid not in items:
-                items[canid] = []
-            byte = self.node[i]['addr'][1]
-            bit = self.node[i]['addr'][2]
-            items[canid].append([8 * byte + bit, 1])
-        inf['items'] = items
-        return inf
-
-    def initNodeObject(self, nodebus, mobs, mobSize):
-        idx = 0
-        for i in self.node.keys():
-            canid = self.node[i]['addr'][0]
-            mobidx = mobs.index(canid)
-            byte = self.node[i]['addr'][1] + mobSize[canid]['start']
-            mask = 1 << self.node[i]['addr'][2]
-            pin = pinStr2Num(self.node[i]['pin'])
-            nodebus.svcTransfer(self.initObjCmd, [idx, mobidx, byte, mask, pin])
-            idx += 1
-
-    def checkPinConflits(self, isSCD41=False, isSHT11=False, isOw=False):
-        usedPins = []
-        if isSCD41:
-            usedPins.extend(['PD0', 'PD1', 'PG4'])
-        if isSHT11:
-            usedPins.extend(['PC3', 'PC5'])
-        if isOw:
-            usedPins.append('PA0')
-
-        for i in self.node.keys():
-            pin = self.node[i]['pin']
-            if pin in usedPins:
-                errmsg = f"pin conflict {pin}"
-                raise RuntimeError(errmsg)
-
-
-class ClassOwtInfo(ClassInfo):
-    def info(self):
-        inf = ClassInfo.info(self)
-        items = {}
-        for i in self.node.keys():
-            canid = self.node[i]['addr'][0]
-            if canid not in items:
-                items[canid] = []
-            byte = self.node[i]['addr'][1]
-            items[canid].append([8 * byte, 16])
-        inf['items'] = items
-        return inf
-
-    def initNodeObject(self, nodebus, mobs, mobSize):
-        idx = 0
-        for i in self.node.keys():
-            canid = self.node[i]['addr'][0]
-            mobidx = mobs.index(canid)
-            byte = self.node[i]['addr'][1] + mobSize[canid]['start']
-            nodebus.svcTransfer(SvcProtocol.CmdSetOwObjParams, [idx, mobidx, byte])
-            if len(self.node.keys()) > 1:
-                rc = bytearray.fromhex(self.node[i]['owRomCode'])
-                if len(rc) != 8:
-                    raise f'Invalid rc length {rc}'
-                rsp = nodebus.svcTransfer(SvcProtocol.CmdSetOwObjRomCode, [idx, *rc[1:7]])
-                if SvcProtocol(rsp[0]) != SvcProtocol.CmdSetOwObjRomCode:
-                    raise f'Invalid response {rc} {rsp[1]}'
-                if rsp[1] != rc[7]:
-                    raise RuntimeError(f'Inwalid crc {list(rc)} {rc[7]} {rsp[1]}')
-            idx += 1
-
-
-class ClassSensorionInfo(ClassInfo):
-    def initNodeObjectSensorion(self, nodebus, mobs, mobSize, cmd):
-        canid = self.node['addr']
-        mobidx = mobs.index(canid)
-        byteidx = mobSize[canid]['start']
-        nodebus.svcTransfer(cmd, [mobidx, byteidx])
-
-
-class ClassSensorionSCD41Info(ClassSensorionInfo):
-    def info(self):
-        return {'ids': {self.node['addr']}, 'count': 1, 'items': {self.node['addr']: [[0, 3*16]]}}
-
-    def initNodeObject(self, nodebus, mobs, mobSize):
-        self.initNodeObjectSensorion(nodebus, mobs, mobSize, SvcProtocol.CmdSetSCD41Params)
-
-
-class ClassSensorionSHT11Info(ClassSensorionInfo):
-    def info(self):
-        return {'ids': {self.node['addr']}, 'count': 1, 'items': {self.node['addr']: [[0, 4 * 8]]}}
-
-    def initNodeObject(self, nodebus, mobs, mobSize):
-        self.initNodeObjectSensorion(nodebus, mobs, mobSize, SvcProtocol.CmdSetSHT11Params)
-
-
-def buildClassInfo(trieda, node):
-    if trieda == 'DigIN':
-        return ClassDigInOutInfo(node, SvcProtocol.CmdSetDigINObjParams)
-    elif trieda == 'DigOUT':
-        return ClassDigInOutInfo(node, SvcProtocol.CmdSetDigOUTObjParams)
-    elif trieda == 'OwT':
-        return ClassOwtInfo(node)
-    elif trieda == 'SensorionSCD41':
-        return ClassSensorionSCD41Info(node)
-    elif trieda == 'SensorionSHT11':
-        return ClassSensorionSHT11Info(node)
-    else:
-        return None
-
-
-class ConfigNode:
-
-    def __init__(self, node):
-        self.canmobsList = set()
-        self.canmobSize = dict()
-        nodeId = node['id']
-        outputCanIds = set()
-        self.inputCanIds = set()
-        self.triedyNr = dict()
-        triedyInfo = dict()
-        self.triedy = dict()
-
-        for trieda in ('DigIN', 'OwT', 'SensorionSCD41', 'SensorionSHT11'):
-            if trieda in node:
-                triedaInfo = buildClassInfo(trieda, node[trieda])
-                info = triedaInfo.info()
-                outputCanIds.update(info['ids'])
-                self.triedyNr[trieda] = info['count']
-                triedyInfo[trieda] = info
-                self.triedy[trieda] = triedaInfo
-            else:
-                self.triedyNr[trieda] = 0
-
-        for trieda in ('DigOUT',):
-            if trieda in node:
-                triedaInfo = buildClassInfo(trieda, node[trieda])
-                info = triedaInfo.info()
-                self.inputCanIds.update(info['ids'])
-                self.triedyNr[trieda] = info['count']
-                triedyInfo[trieda] = info
-                self.triedy[trieda] = triedaInfo
-            else:
-                self.triedyNr[trieda] = 0
-
-        print(f"nodeId:{nodeId} {self.triedyNr} outputCanIdNr:{len(outputCanIds)} inputCanIdNr:{len(self.inputCanIds)}")
-        print(triedyInfo)
-        canmobs = dict()
-        for trieda in triedyInfo:
-            for canid, items in triedyInfo[trieda]['items'].items():
-                if canid not in canmobs:
-                    canmobs[canid] = items
-                else:
-                    canmobs[canid].extend(items)
-
-        for id in canmobs:
-            canmobs[id].sort(key=lambda e: e[0])
-            prev_end = 0
-            for i in canmobs[id]:
-                if prev_end > i[0]:
-                    raise Exception(f"canid:{id:X} overlaps at bit {i[0]} items {canmobs[id]}")
-                prev_end = i[0] + i[1]
-            if prev_end > 8 * 8:
-                raise Exception(f"canid:{id:X} exceeds 8B items:({canmobs[id]})")
-            self.canmobSize[id] = {'size' : (prev_end + 7) // 8}
-
-        if not self.inputCanIds.isdisjoint(outputCanIds):
-            raise Exception(f"IN/OUT can ids mixed {self.inputCanIds} {outputCanIds}")
-
-        self.canmobsList = sorted(self.inputCanIds)
-        self.canmobsList.extend(sorted(outputCanIds))
-        print(self.canmobsList)
-
-        startOffset = 0
-        for mobcanid in self.canmobsList:
-            size = self.canmobSize[mobcanid]['size']
-            self.canmobSize[mobcanid]['start'] = startOffset
-            startOffset += size
-
-        print(self.canmobSize)
-        print(f"sum: {sum([ self.canmobSize[i]['size'] for i in self.canmobSize])}")
-
-    def check(self):
-        def checkIt(trieda):
-            self.triedy[trieda].checkPinConflits(isSCD41=self.triedyNr['SensorionSCD41'],
-                                                 isSHT11=self.triedyNr['SensorionSHT11'],
-                                                 isOw=self.triedyNr['OwT'])
-
-        if self.triedyNr['DigIN']:
-            checkIt('DigIN')
-        if self.triedyNr['DigOUT']:
-            checkIt('DigOUT')
-
-
-    def uploadNode(self, trans):
-        features = 0
-        if self.triedyNr['SensorionSCD41']:
-            features |= 1
-        if self.triedyNr['SensorionSHT11']:
-            features |= 2
-        trans.svcTransfer(SvcProtocol.CmdSetAllocCounts,
-                          [self.triedyNr['DigIN'],
-                           self.triedyNr['DigOUT'],
-                           self.triedyNr['OwT'],
-                           sum([self.canmobSize[i]['size'] for i in self.canmobSize]),
-                           len(self.inputCanIds),
-                           len(self.canmobsList),
-                           features])
-
-        trans.svcTransfer(SvcProtocol.CmdSetStage, [NodeStage.stage2.value])
-
-        for trieda in self.triedy:
-            self.triedy[trieda].initNodeObject(trans, self.canmobsList, self.canmobSize)
-
-        for idx, canid in enumerate(self.canmobsList):
-            endIoIdx = self.canmobSize[canid]['start'] + self.canmobSize[canid]['size']
-            data = pack('BBH', idx, endIoIdx, canid)
-            trans.svcTransfer(SvcProtocol.CmdSetCanMob, data)
-
-
-def configure_one(node_id):
-    with open(args.yamlfile, "r") as stream:
-        config = yaml.safe_load(stream)
-        for node in config['NodeCAN']:
-            if config['NodeCAN'][node]['id'] != node_id:
-                continue
-            print(f"node name: {node}")
-            nodeConf = ConfigNode(config['NodeCAN'][node])
-            nodeConf.check()
-
-            if not args.dry_run:
-                nodeConf.uploadNode(nodeTrans)
-            break
-
-
-def configure_all():
-    with open(args.yamlfile, "r") as stream:
-        config = yaml.safe_load(stream)
-        nodesConfs = dict()
-        allMobsIds = set()
-        for node in config['NodeCAN']:
-            print(f"node name: {node}")
-            nodeConf = ConfigNode(config['NodeCAN'][node])
-            nodeConf.check()
-            nodesConfs[config['NodeCAN'][node]['id']] = nodeConf
-            if not allMobsIds.isdisjoint(nodeConf.canmobsList):
-                errmsg = f"duplicitne ids {nodeConf.canmobsList} v {node}"
-                raise RuntimeError(errmsg)
-            allMobsIds.update(nodeConf.canmobsList)
-
-        if not args.dry_run:
-            for nodeId in nodesConfs:
-                nodeTrans = NodeBus(bus, nodeId)
-                nodesConfs[nodeId].uploadNode(nodeTrans)
+def decode_git_version(data):
+    if len(data) == 7:
+        data.append(0)
+        git_ver32bit, build_time = struct.unpack('II', bytearray(data))
+        dirty = build_time & 1 == 1
+        build_epoch = fw_build_epoch_base + (build_time >> 1) * 60
+        build_datetime = datetime.datetime.fromtimestamp(build_epoch)
+        return {'dirty': bool(dirty), 'build_epoch': build_epoch, 'build_time': build_datetime, 'rev': git_ver32bit}
+    return None
 
 
 def upload_fw(nodeid):
-    avrid1tx = canIdFromNodeId(nodeid)
+    avrid1tx = bytcan.canIdFromNodeId(nodeid)
     avrid1rx = avrid1tx + 1
     message = can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=[ord('s')])
-    sendBlocking(bus, message)
+    bytcan.sendBlocking(bus, message)
     messagein = bus.recv(1.5)
     if messagein.dlc != 4 or messagein.data[0] != ord('s') or 0 != (messagein.data[3] & 0b11000000):
         raise 'invalid response, maybe not bootloader'
@@ -523,12 +118,12 @@ def upload_fw(nodeid):
             page_bytes_in = 0
             pgxor = 0xA5
             print(f"upload page:{page} {len(pgdata)}")
-            sendBlocking(bus, can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=[ord('d')]))
+            bytcan.sendBlocking(bus, can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=[ord('d')]))
             while page_bytes_in < pgsize:
                 msgdata = pgdata[page_bytes_in:page_bytes_in + 8].ljust(8, bytes.fromhex('ff'))
                 for i in msgdata:
                     pgxor ^= i
-                sendBlocking(bus, can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=msgdata))
+                bytcan.sendBlocking(bus, can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=msgdata))
                 page_bytes_in += 8
             rsp = bus.recv()
             if rsp.dlc != 2:
@@ -536,7 +131,7 @@ def upload_fw(nodeid):
             if rsp.data[1] != pgxor:
                 raise 'xorsum mismatch'
             pgaddr = page * pgsize
-            sendBlocking(bus,
+            bytcan.sendBlocking(bus,
                          can.Message(arbitration_id=avrid1tx, is_extended_id=True, data=pack('<BI', ord('f'), pgaddr)))
             rsp = bus.recv()
             if rsp.dlc == 1 and rsp.data[0] == ord('f'):
@@ -564,12 +159,12 @@ def statusRsp(rsp):
 
 def commandStatus():
     if args.all:
-        tran = NodeBus(bus)
+        tran = bytcan.NodeBus(bus, 0)
         rsp = tran.svcTransferBroadcast(SvcProtocol.CmdStatus)
         for node, data in rsp:
             print(f"node:{node} {statusRsp(data)}")
     else:
-        tran = NodeBus(bus, args.id)
+        tran = bytcan.NodeBus(bus, args.id)
         rsp = tran.svcTransfer(SvcProtocol.CmdStatus)
         if rsp is None:
             print("No response")
@@ -585,9 +180,9 @@ if args.fw_upload:
 
 if args.config:
     if args.id is None or args.all:
-        configure_all()
+        core.config.configure_all(bus=bus, yamlfile=args.yamlfile, dry_run=args.dry_run)
     else:
-        configure_one(args.id)
+        core.config.configure_one(nodeTrans=bytcan.NodeBus(bus, args.id), yamlfile=args.yamlfile, dry_run=args.dry_run)
 
 
 
@@ -627,36 +222,65 @@ namespace ow {
 if args.generate:
     generateCppHeader()
 
-if args.cmd:
-    trans = NodeBus(openBus(), args.id)
-    data = [int(v, 0) for v in args.msg]
-    rsp = trans.svcTransfer(SvcProtocol[args.cmd], data)
+def commandResponse(id, rsp):
     if SvcProtocol(rsp[0]) in (SvcProtocol.CmdTestGetPIN, SvcProtocol.CmdTestGetPORT, SvcProtocol.CmdTestGetDDR):
         out = [f"{v:08b}" for v in rsp[1:]]
         print(f"{out}")
     elif SvcProtocol(rsp[0]) == SvcProtocol.CmdInvalid:
         out = [f"{v:02X}" for v in rsp[1:]]
-        print(f"invalid resonse {out}")
+        print(f"invalid response {out}")
+    elif SvcProtocol(rsp[0]) == SvcProtocol.CmdGetGitVersion:
+        rev = decode_git_version(rsp[1:])
+        if rev is not None:
+            rest = f"build time:{rev['build_time']} git version:{rev['rev']:08x}"
+            if rev['dirty']:
+                rest += '-DIRTY'
+            print(f"ID:{id} {rest}")
+        else:
+            out = [f"{v:02X}" for v in rsp]
+            print(f"ID:{id} corrupted git version {out}")
     else:
         out = [f"{v:02X}" for v in rsp]
         print(f"not handled yet: {out}")
 
+
+if args.cmd:
+    if args.all and not args.id:
+        trans = bytcan.NodeBus(bytcan.openBus(args.candev), 0)
+        data = [int(v, 0) for v in args.msg]
+        rsp_list = trans.svcTransfer(SvcProtocol[args.cmd], data)
+        for node_id, rsp in rsp_list:
+            commandResponse(node_id, rsp)
+    else:
+        node_id = args.id
+        trans = bytcan.NodeBus(bytcan.openBus(args.candev), node_id)
+        data = [int(v, 0) for v in args.msg]
+        rsp = trans.svcTransfer(SvcProtocol[args.cmd], data)
+        commandResponse(node_id, rsp)
+
+
 if args.exit_bootloader:
-    id = canid_bcast
+    id = bytcan.canid_bcast
     if not args.all:
-        id = canIdFromNodeId(args.id)
+        id = bytcan.canIdFromNodeId(args.id)
     msg = can.Message(arbitration_id=id, is_extended_id=True, data=[ord('c')])
-    sendBlocking(openBus(), msg)
+    bytcan.sendBlocking(bytcan.openBus(args.candev), msg)
 
 
 def devsimulator():
-    mybus = openBus()
+    mybus = bytcan.openBus(args.candev)
     stage = 0b01000000
+    this_can_id = bytcan.canIdFromNodeId(args.id)
+    rsp_can_id = this_can_id + 1
     while True:
         mymsg = mybus.recv()
         print(mymsg)
+        can_id = arbitration_id=mymsg.arbitration_id
+        if this_can_id != can_id and can_id != bytcan.canid_bcast:
+            continue
+
         if mymsg.data[0] == SvcProtocol.CmdStatus:
-            sendBlocking(mybus, can.Message(arbitration_id=mymsg.arbitration_id + 1, is_extended_id=True,
+            bytcan.sendBlocking(mybus, can.Message(arbitration_id=rsp_can_id, is_extended_id=True,
                                             data=[mymsg.data[0], 0, 0, stage]))
             continue
         elif mymsg.data[0] == SvcProtocol.CmdSetStage:
@@ -665,28 +289,29 @@ def devsimulator():
             if len(mymsg.data) == 8:
                 crc = dallas_crc8([0x28, *mymsg.data[2:8]])
                 print(f"rom code: {list(mymsg.data[2:8])} crc {crc:02X}")
-                sendBlocking(mybus, can.Message(arbitration_id=mymsg.arbitration_id + 1, is_extended_id=True,
+                bytcan.sendBlocking(mybus, can.Message(arbitration_id=rsp_can_id, is_extended_id=True,
                                                 data=[mymsg.data[0], crc]))
                 continue
             else:
                 print("invalid ow rom code")
                 mymsg.data[0] = SvcProtocol.CmdInvalid
 
-        sendBlocking(mybus,
-                     can.Message(arbitration_id=mymsg.arbitration_id + 1, is_extended_id=True, data=[mymsg.data[0]]))
+        bytcan.sendBlocking(mybus,
+                     can.Message(arbitration_id=mymsg.rsp_can_id, is_extended_id=True, data=[mymsg.data[0]]))
 
 
 if args.simulator:
     devsimulator()
 
 
+
 def sniff():
-    bus = openBus()
+    bus = bytcan.openBus(args.candev)
     while True:
         msg = bus.recv()
         data = list(msg.data)
-        if canIdCheck(msg.arbitration_id):
-            nodeid, minor = canIdCheck(msg.arbitration_id)
+        if bytcan.canIdCheck(msg.arbitration_id):
+            nodeid, minor = bytcan.canIdCheck(msg.arbitration_id)
             if minor == 0b11:
                 if len(data) == 8:
                     CANSIT, CANEN = struct.unpack('HH', msg.data[0:4])
@@ -720,14 +345,10 @@ def sniff():
                             if len(data) > 2:
                                 rest = f"{OwResponseCode(data[1]).name} bitcount:{data[2]}"
                     elif SvcProtocol(data[0]) == SvcProtocol.CmdGetGitVersion and type == 'rsp':
-                        if len(data) == 8:
-                            data.append(0)
-                            git_ver32bit, build_time = struct.unpack('II', bytearray(data[1:]))
-                            dirty = build_time & 1 == 1
-                            build_epoch = fw_build_epoch_base + (build_time >> 1) * 60
-                            build_datetime = datetime.datetime.fromtimestamp(build_epoch)
-                            rest = f'build time:{build_datetime} git version:{git_ver32bit:08x}'
-                            if dirty:
+                        rev = decode_git_version(data[1:])
+                        if rev is not None:
+                            rest = f"build time:{rev['build_time']} git version:{rev['rev']:08x}"
+                            if rev['dirty']:
                                 rest += '-DIRTY'
 
                     print(f"({nodeid},{minor}) {type} {SvcProtocol(data[0]).name} {rest}")
@@ -796,7 +417,8 @@ def owSearchRom(req):
                 if not newval:
                     last_zero = bitidx
             elif res == OwResponseCode.eOwSearchResult11:
-                raise "search failed b11"
+                errMsg = f"search failed b11 bitidx:{bitidx} {sensors}"
+                raise Exception(errMsg)
             else:
                 newval = res == OwResponseCode.eOwSearchResult0
 
@@ -861,7 +483,7 @@ def owReadScratchPad(req, t):
 
 
 def owReadTempSingle():
-    t = NodeBus(openBus(), args.id)
+    t = bytcan.NodeBus(bytcan.openBus(args.candev), args.id)
     req = owRequest(t)
 
     owConvert(req)
@@ -878,16 +500,12 @@ def owReadTempSingle():
 
 
 if args.ow_search:
-    t = NodeBus(openBus(), args.id)
+    t = bytcan.NodeBus(bytcan.openBus(args.candev), args.id)
     req = owRequest(t)
     owSearchRom(req)
 
 if args.ow_read_temp_single:
     owReadTempSingle()
-
-
-def owReadTempAll():
-    pass
 
 
 def owMatchRom(req, t, sens):
@@ -914,7 +532,7 @@ def owMatchRom(req, t, sens):
 
 
 if args.ow_read_all:
-    t = NodeBus(openBus(), args.id)
+    t = bytcan.NodeBus(bytcan.openBus(args.candev), args.id)
     req = owRequest(t)
     sensors = owSearchRom(req)
     owConvert(req)
@@ -943,7 +561,7 @@ def test_gpios():
         out = [f'{v:08b}' for v in data]
         print(f"{desc}: {out}")
 
-    trans = NodeBus(openBus(), args.id)
+    trans = bytcan.NodeBus(bytcan.openBus(args.candev), args.id)
 
     def setIoData(portcmd, data):
         rsp = trans.svcTransfer(portcmd, data)
@@ -1013,3 +631,16 @@ def test_gpios():
 
 if args.test_gpios:
     test_gpios()
+
+
+if args.scd41_read_params:
+    sens = core.scd41.SCD41(args.candev, args.id)
+    sens.read_params()
+
+if args.scd41_write_params:
+    temp_offset = float(args.msg[0])
+    altit = int(args.msg[1])
+    sens = core.scd41.SCD41(args.candev, args.id)
+    sens.write_params(temp_offset, altit)
+    time.sleep(1)
+    sens.enable_sm()
