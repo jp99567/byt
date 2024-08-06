@@ -61,6 +61,12 @@ Reku::Reku(IMqttPublisherSPtr mqtt, const char* ttydev)
                     pwm8Exht = f2pwm8(FlowPercent);
                 }
 
+                //leto
+                if(temperature[reku::EXHT].value() > temperature[reku::INTK].value() + 0.1)
+                    bypass = true;
+                else if(temperature[reku::EXHT].value() + 0.1 < temperature[reku::INTK].value()  )
+                    bypass = false;
+
                 control.pwm[reku::INTK] = pwm8;
                 control.pwm[reku::EXHT] = pwm8Exht;
 
