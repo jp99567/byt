@@ -17,10 +17,9 @@ public:
     ~Reku();
     float FlowPercent = 30;
     float FlowExhaustPercent = std::numeric_limits<float>::quiet_NaN();
-    float ByPassTemp = 25;
-    bool bypass = false;
 
 private:
+    bool bypass = false;
     void initFd(const char* ttydev = "/dev/ttyUSB0");
     bool readFrame(reku::RekuTx& recvFrame, struct pollfd& pfd);
     void onNewData(const reku::RekuTx& recvFrame);
