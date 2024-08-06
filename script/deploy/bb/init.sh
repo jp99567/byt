@@ -16,7 +16,12 @@ if config-pin -q 'p9.28'|grep -q 'P9_28 Mode: gpio Direction: out Value: 1'; the
 	config-pin p9.28 low
 	sleep 0.2
 fi
-config-pin p9.28 high
+
+P9_28_CHIP=3
+P9_28_LINE=17
+gpioset --mode=signal $P9_28_CHIP $P9_28_LINE=1 &
+echo $! > /run/gpio_p9_28.pid
+sleep 2
 
 $CONFIGSCRIPT --exit_bootloader --candev can1 --all
 $CONFIGSCRIPT --config --yamlfile config.yaml --candev can1
