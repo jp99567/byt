@@ -11,6 +11,7 @@ SET(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++-12)
 IF(NOT DEFINED ENV{CROSS_ENV_ROOT})
 	MESSAGE(FATAL_ERROR "not defined env CROSS_ENV_ROOT" $ENV{CROSS_ENV_ROOT})
 ENDIF()
+MESSAGE("cross build toolchain bbroot: " $ENV{CROSS_ENV_ROOT})
 
 # where is the target environment
 SET(CMAKE_SYSROOT $ENV{CROSS_ENV_ROOT})

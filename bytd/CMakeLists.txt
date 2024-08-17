@@ -15,10 +15,11 @@ if(Git_FOUND)
     execute_process(
        COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-       RESULT_VARIABLE result
+       RESULT_VARIABLE GIT_COMMAND_RESULT
        OUTPUT_VARIABLE GIT_REV_DESC_STR
        OUTPUT_STRIP_TRAILING_WHITESPACE
     )
+    message("git result: ${GIT_COMMAND_RESULT}")
 endif()
 message("git rev: ${GIT_REV_DESC_STR}")
 configure_file(git_revision_description.h.in inc_generated/git_revision_description.h)
@@ -26,9 +27,9 @@ configure_file(git_revision_description.h.in inc_generated/git_revision_descript
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 set(CMAKE_CXX_FLAGS "-Wall -pthread -Wno-psabi")
 IF(NOT CMAKE_CROSSCOMPILING)
-    include(FindPkgConfig)
-    pkg_check_modules(SYSTEMDDAEMON REQUIRED libsystemd)
-    pkg_check_modules(GPIOD REQUIRED libgpiod)
+	#include(FindPkgConfig)
+	#    pkg_check_modules(SYSTEMDDAEMON REQUIRED libsystemd)
+	#    pkg_check_modules(GPIOD REQUIRED libgpiod)
     option(UTEST "unit tests" FALSE)
     IF(UTEST)
         add_subdirectory(utest)
