@@ -127,19 +127,3 @@ bool CanBus::send(const can_frame& frame)
     return false;
 }
 
-int testapp()
-{
-    boost::asio::io_service io_context;
-    CanBus bus(io_context);
-    bus.setOnRecv([](const can_frame& frame) {
-        LogINFO("recv can frame {:X} {}", frame.can_id, frame.data);
-    });
-    return 0;
-}
-
-#ifdef TESTAPP
-int main()
-{
-    return testapp();
-}
-#endif
