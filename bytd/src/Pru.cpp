@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "hwif.h"
 #include "Log.h"
 #include "pru/rpm_iface.h"
 #include "thread_util.h"
@@ -38,13 +39,13 @@ void PruRxMsg::checkClear()
 
 void Pru::send(const uint8_t* data, std::size_t len)
 {
-#ifndef BYTD_SIMULATOR
+
     auto rv = ::write(fd, data, len);
 
     if((rv < 0) || ((unsigned)rv != len)) {
         LogSYSERR("pru write");
     }
-#else
+
     PruRxMsg::Buf buf(1);
     using namespace pru;
     switch(*reinterpret_cast<const uint32_t*>(data)) {
@@ -60,22 +61,18 @@ void Pru::send(const uint8_t* data, std::size_t len)
         buf[0] = eOtNoResponse;
         break;
     default:
-        throw std::runtime_error("pru simulator");
+        throw std::runtime_error("pru bad rsp code");
         break;
     }
     std::ignore = len;
     respond(buf);
-#endif
 }
 
 Pru::Pru()
 {
-
-#ifndef BYTD_SIMULATOR
-    fd = ::open("/dev/rpmsg_pru30", O_RDWR);
+    fd = hwif::open_pru();
     if(fd < 0)
         LogSYSDIE("open pru");
-#endif
 
     thrd = std::thread([this] {
         thread_util::set_thread_name("bytd-pru");
