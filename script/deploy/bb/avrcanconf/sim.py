@@ -38,42 +38,35 @@ async def signal_handler(scope: CancelScope):
                 print("\nCtrl+C pressed!")
             else:
                 print('Terminated!')
-
-
-            if not vctrl.moving and vctrl.inPosition:
-                with open(last_position_file, "w") as f:
-                    f.write(porty[vctrl.curPort] + "\n")
-                    print(f"stored last position {porty[vctrl.curPort]}")
-
             scope.cancel()
-            return
 
 
 canbus = can.Bus(interface='socketcan', channel='vcan0')
 
 
-def todo():
+def recvCan(send_stream):
     data = canbus.recv()
-    print(f"recv {data}")
-    pass
+    print(f"recv {data}, send stat {send_stream.statistics()}")
+    send_stream.send_nowait(data)
+    print(f"send stat {send_stream.statistics()}")
 
 
-def do_sync_io_multiplex():
+def do_sync_io_multiplex(send_stream):
     canfd = canbus.fileno()
     sel = selectors.DefaultSelector()
     print(f"can  thread {canbus}")
-    sel.register(canfd, selectors.EVENT_READ, todo)
+    sel.register(canfd, selectors.EVENT_READ, recvCan)
     # sel.register(fd2, selectors.EVENT_READ, self.read_pin2)
     while True:
         events = sel.select()
         if events:
             print(f"select events {events}")
             for key, mask in events:
-                key.data()
+                key.data(send_stream)
 
 
-async def start_sync_io_multiplex():
-    await to_thread.run_sync(do_sync_io_multiplex)
+async def start_sync_io_multiplex(send_stream):
+    await to_thread.run_sync(do_sync_io_multiplex, send_stream)
     pass
 
 
@@ -103,13 +96,25 @@ async def start_mqtt(tg):
             print(f"mqtt msg {msg.payload.decode()}")
 
 
+send_stream, recv_stream = anyio.create_memory_object_stream()
+
+
+async def start_recv_obj_stream(recv_stream):
+    print("start_recv_obj_stream")
+    while True:
+        msg = await recv_stream.receive()
+        print(f"from io recv: {msg}")
+
+
 async def main() -> None:
     async with anyio.create_task_group() as tg:
         tg.start_soon(start_mqtt, tg)
         tg.start_soon(signal_handler, tg.cancel_scope)
         tg.start_soon(start_pru_sim_listener)
-        tg.start_soon(start_sync_io_multiplex)
+        tg.start_soon(start_sync_io_multiplex, send_stream)
+        tg.start_soon(start_recv_obj_stream, recv_stream)
 
 
 anyio.run(main)
 os.remove(pru_sim_socket_path)
+print("Simulator finished")
