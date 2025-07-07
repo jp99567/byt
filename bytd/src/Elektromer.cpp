@@ -166,7 +166,7 @@ Vodomer::Vodomer(IMqttPublisher& mqtt)
     : Impulzy("0", 3, mqtt, "vodomer-litre.txt", gpiod::line_request::EVENT_BOTH_EDGES)
 {
     minDeltoToSTore = 10;
-    threadName = "bytd-elektromer";
+    threadName = "bytd-vodomer";
     svc_init();
 }
 
