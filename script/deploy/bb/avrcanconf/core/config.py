@@ -105,7 +105,15 @@ class ClassDigInOutInfo(ClassInfo):
             byte = self.node[i]['addr'][1] + mobSize[canid]['start']
             mask = 1 << self.node[i]['addr'][2]
             pin = pinStr2Num(self.node[i]['pin'])
-            nodebus.svcTransfer(self.initObjCmd, [idx, mobidx, byte, mask, pin])
+            confdata = [idx, mobidx, byte, mask, pin, debounce]
+
+            if self.initObjCmd == SvcProtocol.CmdSetDigINObjParams:
+                debounce = 4
+                if 'debounce' in self.node[i]:
+                    debounce = int(self.node[i]['debounce'])
+                confdata.append(debounce)
+
+            nodebus.svcTransfer(self.initObjCmd, confdata)
             idx += 1
 
     def checkPinConflits(self, isSCD41=False, isSHT11=False, isOw=False):
