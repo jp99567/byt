@@ -105,7 +105,7 @@ class ClassDigInOutInfo(ClassInfo):
             byte = self.node[i]['addr'][1] + mobSize[canid]['start']
             mask = 1 << self.node[i]['addr'][2]
             pin = pinStr2Num(self.node[i]['pin'])
-            confdata = [idx, mobidx, byte, mask, pin, debounce]
+            confdata = [idx, mobidx, byte, mask, pin]
 
             if self.initObjCmd == SvcProtocol.CmdSetDigINObjParams:
                 debounce = 4
