@@ -69,7 +69,7 @@ float Elektromer::calc() const
 }
 
 Elektromer::Elektromer(IMqttPublisher& mqtt)
-    : Impulzy("1", 17, mqtt, "elektromer-kwh.txt", gpiod::line_request::EVENT_RISING_EDGE)
+    : Impulzy("1", 17, mqtt, "elektromer_total_kwh", gpiod::line_request::EVENT_RISING_EDGE)
 {
     threadName = "bytd-elektromer";
     svc_init();
@@ -80,12 +80,19 @@ Elektromer::~Elektromer()
     LogDBG("~Elektromer");
 }
 
+void Impulzy::store()
+{
+    auto v = calc();
+    store(v);
+}
+
 Impulzy::Impulzy(std::string chipname, unsigned int line, IMqttPublisher& mqtt,
     const char* filename, int line_req_type)
     : chipName(chipname)
     , chipLine(line)
     , mqtt(mqtt)
-    , persistFile(filename)
+    , persistFile(std::string(filename).append(".txt"))
+    , mqtt_topic_total(std::string(mqtt::rootStat)+'/'+filename)
     , line_req_type(line_req_type)
 {
     try {
@@ -94,7 +101,9 @@ Impulzy::Impulzy(std::string chipname, unsigned int line, IMqttPublisher& mqtt,
     } catch(const std::exception& e) {
         LogERR("implzy last value not found ({})", persistFile.string());
     }
-    orig = lastStored;
+    if(not std::isnan(lastStored))
+        orig = lastStored;
+    LogINFO("Impulzy {} loaded {}", persistFile.native(), lastStored);
 }
 
 Impulzy::~Impulzy()
@@ -139,12 +148,14 @@ void Impulzy::event(EventType e)
 {
     if(e == EventType::rising) {
         ++impCount;
+        checkStore();
     }
 }
 
 void Impulzy::checkStore()
 {
     auto v = calc();
+    mqtt.publish(mqtt_topic_total, std::to_string(v));
     if(lastStoredTime + std::chrono::hours(1) < Clock::now()
         || std::abs(v - lastStored) > minDeltoToSTore) {
         store(v);
@@ -163,7 +174,7 @@ void Impulzy::store(float val)
 }
 
 Vodomer::Vodomer(IMqttPublisher& mqtt)
-    : Impulzy("0", 3, mqtt, "vodomer-litre.txt", gpiod::line_request::EVENT_BOTH_EDGES)
+    : Impulzy("0", 3, mqtt, "vodomer_total_litre", gpiod::line_request::EVENT_BOTH_EDGES)
 {
     minDeltoToSTore = 10;
     threadName = "bytd-vodomer";

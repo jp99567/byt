@@ -198,6 +198,8 @@ void AppContainer::run()
     ::sd_notify(0, "READY=1");
     io_service.run();
     LogINFO("io service exited");
+    elektomer.store();
+    vodomer.store();
 }
 
 void AppContainer::on1sec()

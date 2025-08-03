@@ -17,7 +17,8 @@ class MqttClient;
 class Impulzy {
     std::string chipName;
     unsigned chipLine = 0;
-
+public:
+    void store();
 protected:
     explicit Impulzy(std::string chipname, unsigned line, IMqttPublisher& mqtt, const char* filename, int line_req_type);
     virtual ~Impulzy();
@@ -39,12 +40,15 @@ protected:
 
 private:
     std::filesystem::path persistFile;
+    std::string mqtt_topic_total;
     float lastStored = std::numeric_limits<float>::quiet_NaN();
     Clock::time_point lastStoredTime;
     const int line_req_type;
     void checkStore();
     virtual float calc() const = 0;
 };
+
+
 
 class Elektromer : public Impulzy {
 public:
