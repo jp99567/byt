@@ -167,7 +167,7 @@ void Impulzy::store(float val)
     if(val != lastStored) {
         lastStored = val;
         std::ofstream f(persistFile);
-        f << lastStored;
+        f << lastStored << std::endl;
         LogINFO("stored value {} to {}", val, persistFile.string());
     }
     lastStoredTime = Clock::now();
@@ -203,9 +203,10 @@ void Vodomer::event(EventType e)
         }
     }
 
+    Impulzy::event(e);
+
     if(e == EventType::rising) {
         LogINFO("vodomer imp rising");
-        ++impCount;
         auto nt = Clock::now();
         lastPeriod = std::chrono::duration_cast<std::chrono::milliseconds>(nt - lastImp);
         lastImp = nt;
@@ -225,7 +226,6 @@ void Vodomer::event(EventType e)
             mqtt.publish("rb/stat/prietok", std::to_string(prietok));
         }
     }
-    Impulzy::event(e);
 }
 
 float Vodomer::calc() const
