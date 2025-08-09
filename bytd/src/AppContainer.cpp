@@ -27,6 +27,23 @@ std::string AppContainer::doRequest(std::string msg)
     } else if(cmd == "rev") {
         rsp = GIT_REV_DESC_STR;
     }
+    else if(cmd == "setNewTotal")
+    {
+        std::string dev;
+        float val;
+        ss >> dev >> val;
+        if(dev == "elektromer"){
+            components.elektromer->setNewValue(val);
+            rsp = "ok";
+        }
+        else if(dev == "vodomer"){
+            components.vodomer->setNewValue(val);
+            rsp = "ok";
+        }
+        else{
+            rsp = "setNewTotal error";
+        }
+    }
     return rsp;
 }
 
@@ -106,8 +123,8 @@ void AppContainer::run()
     builder = nullptr;
     auto meranie = std::make_unique<MeranieTeploty>(pru, std::move(tsensors), *mqtt);
 
-    Elektromer elektomer(*mqtt);
-    Vodomer vodomer(*mqtt);
+    components.elektromer = std::make_unique<Elektromer>(*mqtt);
+    components.vodomer = std::make_unique<Vodomer>(*mqtt);
 
     openTherm->Flame = [this](bool flameOn) {
         if(!flameOn) {
@@ -198,8 +215,8 @@ void AppContainer::run()
     ::sd_notify(0, "READY=1");
     io_service.run();
     LogINFO("io service exited");
-    elektomer.store();
-    vodomer.store();
+    components.elektromer->store();
+    components.vodomer->store();
 }
 
 void AppContainer::on1sec()

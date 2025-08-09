@@ -8,6 +8,7 @@
 #include "MqttDigiOut.h"
 #include "candata.h"
 #include "kurenieHW.h"
+#include "Elektromer.h"
 
 Builder::Builder(IMqttPublisherSPtr mqtt)
     : config(YAML::LoadFile("config.yaml"))

@@ -86,6 +86,13 @@ void Impulzy::store()
     store(v);
 }
 
+void Impulzy::setNewValue(float newVal)
+{
+    impCount = 0;
+    orig = newVal;
+    store(newVal);
+}
+
 Impulzy::Impulzy(std::string chipname, unsigned int line, IMqttPublisher& mqtt,
     const char* filename, int line_req_type)
     : chipName(chipname)

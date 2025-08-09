@@ -19,9 +19,10 @@ class Impulzy {
     unsigned chipLine = 0;
 public:
     void store();
+    void setNewValue(float newVal);
+    virtual ~Impulzy();
 protected:
     explicit Impulzy(std::string chipname, unsigned line, IMqttPublisher& mqtt, const char* filename, int line_req_type);
-    virtual ~Impulzy();
     void store(float val);
     std::thread t;
     bool active = true;
