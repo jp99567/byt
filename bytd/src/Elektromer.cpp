@@ -205,7 +205,7 @@ void Vodomer::event(EventType e)
     if(e != EventType::timeout) {
         auto check_debounce = std::chrono::duration_cast<std::chrono::milliseconds>(nt - lastChangeDebounced);
         lastChangeDebounced = nt;
-        if(check_debounce < std::chrono::milliseconds(100)) {
+        if(check_debounce < std::chrono::milliseconds(400)) {
             return;
         }
     }
