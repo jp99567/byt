@@ -94,13 +94,14 @@ void Impulzy::setNewValue(float newVal)
 }
 
 Impulzy::Impulzy(std::string chipname, unsigned int line, IMqttPublisher& mqtt,
-    const char* filename, int line_req_type)
+    const char* filename, int line_req_type, int timeout_ms)
     : chipName(chipname)
     , chipLine(line)
     , mqtt(mqtt)
     , persistFile(std::string(filename).append(".txt"))
     , mqtt_topic_total(std::string(mqtt::rootStat)+'/'+filename)
     , line_req_type(line_req_type)
+    ,timeout(std::chrono::nanoseconds((uint64_t)(1e6*timeout_ms)))
 {
     try {
         std::ifstream f(persistFile);
@@ -137,8 +138,7 @@ void Impulzy::svc_init()
             LogINFO("impulze imp pin reqeusted: {} ({})", impin.name(), impin.get_value());
 
             while(active) {
-                constexpr unsigned long long toutns = 1e9;
-                if(impin.event_wait(std::chrono::nanoseconds(toutns))) {
+                if(impin.event_wait(std::chrono::nanoseconds(timeout))) {
                     event(impin.event_read().event_type == gpiod::line_event::RISING_EDGE ? EventType::rising : EventType::falling);
                 } else {
                     event(EventType::timeout);
@@ -181,7 +181,7 @@ void Impulzy::store(float val)
 }
 
 Vodomer::Vodomer(IMqttPublisher& mqtt)
-    : Impulzy("0", 3, mqtt, "vodomer_total_litre", gpiod::line_request::EVENT_BOTH_EDGES)
+    : Impulzy("0", 3, mqtt, "vodomer_total_litre", gpiod::line_request::EVENT_BOTH_EDGES, 400)
 {
     minDeltoToSTore = 10;
     threadName = "bytd-vodomer";
@@ -201,12 +201,20 @@ constexpr std::chrono::milliseconds intervalMax((unsigned)(((1/imp_per_liter) / 
 
 void Vodomer::event(EventType e)
 {
-    auto nt = Clock::now();
-    if(e != EventType::timeout) {
-        auto check_debounce = std::chrono::duration_cast<std::chrono::milliseconds>(nt - lastChangeDebounced);
-        lastChangeDebounced = nt;
-        if(check_debounce < std::chrono::milliseconds(400)) {
-            return;
+    if( e != lastDebugEvent)
+    {
+        LogDBG("vodomer event {}", (int)e);
+    }
+    lastDebugEvent = e;
+
+    if( e != EventType::timeout){
+        lastEvent = e;
+        return;
+    }
+    else{
+        if(lastEvent != lastValidEvent){
+            lastValidEvent = lastEvent;
+            e = lastValidEvent;
         }
     }
 

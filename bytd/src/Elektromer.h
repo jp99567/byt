@@ -22,15 +22,15 @@ public:
     void setNewValue(float newVal);
     virtual ~Impulzy();
 protected:
-    explicit Impulzy(std::string chipname, unsigned line, IMqttPublisher& mqtt, const char* filename, int line_req_type);
+    explicit Impulzy(std::string chipname, unsigned line, IMqttPublisher& mqtt, const char* filename, int line_req_type, int timeout_ms=1000);
     void store(float val);
     std::thread t;
     bool active = true;
     using Clock = std::chrono::steady_clock;
     Clock::time_point lastImp = Clock::time_point::min();
-    enum class EventType { rising,
-        falling,
-        timeout };
+    enum class EventType { rising = 1,
+        falling = 0,
+        timeout = 2};
     void svc_init();
     std::string threadName = "bytd-noname";
     unsigned impCount = 0;
@@ -47,6 +47,7 @@ private:
     const int line_req_type;
     void checkStore();
     virtual float calc() const = 0;
+    const std::chrono::nanoseconds timeout;
 };
 
 
@@ -74,7 +75,9 @@ public:
 private:
     void event(EventType) override;
     std::chrono::milliseconds lastPeriod = std::chrono::milliseconds::max();
-    Clock::time_point lastChangeDebounced = Clock::time_point::min();
+    EventType lastValidEvent = EventType::rising;
+    EventType lastEvent = EventType::rising;
+    EventType lastDebugEvent = EventType::rising;
     float calc() const override;
     float prietok = 0;
 };
