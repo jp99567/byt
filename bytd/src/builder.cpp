@@ -266,6 +266,7 @@ void Builder::vypinace(boost::asio::io_service& io_context)
     auto vypinacKupelka = std::make_unique<VypinacDuoWithLongPress>(io_context);
     auto vypinacZadverie = std::make_unique<VypinacDuoWithLongPress>(io_context);
     auto vypinacKuchyna = std::make_unique<VypinacDuoSimple>();
+    auto vypinacLinka = std::make_unique<VypinacDuoSimple>();
     auto vypinacChodbicka = std::make_unique<VypinacDuoSimple>();
     auto vypinacIzba = std::make_unique<VypinacSingle>(io_context);
     auto vypinacSpalna = std::make_unique<VypinacSingle>(io_context);
@@ -289,6 +290,11 @@ void Builder::vypinace(boost::asio::io_service& io_context)
     assignVypinavButton(*vypinacKuchyna, VypinacDuo::Button::LD, getDigInputByName(digInputs, "buttonKuchyna1LD"));
     assignVypinavButton(*vypinacKuchyna, VypinacDuo::Button::RU, getDigInputByName(digInputs, "buttonKuchyna1RU"));
     assignVypinavButton(*vypinacKuchyna, VypinacDuo::Button::RD, getDigInputByName(digInputs, "buttonKuchyna1RD"));
+
+    assignVypinavButton(*vypinacLinka, VypinacDuo::Button::LU, getDigInputByName(digInputs, "buttonKuchyna2LU"));
+    assignVypinavButton(*vypinacLinka, VypinacDuo::Button::LD, getDigInputByName(digInputs, "buttonKuchyna2LD"));
+    assignVypinavButton(*vypinacLinka, VypinacDuo::Button::RU, getDigInputByName(digInputs, "buttonKuchyna2RU"));
+    assignVypinavButton(*vypinacLinka, VypinacDuo::Button::RD, getDigInputByName(digInputs, "buttonKuchyna2RD"));
 
     assignVypinavButton(*vypinacIzba, VypinacSingle::Button::U, getDigInputByName(digInputs, "buttonIzbaU"));
     assignVypinavButton(*vypinacIzba, VypinacSingle::Button::D, getDigInputByName(digInputs, "buttonIzbaD"));
@@ -335,6 +341,7 @@ void Builder::vypinace(boost::asio::io_service& io_context)
     components.vypinaceDuo.emplace_back(std::move(vypinacKupelka));
     components.vypinaceDuo.emplace_back(std::move(vypinacZadverie));
     components.vypinaceDuo.emplace_back(std::move(vypinacKuchyna));
+    components.vypinaceDuo.emplace_back(std::move(vypinacLinka));
     components.vypinaceDuo.emplace_back(std::move(vypinacChodbicka));
 
     components.vypinaceSingle.emplace_back(std::move(vypinacIzba));
