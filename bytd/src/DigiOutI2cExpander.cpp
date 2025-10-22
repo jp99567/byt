@@ -1,5 +1,7 @@
 #include "DigiOutI2cExpander.h"
 
+#include <stdexcept>
+
 DigiOutI2cExpander::DigiOutI2cExpander(slowswi2cpwm& ioexpander, int idx)
     : ioexpander(ioexpander)
 {
