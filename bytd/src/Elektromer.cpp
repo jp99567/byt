@@ -25,6 +25,21 @@ constexpr double calcPwr(std::chrono::milliseconds ms)
 
 }
 
+ImpulzyBase::ImpulzyBase(IMqttPublisher &mqtt, const char *filename)
+    : mqtt(mqtt)
+    , persistFile(filename)
+{
+    try {
+        std::ifstream f(persistFile);
+        f >> lastStored;
+    } catch(const std::exception& e) {
+        LogERR("implzy last value not found ({})", persistFile.string());
+    }
+    if(not std::isnan(lastStored))
+        orig = lastStored;
+    LogINFO("Impulzy {} loaded {}", persistFile.native(), lastStored);
+}
+
 double Elektromer::getPowerCur() const
 {
     if(lastPeriod == std::chrono::milliseconds::max())
@@ -80,13 +95,13 @@ Elektromer::~Elektromer()
     LogDBG("~Elektromer");
 }
 
-void Impulzy::store()
+void ImpulzyBase::store()
 {
     auto v = calc();
     store(v);
 }
 
-void Impulzy::setNewValue(float newVal)
+void ImpulzyBase::setNewValue(float newVal)
 {
     impCount = 0;
     orig = newVal;
@@ -95,23 +110,12 @@ void Impulzy::setNewValue(float newVal)
 
 Impulzy::Impulzy(std::string chipname, unsigned int line, IMqttPublisher& mqtt,
     const char* filename, int line_req_type, int timeout_ms)
-    : chipName(chipname)
+    : ImpulzyBase(mqtt, filename)
+    , chipName(chipname)
     , chipLine(line)
-    , mqtt(mqtt)
-    , persistFile(std::string(filename).append(".txt"))
-    , mqtt_topic_total(std::string(mqtt::rootStat)+'/'+filename)
     , line_req_type(line_req_type)
-    ,timeout(std::chrono::nanoseconds((uint64_t)(1e6*timeout_ms)))
+    , timeout(std::chrono::nanoseconds((uint64_t)(1e6*timeout_ms)))
 {
-    try {
-        std::ifstream f(persistFile);
-        f >> lastStored;
-    } catch(const std::exception& e) {
-        LogERR("implzy last value not found ({})", persistFile.string());
-    }
-    if(not std::isnan(lastStored))
-        orig = lastStored;
-    LogINFO("Impulzy {} loaded {}", persistFile.native(), lastStored);
 }
 
 Impulzy::~Impulzy()
@@ -151,7 +155,7 @@ void Impulzy::svc_init()
     });
 }
 
-void Impulzy::event(EventType e)
+void ImpulzyBase::event(EventType e)
 {
     if(e == EventType::rising) {
         ++impCount;
@@ -159,7 +163,7 @@ void Impulzy::event(EventType e)
     }
 }
 
-void Impulzy::checkStore()
+void ImpulzyBase::checkStore()
 {
     auto v = calc();
     mqtt.publish(mqtt_topic_total, std::to_string(v));
@@ -169,7 +173,7 @@ void Impulzy::checkStore()
     }
 }
 
-void Impulzy::store(float val)
+void ImpulzyBase::store(float val)
 {
     if(val != lastStored) {
         lastStored = val;
@@ -218,7 +222,7 @@ void Vodomer::event(EventType e)
         }
     }
 
-    Impulzy::event(e);
+    ImpulzyBase::event(e);
 
     if(e == EventType::rising) {
         LogINFO("vodomer imp rising");

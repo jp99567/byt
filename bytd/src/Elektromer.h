@@ -14,39 +14,48 @@
 
 class MqttClient;
 
-class Impulzy {
-    std::string chipName;
-    unsigned chipLine = 0;
+class ImpulzyBase
+{
 public:
-    void store();
     void setNewValue(float newVal);
-    virtual ~Impulzy();
+    void store();
 protected:
-    explicit Impulzy(std::string chipname, unsigned line, IMqttPublisher& mqtt, const char* filename, int line_req_type, int timeout_ms=1000);
-    void store(float val);
-    std::thread t;
-    bool active = true;
+    explicit ImpulzyBase(IMqttPublisher& mqtt, const char* filename);
+    virtual ~ImpulzyBase() { }
+    IMqttPublisher& mqtt;
     using Clock = std::chrono::steady_clock;
     Clock::time_point lastImp = Clock::time_point::min();
     enum class EventType { rising = 1,
         falling = 0,
         timeout = 2};
-    void svc_init();
-    std::string threadName = "bytd-noname";
-    unsigned impCount = 0;
-    virtual void event(EventType);
-    IMqttPublisher& mqtt;
     float orig = 0;
     float minDeltoToSTore = 1;
-
+    unsigned impCount = 0;
+    virtual void event(EventType);
+    void store(float val);
 private:
     std::filesystem::path persistFile;
     std::string mqtt_topic_total;
     float lastStored = std::numeric_limits<float>::quiet_NaN();
     Clock::time_point lastStoredTime;
-    const int line_req_type;
     void checkStore();
     virtual float calc() const = 0;
+};
+
+class Impulzy : public ImpulzyBase {
+public:
+    ~Impulzy() override;
+protected:
+    explicit Impulzy(std::string chipname, unsigned line, IMqttPublisher& mqtt, const char* filename, int line_req_type, int timeout_ms=1000);
+    std::thread t;
+    bool active = true;
+    void svc_init();
+    std::string threadName = "bytd-noname";
+
+private:
+    std::string chipName;
+    unsigned chipLine = 0;
+    const int line_req_type;
     const std::chrono::nanoseconds timeout;
 };
 
