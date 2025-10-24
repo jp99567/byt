@@ -9,7 +9,7 @@ Plynomer::Plynomer(IMqttPublisher& mqtt, DigInput& digIn)
     }));
 }
 
-constexpr double imp_per_m3 = 0.01;
+constexpr double imp_per_m3 = 100;
 
 float Plynomer::calc() const
 {
