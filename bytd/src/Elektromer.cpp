@@ -9,7 +9,6 @@
 #include "IMqttPublisher.h"
 #include "Log.h"
 #include "thread_util.h"
-#include <fstream>
 #include <gpiod.hpp>
 
 namespace {
@@ -23,21 +22,6 @@ constexpr double calcPwr(std::chrono::milliseconds ms)
     return kw * 1e3;
 }
 
-}
-
-ImpulzyBase::ImpulzyBase(IMqttPublisher &mqtt, const char *filename)
-    : mqtt(mqtt)
-    , persistFile(filename)
-{
-    try {
-        std::ifstream f(persistFile);
-        f >> lastStored;
-    } catch(const std::exception& e) {
-        LogERR("implzy last value not found ({})", persistFile.string());
-    }
-    if(not std::isnan(lastStored))
-        orig = lastStored;
-    LogINFO("Impulzy {} loaded {}", persistFile.native(), lastStored);
 }
 
 double Elektromer::getPowerCur() const
@@ -95,19 +79,6 @@ Elektromer::~Elektromer()
     LogDBG("~Elektromer");
 }
 
-void ImpulzyBase::store()
-{
-    auto v = calc();
-    store(v);
-}
-
-void ImpulzyBase::setNewValue(float newVal)
-{
-    impCount = 0;
-    orig = newVal;
-    store(newVal);
-}
-
 Impulzy::Impulzy(std::string chipname, unsigned int line, IMqttPublisher& mqtt,
     const char* filename, int line_req_type, int timeout_ms)
     : ImpulzyBase(mqtt, filename)
@@ -153,35 +124,6 @@ void Impulzy::svc_init()
             return;
         }
     });
-}
-
-void ImpulzyBase::event(EventType e)
-{
-    if(e == EventType::rising) {
-        ++impCount;
-        checkStore();
-    }
-}
-
-void ImpulzyBase::checkStore()
-{
-    auto v = calc();
-    mqtt.publish(mqtt_topic_total, std::to_string(v));
-    if(lastStoredTime + std::chrono::hours(1) < Clock::now()
-        || std::abs(v - lastStored) > minDeltoToSTore) {
-        store(v);
-    }
-}
-
-void ImpulzyBase::store(float val)
-{
-    if(val != lastStored) {
-        lastStored = val;
-        std::ofstream f(persistFile);
-        f << lastStored << std::endl;
-        LogINFO("stored value {} to {}", val, persistFile.string());
-    }
-    lastStoredTime = Clock::now();
 }
 
 Vodomer::Vodomer(IMqttPublisher& mqtt)

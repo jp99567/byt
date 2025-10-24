@@ -6,47 +6,13 @@
  */
 #pragma once
 
-#include "bytd/src/IMqttPublisher.h"
-#include <chrono>
-#include <filesystem>
-#include <string>
 #include <thread>
-
-class MqttClient;
-
-class ImpulzyBase
-{
-public:
-    void setNewValue(float newVal);
-    void store();
-protected:
-    explicit ImpulzyBase(IMqttPublisher& mqtt, const char* filename);
-    virtual ~ImpulzyBase() { }
-    IMqttPublisher& mqtt;
-    using Clock = std::chrono::steady_clock;
-    Clock::time_point lastImp = Clock::time_point::min();
-    enum class EventType { rising = 1,
-        falling = 0,
-        timeout = 2};
-    float orig = 0;
-    float minDeltoToSTore = 1;
-    unsigned impCount = 0;
-    virtual void event(EventType);
-    void store(float val);
-private:
-    std::filesystem::path persistFile;
-    std::string mqtt_topic_total;
-    float lastStored = std::numeric_limits<float>::quiet_NaN();
-    Clock::time_point lastStoredTime;
-    void checkStore();
-    virtual float calc() const = 0;
-};
+#include "ImpulzyBase.h"
 
 class Impulzy : public ImpulzyBase {
-public:
-    ~Impulzy() override;
 protected:
     explicit Impulzy(std::string chipname, unsigned line, IMqttPublisher& mqtt, const char* filename, int line_req_type, int timeout_ms=1000);
+    ~Impulzy() override;
     std::thread t;
     bool active = true;
     void svc_init();
@@ -58,8 +24,6 @@ private:
     const int line_req_type;
     const std::chrono::nanoseconds timeout;
 };
-
-
 
 class Elektromer : public Impulzy {
 public:
