@@ -5,7 +5,8 @@
 
 ImpulzyBase::ImpulzyBase(IMqttPublisher &mqtt, const char *filename)
     : mqtt(mqtt)
-    , persistFile(filename)
+    , persistFile(std::string(filename).append(".txt"))
+    , mqtt_topic_total(std::string(mqtt::rootStat)+'/'+filename)
 {
     try {
         std::ifstream f(persistFile);
@@ -15,6 +16,7 @@ ImpulzyBase::ImpulzyBase(IMqttPublisher &mqtt, const char *filename)
     }
     if(not std::isnan(lastStored))
         orig = lastStored;
+    lastStoredTime = Clock::now();
     LogINFO("Impulzy {} loaded {}", persistFile.native(), lastStored);
 }
 
