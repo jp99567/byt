@@ -9,6 +9,7 @@
 #include "candata.h"
 #include "kurenieHW.h"
 #include "Elektromer.h"
+#include "Plynomer.h"
 
 Builder::Builder(IMqttPublisherSPtr mqtt)
     : config(YAML::LoadFile("config.yaml"))
@@ -349,6 +350,7 @@ void Builder::vypinace(boost::asio::io_service& io_context)
 
     components.brana = std::make_unique<MonoStableDev>(getDigOutputByName(digiOutputs, "brana"), "Brana", mqtt, io_context, 0.25);
     components.dverePavlac = std::make_unique<MonoStableDev>(getDigOutputByName(digiOutputs, "dverePavlac"), "DverePavlac", mqtt, io_context, 2);
+    components.plynomer = std::make_unique<Plynomer>(*mqtt, getDigInputByName(digInputs, "plynImp"));
 }
 
 AppComponents Builder::getComponents()

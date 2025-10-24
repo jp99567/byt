@@ -40,6 +40,10 @@ std::string AppContainer::doRequest(std::string msg)
             components.vodomer->setNewValue(val);
             rsp = "ok";
         }
+        else if(dev == "plynomer"){
+            components.plynomer->setNewValue(val);
+            rsp = "ok";
+        }
         else{
             rsp = "setNewTotal error";
         }

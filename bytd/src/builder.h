@@ -21,7 +21,7 @@ namespace gpiod {
 class chip;
 }
 class OpenTherm;
-class Impulzy;
+class ImpulzyBase;
 
 struct AppComponents {
     VypinaceDuoList vypinaceDuo;
@@ -34,8 +34,9 @@ struct AppComponents {
     std::unique_ptr<Pumpa> pumpa;
     std::unique_ptr<kurenie::Kurenie> kurenie;
     std::unique_ptr<Ventil4w> ventil;
-    std::unique_ptr<Impulzy> elektromer;
-    std::unique_ptr<Impulzy> vodomer;
+    std::unique_ptr<ImpulzyBase> elektromer;
+    std::unique_ptr<ImpulzyBase> vodomer;
+    std::unique_ptr<ImpulzyBase> plynomer;
 };
 
 class Builder {
