@@ -63,6 +63,7 @@ struct DigIN_Obj : Dig_Obj
 	{
 		Dig_Obj::setParams(msg);
 		setDigOut(pin, true); // pull up
+		debounce = msg[6];
 	}
 	uint8_t debounce = 3;
 	uint8_t consecutive = 0;

@@ -60,6 +60,16 @@ NodeCAN:
         buttonKupelna1D: { addr: [ 0x117, 0, 1 ], pin: PA7 }
         buttonKupelna2U: { addr: [ 0x117, 0, 2 ], pin: PA6 }
         buttonKupelna2D: { addr: [ 0x117, 0, 3 ], pin: PC7 }
+  Kuchyna:
+      id: 10
+      DigIN:
+        buttonKuchyna2LU: { addr: [ 0x11C, 0, 0 ], pin: PA7 }
+        buttonKuchyna2LD: { addr: [ 0x11C, 0, 1 ], pin: PA6 }
+        buttonKuchyna2RU: { addr: [ 0x11C, 0, 2 ], pin: PC7 }
+        buttonKuchyna2RD: { addr: [ 0x11C, 0, 3 ], pin: PG2 }
+        plynImp: { addr: [ 0x11C, 0, 4 ], pin: PA1 }
+      DigOUT:
+        linkaLedStrip: { addr: [ 0x11D, 0, 0 ], pin: PE3 }
 
 BBOw:
   tBoiler: { owRomCode : 284b7a0a06000089 }

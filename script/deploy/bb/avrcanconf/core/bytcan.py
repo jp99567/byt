@@ -41,6 +41,9 @@ class NodeBus:
         self.canid = canIdFromNodeId(nodeid)
         self.nodeid = nodeid
 
+    def __del__(self):
+        self.bus.shutdown()
+
     def svcTransfer(self, cmd, data=None):
         if self.canid == canid_bcast:
             return self.svcTransferBroadcast(cmd, data)

@@ -65,7 +65,7 @@ private:
     IMqttPublisherSPtr mqtt;
     uint16_t status = 0;
     opentherm::Frame asyncReq;
-    Mode mode = Mode::LETO;
+    Mode mode = Mode::ZIMA;
     SimpleSensor tCH;
     SimpleSensor tDHW;
 };
