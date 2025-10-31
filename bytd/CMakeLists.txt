@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Threads REQUIRED)
 find_package(Boost COMPONENTS system REQUIRED)
-find_package(PostgreSQL REQUIRED)
 #find_package(mosquittopp REQUIRED)
 
 option(SIMULATOR "connected to test interfaces" HOST )
@@ -41,11 +40,8 @@ ENDIF()
 file(GLOB_RECURSE SRC_CPP src/*.cpp)
 file(GLOB_RECURSE SRC_HEADERS src/*.h)
 add_executable(${PROJECT_NAME} ${SRC_CPP} ${SRC_HEADERS})
-#add_executable(testapp canbus.cpp Log.cpp canbus.h Log.h )
-#target_compile_definitions(testapp PUBLIC TESTAPP)
-target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system PostgreSQL::PostgreSQL systemd gpiodcxx rt mosquittopp yaml-cpp stdc++fs)
+target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system systemd gpiodcxx rt mosquittopp yaml-cpp stdc++fs)
 target_include_directories(${PROJECT_NAME} PRIVATE
-    ${PostgreSQL_INCLUDE_DIRS}
     ${CMAKE_SYSROOT}/usr/local/include
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_BINARY_DIR}/inc_generated
