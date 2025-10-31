@@ -10,6 +10,8 @@ find_package(Boost COMPONENTS system REQUIRED)
 find_package(PostgreSQL REQUIRED)
 #find_package(mosquittopp REQUIRED)
 
+option(SIMULATOR "connected to test interfaces" HOST )
+
 find_package(Git REQUIRED)
 if(Git_FOUND)
     execute_process(
@@ -51,7 +53,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 #set(CMAKE_CXX_FLAGS_RELEASE "-O2 -flto")
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
+IF(SIMULATOR)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC BYTD_SIMULATOR)
+ENDIF()
 IF(NOT CMAKE_CROSSCOMPILING)
     target_link_libraries(${PROJECT_NAME} fmt)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC BYTD_SIMULATOR)
 ENDIF()
