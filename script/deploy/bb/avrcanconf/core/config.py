@@ -1,3 +1,5 @@
+from fontTools.otlLib.builder import ClassPairPosSubtableBuilder
+
 import core.bytcan
 import yaml
 import enum
@@ -30,6 +32,10 @@ class SvcProtocol(enum.IntEnum):
     CmdSetSHT11Params = enum.auto()
     CmdSCD41Test = enum.auto()
     CmdFlushAll = enum.auto()
+    CmdSetAllocCounts2 = enum.auto()
+    CmdGetAllocCounts2 = enum.auto()
+    CmdSetPwm16At90Params = enum.auto()
+    CmdSetPwm16At90ChannelParams = enum.auto()
     CmdStatus = ord('s')
     CmdInvalid = ord('X')
 
@@ -44,12 +50,19 @@ class ClassInfo:
     def __init__(self, node):
         self.node = node
 
-    def info(self):
-        count = len(self.node.keys())
+    def itemsDictNode(self):
+        return self.node
+
+    def infoItems(self):
+        count = len(self.itemsDictNode().keys())
         ids = set()
-        for i in self.node.keys():
-            ids.add(self.node[i]['addr'][0])
+        for i in self.itemsDictNode().keys():
+            ids.add(self.itemsDictNode()[i]['addr'][0])
         return {'ids': ids, 'count': count}
+
+    def info(self):
+        errmsg = f"info {self.node}"
+        raise NotImplementedError(errmsg)
 
     def initNodeObject(self, nodebus, mobs, mobSize):
         errmsg = f"initNodeObject {self.node}"
@@ -78,6 +91,17 @@ def pinStr2Num(pin):
         raise Exception(f"invalid pin {pin} out of range")
     return portidx * 8 + bitidx
 
+def pinStr2Pwm16CHannel(pin):
+    pin = pin.upper()
+    if pin == 'PE3':
+        return 0
+    if pin == 'PE4':
+        return 1
+    if pin == 'PE5':
+        return 2
+    errmsg = f"pin identificator {pin} is not associated with any pwm channel"
+    raise RuntimeError(errmsg)
+
 
 class ClassDigInOutInfo(ClassInfo):
     def __init__(self, node, initCmd):
@@ -85,7 +109,7 @@ class ClassDigInOutInfo(ClassInfo):
         self.initObjCmd = initCmd
 
     def info(self):
-        inf = ClassInfo.info(self)
+        inf = ClassInfo.infoItems(self)
         items = {}
         for i in self.node.keys():
             canid = self.node[i]['addr'][0]
@@ -131,20 +155,22 @@ class ClassDigInOutInfo(ClassInfo):
                 errmsg = f"pin conflict {pin}"
                 raise RuntimeError(errmsg)
 
-
-class ClassOwtInfo(ClassInfo):
+class Class16BitBaseInfo(ClassInfo):
     def info(self):
-        inf = ClassInfo.info(self)
+        inf = ClassInfo.infoItems(self)
+
         items = {}
-        for i in self.node.keys():
-            canid = self.node[i]['addr'][0]
+        for i in self.itemsDictNode().keys():
+            canid = self.itemsDictNode()[i]['addr'][0]
             if canid not in items:
                 items[canid] = []
-            byte = self.node[i]['addr'][1]
+            byte = self.itemsDictNode()[i]['addr'][1]
             items[canid].append([8 * byte, 16])
         inf['items'] = items
         return inf
 
+
+class ClassOwtInfo(Class16BitBaseInfo):
     def initNodeObject(self, nodebus, mobs, mobSize):
         idx = 0
         for i in self.node.keys():
@@ -188,6 +214,27 @@ class ClassSensorionSHT11Info(ClassSensorionInfo):
         self.initNodeObjectSensorion(nodebus, mobs, mobSize, SvcProtocol.CmdSetSHT11Params)
 
 
+class ClassPwm16At90Info(Class16BitBaseInfo):
+    def itemsDictNode(self):
+        return self.node['channels']
+
+    def initNodeObject(self, nodebus, mobs, mobSize):
+        params = self.node['params']
+        data = pack('BH', int(params['prescaler']), int(params['top']))
+        nodebus.svcTransfer(SvcProtocol.CmdSetPwm16At90Params, data)
+
+        channels = self.node['channels']
+        idx = 0
+        for i in channels.keys():
+            canid = channels[i]['addr'][0]
+            mobidx = mobs.index(canid)
+            byte = channels[i]['addr'][1] + mobSize[canid]['start']
+            pwmidx = pinStr2Pwm16CHannel(channels[i]['pin'])
+            confdata = [idx, mobidx, byte, pwmidx]
+            nodebus.svcTransfer(SvcProtocol.CmdSetPwm16At90ChannelParams, confdata)
+            idx += 1
+
+
 def buildClassInfo(trieda, node):
     if trieda == 'DigIN':
         return ClassDigInOutInfo(node, SvcProtocol.CmdSetDigINObjParams)
@@ -199,6 +246,8 @@ def buildClassInfo(trieda, node):
         return ClassSensorionSCD41Info(node)
     elif trieda == 'SensorionSHT11':
         return ClassSensorionSHT11Info(node)
+    elif trieda == 'Pwm16At90':
+        return ClassPwm16At90Info(node)
     else:
         return None
 
@@ -226,7 +275,7 @@ class ConfigNode:
             else:
                 self.triedyNr[trieda] = 0
 
-        for trieda in ('DigOUT',):
+        for trieda in ('DigOUT', 'Pwm16At90'):
             if trieda in node:
                 triedaInfo = buildClassInfo(trieda, node[trieda])
                 info = triedaInfo.info()
@@ -299,6 +348,10 @@ class ConfigNode:
                            len(self.inputCanIds),
                            len(self.canmobsList),
                            features])
+
+        if self.triedyNr['Pwm16At90'] > 0:
+            trans.svcTransfer(SvcProtocol.CmdSetAllocCounts2,
+                          [self.triedyNr['Pwm16At90']])
 
         trans.svcTransfer(SvcProtocol.CmdSetStage, [NodeStage.stage2.value])
 

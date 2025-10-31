@@ -11,6 +11,7 @@
 #include "clock.h"
 #include "sht11_sm.h"
 #include "scd4x_sm.h"
+#include "pwm16_at90.h"
 
 uint32_t gCounter;
 uint8_t gEvents;
@@ -73,6 +74,11 @@ struct OwT_Obj : Base_Obj
 {
 };
 
+struct Pwm16At90_Obj : Base_Obj
+{
+	Pwm16At90::Channel ch;
+};
+
 enum Features : int8_t {
 	eFeatureSCD41 = (1<<0),
 	eFeatureSHT11 = (1<<1)
@@ -85,6 +91,7 @@ static uint8_t gIOData_count;
 static uint8_t gMobFirstTx;
 static uint8_t gMobCount;
 static uint8_t gFeatures;
+static uint8_t gPwm16At90_count;
 
 struct SHT11_Obj;
 struct SCD41_Obj;
@@ -94,6 +101,7 @@ OwT_Obj* gOwT_Obj;
 ow::RomData* gOwTempSensors;
 SCD41_Obj* gSCD41_Obj;
 SHT11_Obj* gSHT11_Obj;
+Pwm16At90_Obj* gPwm16At90_Obj;
 uint8_t* gIOData;
 uint8_t* gMobEndIdx;
 uint16_t gMobMarkedTx;
@@ -263,6 +271,14 @@ void svc(bool broadcast) {
 		svc_msg[svc_msglen++] = gMobCount;
 		svc_msg[svc_msglen++] = gFeatures;
 		break;
+	case Svc::Protocol::CmdSetAllocCounts2:
+		gPwm16At90_count = svc_msg[1];
+		svc_msglen = 1;
+		break;
+	case Svc::Protocol::CmdGetAllocCounts2:
+		svc_msglen = 1;
+		svc_msg[svc_msglen++] = gPwm16At90_count;
+		break;
 	case Svc::Protocol::CmdSetStage:
 	{
 		const auto newStage = svc_msg[1];
@@ -306,6 +322,24 @@ void svc(bool broadcast) {
 		}
 		svc_msg[1] = obj.crc;
 		svc_msglen = 2;
+	}
+		break;
+	case Svc::Protocol::CmdSetPwm16At90Params:
+	{
+		uint8_t prescaler = svc_msg[1];
+		uint16_t top = *reinterpret_cast<const uint16_t*>(&svc_msg[2]);
+		Pwm16At90::init(prescaler, top);
+		svc_msglen = 1;
+	}
+		break;
+	case Svc::Protocol::CmdSetPwm16At90ChannelParams:
+	{
+		auto& obj = gPwm16At90_Obj[svc_msg[1]];
+		obj.mobIdx = svc_msg[2];
+		obj.iodataIdx = svc_msg[3];
+		obj.ch = (Pwm16At90::Channel)svc_msg[4];
+		Pwm16At90::enableOut(obj.ch);
+		svc_msglen = 1;
 	}
 		break;
 	case Svc::Protocol::CmdSetDigINObjParams:
@@ -613,6 +647,13 @@ void iterateOutputObjs(uint8_t mobidx)
 			setDigOut(obj.pin, v);
 		}
 	}
+	for(int i=0; i<gPwm16At90_count; ++i){
+		auto& obj = gPwm16At90_Obj[i];
+		if(mobidx == obj.mobIdx){
+			auto v = *reinterpret_cast<const uint16_t*>(&gIOData[obj.iodataIdx]);
+			Pwm16At90::setPwm(obj.ch, v);
+		}
+	}
 }
 
 void onTimer16s7()
@@ -771,7 +812,8 @@ int main() {
 		  + gOwT_count * sizeof(OwT_Obj)
 		  + sizeOfOwT()
 		  + sizeOfSCD41()
-		  + sizeOfSHT11();
+		  + sizeOfSHT11()
+		  + gPwm16At90_count * sizeof(Pwm16At90_Obj);
 
 	uint8_t allocGData[allocSize];
 	uint8_t* ptr = allocGData;
@@ -799,6 +841,9 @@ int main() {
 	ptr += sizeOfSCD41();
 
 	gSHT11_Obj = (SHT11_Obj*)ptr;
+	ptr += sizeOfSHT11();
+
+	gPwm16At90_Obj = (Pwm16At90_Obj*)ptr;
 
 	if(gFeatures & eFeatureSHT11){
 		sht11::enable();

@@ -68,8 +68,10 @@ NodeCAN:
         buttonKuchyna2RU: { addr: [ 0x11C, 0, 2 ], pin: PC7 }
         buttonKuchyna2RD: { addr: [ 0x11C, 0, 3 ], pin: PG2 }
         plynImp: { addr: [ 0x11C, 0, 4 ], pin: PA1 }
-      DigOUT:
-        linkaLedStrip: { addr: [ 0x11D, 0, 0 ], pin: PE3 }
+      Pwm16At90:
+        params: {top: 31999, prescaler: 1}
+        channels:
+          linkaLedStrip: { addr: [ 0x11D, 0 ], pin: PE3 }
 
 BBOw:
   tBoiler: { owRomCode : 284b7a0a06000089 }
