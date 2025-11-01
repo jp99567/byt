@@ -9,7 +9,7 @@ find_package(Threads REQUIRED)
 find_package(Boost COMPONENTS system REQUIRED)
 #find_package(mosquittopp REQUIRED)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBGPIODCXX REQUIRED IMPORTED_TARGET libgpiodcxx=1.6.5)
+pkg_check_modules(LIBGPIODCXX REQUIRED IMPORTED_TARGET libgpiodcxx>=2.2.1)
 
 option(SIMULATOR "connected to test interfaces" HOST )
 

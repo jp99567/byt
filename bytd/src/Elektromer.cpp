@@ -10,6 +10,7 @@
 #include "Log.h"
 #include "thread_util.h"
 #include <gpiod.hpp>
+#include <poll.h>
 
 namespace {
 
@@ -68,7 +69,7 @@ float Elektromer::calc() const
 }
 
 Elektromer::Elektromer(IMqttPublisher& mqtt)
-    : Impulzy("1", 17, mqtt, "elektromer_total_kwh", gpiod::line_request::EVENT_RISING_EDGE)
+    : Impulzy("1", 17, mqtt, "elektromer_total_kwh", gpiod::line::edge::RISING)
 {
     threadName = "bytd-elektromer";
     svc_init();
@@ -80,7 +81,7 @@ Elektromer::~Elektromer()
 }
 
 Impulzy::Impulzy(std::string chipname, unsigned int line, IMqttPublisher& mqtt,
-    const char* filename, int line_req_type, int timeout_ms)
+    const char* filename, const gpiod::line::edge line_req_type, int timeout_ms)
     : ImpulzyBase(mqtt, filename)
     , chipName(chipname)
     , chipLine(line)
@@ -101,22 +102,47 @@ void Impulzy::svc_init()
     t = std::thread([this] {
         thread_util::set_thread_name(threadName.c_str());
 
+        std::string consumer_name = threadName + chipName + std::to_string(chipLine);
         try {
-            gpiod::chip gpiochip(chipName);
-            auto impin = gpiochip.get_line(chipLine);
+            auto request =
+                ::gpiod::chip(chipName)
+                    .prepare_request()
+                    .set_consumer(consumer_name)
+                    .add_line_settings(
+                        chipLine,
+                        ::gpiod::line_settings()
+                            .set_direction(
+                                ::gpiod::line::direction::INPUT)
+                            .set_edge_detection(line_req_type)
+                        )
+                    .do_request();
 
-            if(impin.direction() != gpiod::line::DIRECTION_INPUT) {
-                LogERR("Impulz direction not input");
-                active = false;
-            }
-            impin.request({ "bytd", line_req_type, 0 });
-            LogINFO("impulze imp pin reqeusted: {} ({})", impin.name(), impin.get_value());
+            ::gpiod::edge_event_buffer buffer(1);
 
+            LogINFO("impulze imp pin reqeusted: {} ({})", consumer_name, request.get_value(chipLine));
+
+            struct pollfd pollfd;
+            pollfd.fd = request.fd();
+            pollfd.events = POLLIN;
+
+            auto timeout_ms = std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count();
             while(active) {
-                if(impin.event_wait(std::chrono::nanoseconds(timeout))) {
-                    event(impin.event_read().event_type == gpiod::line_event::RISING_EDGE ? EventType::rising : EventType::falling);
-                } else {
+                auto ret = poll(&pollfd, 1, timeout_ms);
+                if (ret == -1) {
+                    LogERR("error waiting for edge events: {}", strerror(errno));
+                    active = false;
+                    break;
+                }
+                else if(ret == 0){
                     event(EventType::timeout);
+                    continue;
+                }
+
+                request.read_edge_events(buffer);
+
+                for (const auto& ev : buffer)
+                {
+                    event(ev.type() == gpiod::edge_event::event_type::RISING_EDGE ? EventType::rising : EventType::falling);
                 }
             }
         } catch(std::exception& e) {
@@ -127,7 +153,7 @@ void Impulzy::svc_init()
 }
 
 Vodomer::Vodomer(IMqttPublisher& mqtt)
-    : Impulzy("0", 3, mqtt, "vodomer_total_litre", gpiod::line_request::EVENT_BOTH_EDGES, 400)
+    : Impulzy("0", 3, mqtt, "vodomer_total_litre", gpiod::line::edge::BOTH, 400)
 {
     minDeltoToSTore = 10;
     threadName = "bytd-vodomer";

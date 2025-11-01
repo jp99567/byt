@@ -4,7 +4,7 @@
 #include <gpiod.hpp>
 
 class BBDigiOut : public IDigiOut {
-    gpiod::line line;
+    gpiod::line_request line;
 
 public:
     explicit BBDigiOut(gpiod::chip& chip, unsigned lineNr);
