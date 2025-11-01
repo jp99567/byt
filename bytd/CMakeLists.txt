@@ -43,7 +43,7 @@ file(GLOB_RECURSE SRC_CPP src/*.cpp)
 file(GLOB_RECURSE SRC_HEADERS src/*.h)
 add_executable(${PROJECT_NAME} ${SRC_CPP} ${SRC_HEADERS})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE PkgConfig::LIBGPIODCXX Threads::Threads Boost::system systemd rt mosquittopp yaml-cpp stdc++fs)
+target_link_libraries(${PROJECT_NAME} PRIVATE PkgConfig::LIBGPIODCXX Threads::Threads Boost::system systemd rt mosquittopp yaml-cpp stdc++fs fmt)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SYSROOT}/usr/local/include
@@ -55,7 +55,4 @@ target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 IF(SIMULATOR)
     target_compile_definitions(${PROJECT_NAME} PRIVATE BYTD_SIMULATOR)
-ENDIF()
-IF(NOT CMAKE_CROSSCOMPILING)
-    target_link_libraries(${PROJECT_NAME} PRIVATE fmt)
 ENDIF()
