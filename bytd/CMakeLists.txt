@@ -8,6 +8,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Threads REQUIRED)
 find_package(Boost COMPONENTS system REQUIRED)
 #find_package(mosquittopp REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBGPIODCXX REQUIRED IMPORTED_TARGET libgpiodcxx=1.6.5)
 
 option(SIMULATOR "connected to test interfaces" HOST )
 
@@ -40,7 +42,9 @@ ENDIF()
 file(GLOB_RECURSE SRC_CPP src/*.cpp)
 file(GLOB_RECURSE SRC_HEADERS src/*.h)
 add_executable(${PROJECT_NAME} ${SRC_CPP} ${SRC_HEADERS})
-target_link_libraries(${PROJECT_NAME} Threads::Threads Boost::system systemd gpiodcxx rt mosquittopp yaml-cpp stdc++fs)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE PkgConfig::LIBGPIODCXX Threads::Threads Boost::system systemd rt mosquittopp yaml-cpp stdc++fs)
+
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SYSROOT}/usr/local/include
     ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -50,8 +54,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 IF(SIMULATOR)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC BYTD_SIMULATOR)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE BYTD_SIMULATOR)
 ENDIF()
 IF(NOT CMAKE_CROSSCOMPILING)
-    target_link_libraries(${PROJECT_NAME} fmt)
+    target_link_libraries(${PROJECT_NAME} PRIVATE fmt)
 ENDIF()
