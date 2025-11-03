@@ -10,12 +10,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
-#ifdef BYTD_SIMULATOR
-constexpr auto can_dev_name = "vcan0";
-#else
-constexpr auto can_dev_name = "can1";
-#endif
+#include "hwif.h"
 
 CanBus::CanBus(boost::asio::io_service& io_context)
     : canStream(io_context)
@@ -30,7 +25,7 @@ CanBus::CanBus(boost::asio::io_service& io_context)
         LogSYSDIE("CAN Socket");
     }
 
-    strcpy(ifr.ifr_name, can_dev_name);
+    strcpy(ifr.ifr_name, hwif::can_dev_name().c_str());
     auto rv = ::ioctl(socket, SIOCGIFINDEX, &ifr);
     if(rv == -1) {
         LogSYSDIE("CAN Socket ioctl");
