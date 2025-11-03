@@ -8,6 +8,12 @@
 
 #include "Log.h"
 
+#ifdef BYTD_SIMULATOR
+constexpr auto default_can_dev_name = "vcan0";
+#else
+constexpr auto default_can_dev_name = "can1";
+#endif
+
 namespace hwif {
 
 int open_pru()
@@ -26,4 +32,21 @@ int open_pru()
     return ::open("/dev/rpmsg_pru30", O_RDWR);
 #endif
 }
+
+std::string can_dev_name()
+{
+    auto env_devname = ::getenv("BYTD_CAN_DEVICE_NAME");
+    if(env_devname)
+        return env_devname;
+    return default_can_dev_name;
+}
+
+std::string mqtt_broker_hostname()
+{
+    auto env_hostname = ::getenv("BYTD_MQTT_BROKER_HOSTNAME");
+    if(env_hostname)
+        return env_hostname;
+    return "localhost";
+}
+
 }
