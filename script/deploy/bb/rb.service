@@ -1,15 +1,14 @@
 [Unit]
 Description=Riadenie bytu
-After=network.target
+After=multi-user.target
+
 [Service]
 Type=simple
-Environment="BYTD_MQTT_BROKER_HOSTNAME=172.16.53.1"
 WorkingDirectory=/opt/rb
+EnvironmentFile=/opt/rb/environment.txt
 ExecStartPre=/opt/rb/init.sh
-LimitCORE=infinity
 ExecStart=/opt/rb/bytd
-ExecStop=rm /run/gpio_p9_28.pid
+#LimitCORE=infinity
 
 [Install]
-WantedBy=multi-user.target
-
+WantedBy=graphical.target

@@ -5,26 +5,29 @@ set -e
 CONFIGSCRIPT=./avrcanconf/run.py
 [[ -x "$CONFIGSCRIPT" ]]
 
-config-pin -f config-pin.txt
+RETRIES_TIMEOUT=20
+while ! ip link show type can|grep -q $BYTD_CAN_DEVICE_NAME; do
+	if [[ $RETRIES_TIMEOUT -gt 0 ]]; then
+		echo "wait for can devices.. ($RETRIES_TIMEOUT)"
+		sleep 1
+	else
+		echo No can devices
+		exit 1
+	fi
+	RETRIES_TIMEOUT=$(( $RETRIES_TIMEOUT - 1 ))
+done
 
-if ip link show can1|grep -q 'state DOWN'; then
-	ip link set can1 type can bitrate 100000
-	ip link set up can1
+if ip link show $BYTD_CAN_DEVICE_NAME|grep -q 'state DOWN'; then
+	ip link set $BYTD_CAN_DEVICE_NAME type can bitrate 100000
+	ip link set up $BYTD_CAN_DEVICE_NAME
 fi
 
-if config-pin -q 'p9.28'|grep -q 'P9_28 Mode: gpio Direction: out Value: 1'; then
-	config-pin p9.28 low
-	sleep 0.2
-fi
-
-P9_28_CHIP=3
+P9_28_CHIP=gpiochip3
 P9_28_LINE=17
-gpioset --mode=signal $P9_28_CHIP $P9_28_LINE=1 &
-echo $! > /run/gpio_p9_28.pid
-sleep 2
+gpioset --daemonize --chip $P9_28_CHIP $P9_28_LINE=1
 
-$CONFIGSCRIPT --exit_bootloader --candev can1 --all
-$CONFIGSCRIPT --config --yamlfile config.yaml --candev can1
+$CONFIGSCRIPT --exit_bootloader --candev $BYTD_CAN_DEVICE_NAME --all
+$CONFIGSCRIPT --config --yamlfile config.yaml --candev $BYTD_CAN_DEVICE_NAME
 
 RPROC_CTRL_FILE='/sys/class/remoteproc/remoteproc1/state'
 while [[ ! -f $RPROC_CTRL_FILE ]]; do
@@ -33,14 +36,21 @@ while [[ ! -f $RPROC_CTRL_FILE ]]; do
 done
 RPROC_CUR_STATE=$(<$RPROC_CTRL_FILE)
 if [[ 'offline' != $RPROC_CUR_STATE ]]; then
-	echo $RPROC_CTRL_FILE $RPROC_CUR_STATE
+	echo "$RPROC_CTRL_FILE is not offline ($RPROC_CUR_STATE). Stopping"
 	echo stop > $RPROC_CTRL_FILE
 fi
 
 echo start > $RPROC_CTRL_FILE
 
 RPROC_DEV='/dev/rpmsg_pru30'
+RETRIES_TIMEOUT=10
 while [[ ! -c $RPROC_DEV ]]; do
-	echo waiting for $RPROC_DEV
-	sleep 1
+	if [[ $RETRIES_TIMEOUT -gt 0 ]]; then
+		echo "waiting for $RPROC_DEV ($RETRIES_TIMEOUT)"
+		sleep 1
+	else
+		echo No $RPROC_DEV device
+		exit 1
+	fi
+	RETRIES_TIMEOUT=$(( $RETRIES_TIMEOUT - 1 ))
 done
