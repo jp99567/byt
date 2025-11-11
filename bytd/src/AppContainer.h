@@ -12,7 +12,6 @@
 #include "Pumpa.h"
 #include "builder.h"
 #include "canbus.h"
-#include "exporter.h"
 #include "mqtt.h"
 #include "slowswi2cpwm.h"
 #include <boost/asio.hpp>
@@ -24,7 +23,6 @@ class AppContainer {
     boost::asio::steady_timer t1sec;
     boost::asio::steady_timer timerKurenie;
     CanBus canBus;
-    ow::ExporterSptr exporter;
     std::shared_ptr<OpenTherm> openTherm;
     std::shared_ptr<MqttClient> mqtt;
     std::unique_ptr<slowswi2cpwm> slovpwm;
@@ -34,6 +32,7 @@ public:
     explicit AppContainer();
     ~AppContainer();
     void run();
+    static std::string version();
 
 private:
     void on1sec();

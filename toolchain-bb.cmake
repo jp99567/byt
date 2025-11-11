@@ -5,12 +5,13 @@ SET(CMAKE_SYSTEM_PROCESSOR arm)
 SET(CMAKE_SYSTEM_VERSION 1)
 
 # specify the cross compiler
-SET(CMAKE_C_COMPILER   arm-linux-gnueabihf-gcc-8)
-SET(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++-8)
+SET(CMAKE_C_COMPILER   arm-linux-gnueabihf-gcc-14)
+SET(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++-14)
 
 IF(NOT DEFINED ENV{CROSS_ENV_ROOT})
 	MESSAGE(FATAL_ERROR "not defined env CROSS_ENV_ROOT" $ENV{CROSS_ENV_ROOT})
 ENDIF()
+MESSAGE("cross build toolchain bbroot: " $ENV{CROSS_ENV_ROOT})
 
 # where is the target environment
 SET(CMAKE_SYSROOT $ENV{CROSS_ENV_ROOT})

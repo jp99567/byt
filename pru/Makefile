@@ -25,16 +25,16 @@ endef
 $(error $(ERROR_BODY))
 endif
 
-ifndef PRU_TI_EXAMPLE
-$(error PRU_TI_EXAMPLE environment variable is not set, check env.sh) 
+ifndef PRU_SUPPORT_PKG
+$(error PRU_SUPPORT_PKG environment variable is not set, check env.sh) 
 endif
 
 MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 CURRENT_DIR := $(notdir $(patsubst %/,%,$(dir $(MKFILE_PATH))))
 PROJ_NAME=$(CURRENT_DIR)
-LINKER_COMMAND_FILE=./AM335x_PRU.cmd
-LIBS=--library=$(PRU_TI_EXAMPLE)/lib/rpmsg_lib.lib
-INCLUDE=--include_path=$(PRU_TI_EXAMPLE)/include --include_path=$(PRU_TI_EXAMPLE)/include/am335x
+LINKER_COMMAND_FILE=./AM335x_PRU_intc_rscTbl.cmd
+LIBS=--library=$(PRU_SUPPORT_PKG)/lib/rpmsg_lib.lib
+INCLUDE=--include_path=$(PRU_SUPPORT_PKG)/include --include_path=$(PRU_SUPPORT_PKG)/include/am335x
 STACK_SIZE=0x100
 HEAP_SIZE=0x100
 GEN_DIR=gen

@@ -1,2 +1,2 @@
 
-export CROSS_ENV_ROOT=/mnt/bb
+export CROSS_ENV_ROOT=/mnt/bbroot

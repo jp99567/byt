@@ -1,16 +1,7 @@
 #include "mqtt.h"
 #include "IIo.h"
 #include "Log.h"
-
-namespace {
-const char* hostname()
-{
-    auto env_hostname = ::getenv("BYTD_MQTT_BROKER_HOSTNAME");
-    if(env_hostname)
-        return env_hostname;
-    return "localhost";
-}
-}
+#include "hwif.h"
 
 MqttWrapper::MqttWrapper() noexcept
 {
@@ -27,8 +18,9 @@ MqttClient::MqttClient(boost::asio::io_service& io_context)
     , io_context(io_context)
 {
     threaded_set(true);
-    LogINFO("mqtt connect to {}", hostname());
-    auto rv = connect_async(hostname(), 1883, 900);
+    auto broker_hostname = hwif::mqtt_broker_hostname();
+    LogINFO("mqtt connect to {}", broker_hostname);
+    auto rv = connect_async(broker_hostname.c_str(), 1883, 900);
     check_connect_attempt(rv);
 }
 

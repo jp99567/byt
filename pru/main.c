@@ -39,8 +39,8 @@
 #include <rsc_types.h>
 #include <pru_iep.h>
 #include <pru_rpmsg.h>
-#include "resource_table_0.h"
-//#include "resource_table_1.h"
+#include "resource_table.h"
+#include "intc_map_0.h"
 
 volatile register uint32_t __R31;
 volatile register uint32_t __R30;
@@ -61,7 +61,6 @@ volatile register uint32_t __R30;
  * at linux-x.y.z/drivers/rpmsg/rpmsg_pru.c
  */
 #define CHAN_NAME			"rpmsg-pru"
-#define CHAN_DESC			"Channel 30"
 #define CHAN_PORT			30
 
 
@@ -71,7 +70,7 @@ volatile register uint32_t __R30;
  */
 #define VIRTIO_CONFIG_S_DRIVER_OK	4
 
-uint8_t payload[RPMSG_BUF_SIZE];
+uint8_t payload[RPMSG_MESSAGE_SIZE];
 
 void eip_timer_init(void)
 {
@@ -303,11 +302,12 @@ void main(void)
 	status = &resourceTable.rpmsg_vdev.status;
 	while (!(*status & VIRTIO_CONFIG_S_DRIVER_OK));
 
+
 	/* Initialize the RPMsg transport structure */
 	pru_rpmsg_init(&transport, &resourceTable.rpmsg_vring0, &resourceTable.rpmsg_vring1, TO_ARM_HOST, FROM_ARM_HOST);
 
 	/* Create the RPMsg channel between the PRU and ARM user space using the transport structure. */
-	while (pru_rpmsg_channel(RPMSG_NS_CREATE, &transport, CHAN_NAME, CHAN_DESC, CHAN_PORT) != PRU_RPMSG_SUCCESS);
+	while (pru_rpmsg_channel(RPMSG_NS_CREATE, &transport, CHAN_NAME, CHAN_PORT) != PRU_RPMSG_SUCCESS);
 
 	while (1) {
 

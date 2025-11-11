@@ -25,7 +25,7 @@ std::string AppContainer::doRequest(std::string msg)
         Util::Log::instance().get()->set_level(spdlog::level::from_str(level));
         rsp = "ok";
     } else if(cmd == "rev") {
-        rsp = GIT_REV_DESC_STR;
+        rsp = version();
     }
     else if(cmd == "setNewTotal")
     {
@@ -221,6 +221,11 @@ void AppContainer::run()
     LogINFO("io service exited");
     components.elektromer->store();
     components.vodomer->store();
+}
+
+std::string AppContainer::version()
+{
+    return GIT_REV_DESC_STR;
 }
 
 void AppContainer::on1sec()
