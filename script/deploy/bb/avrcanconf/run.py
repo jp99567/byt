@@ -644,3 +644,7 @@ if args.scd41_write_params:
     sens.write_params(temp_offset, altit)
     time.sleep(1)
     sens.enable_sm()
+
+if bus:
+    bus.shutdown()
+
