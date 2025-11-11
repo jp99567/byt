@@ -1,0 +1,70 @@
+#include <dt-bindings/pinctrl/am33xx.h>
+#include <dt-bindings/board/am335x-bone-pins.h>
+#include <dt-bindings/gpio/gpio.h>
+
+/*
+git clone --branch v5.10.x-ti https://github.com/beagleboard/BeagleBoard-DeviceTrees.git
+
+    # CANRX P9.24 dcan1_rx
+    # CANTX P9.26 dcan1_tx
+    # CANPWR P9.28 gpio3_17
+    
+    # OWIN P9.27 pru0_r31_in5
+    # OWOUT P9.29 pru0_r30_out1
+    # OWSPWR P9.31 pru0_r30_out0
+    # PUMPA P9.25
+    # IMPELM p9.23
+    # IMPVM p9.21
+    
+    # OTIN pru0_in14 P8_16
+    # OTOUT pru0_out14 P8_12
+*/
+
+&am33xx_pinmux {
+    dcan1_pins: pinmux_dcan1_pins {
+            pinctrl-single,pins = <
+                    P9_24(PIN_INPUT|MUX_MODE2)
+                    P9_26(PIN_OUTPUT|MUX_MODE2)
+            >;
+    };
+    bytd_pins: bytd_pins {
+            pinctrl-single,pins = <
+                    P9_27(PIN_INPUT | MUX_MODE6)
+                    P9_29(PIN_OUTPUT | MUX_MODE5)
+                    P9_31(PIN_OUTPUT | MUX_MODE5)
+                    P8_16(PIN_INPUT | MUX_MODE6)
+                    P8_12(PIN_OUTPUT | MUX_MODE6)
+                    P8_40(PIN_OUTPUT | MUX_MODE7)
+                    P8_42(PIN_OUTPUT | MUX_MODE7)
+                    P9_25(PIN_OUTPUT | MUX_MODE7)
+                    P9_28(PIN_OUTPUT | MUX_MODE7)
+                    AM33XX_PADCONF(AM335X_PIN_XDMA_EVENT_INTR0, PIN_OUTPUT_PULLDOWN, MUX_MODE3)
+            >;
+    };
+    uart4_pins: pinmux_uart4_pins {
+            pinctrl-single,pins = <
+                    P9_11(PIN_INPUT | MUX_MODE6)
+                    P9_13(PIN_OUTPUT | MUX_MODE6)
+            >;
+    };
+};
+
+&dcan1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&dcan1_pins>;
+	status = "okay";
+};
+
+&uart4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart4_pins>;
+	status = "okay";
+};
+
+&ocp {
+     bytd_pru_helper {
+        compatible = "bone-pinmux-helper";
+        pinctrl-names = "default";
+        pinctrl-0 = <&bytd_pins>;
+    };
+};
