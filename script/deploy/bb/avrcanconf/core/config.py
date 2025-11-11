@@ -1,5 +1,3 @@
-from fontTools.otlLib.builder import ClassPairPosSubtableBuilder
-
 import core.bytcan
 import yaml
 import enum
