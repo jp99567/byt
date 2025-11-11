@@ -45,27 +45,6 @@ void Pru::send(const uint8_t* data, std::size_t len)
     if((rv < 0) || ((unsigned)rv != len)) {
         LogSYSERR("pru write");
     }
-
-    PruRxMsg::Buf buf(1);
-    using namespace pru;
-    switch(*reinterpret_cast<const uint32_t*>(data)) {
-    case eCmdOwInit:
-    case eCmdOwSearchDir0:
-    case eCmdOwSearchDir1:
-    case eCmdOwWrite:
-    case eCmdOwRead:
-    case eCmdOwWritePower:
-        buf[0] = eOwBusFailure0;
-        break;
-    case eCmdOtTransmit:
-        buf[0] = eOtNoResponse;
-        break;
-    default:
-        throw std::runtime_error("pru bad rsp code");
-        break;
-    }
-    std::ignore = len;
-    respond(buf);
 }
 
 Pru::Pru()
