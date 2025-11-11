@@ -16,8 +16,18 @@ public:
     }
 };
 
-int main()
+int main(int argc, char* argv[])
 {
+    if(argc > 1)
+    {
+        std::string arg1(argv[1]);
+        if(arg1 == "-v" || arg1 == "--version"){
+            std::cout << AppContainer::version() << std::endl;
+            return EXIT_SUCCESS;
+        }
+        return EXIT_FAILURE;
+    }
+
     LogExit scopedLog("GRACEFUL");
     MqttWrapper libmMosquitto;
 

@@ -32,6 +32,7 @@ public:
     explicit AppContainer();
     ~AppContainer();
     void run();
+    static std::string version();
 
 private:
     void on1sec();
