@@ -40,7 +40,7 @@ public:
 void Builder::buildMisc(slowswi2cpwm& ioexpander, OpenTherm& ot)
 {
     digiOutputs.emplace("dverePavlac", std::make_unique<DigiOutI2cExpander>(ioexpander, 2));
-    components.reku = std::make_unique<Reku>(mqtt, "/dev/ttyO4");
+    components.reku = std::make_unique<Reku>(mqtt, "/dev/ttyS4");
     digiOutputs.emplace("prevetranie", std::make_unique<PrevetranieReku>(*components.reku));
     std::unique_ptr<IDigiOut> pumpaDigOut;
 #ifdef BYTD_SIMULATOR
