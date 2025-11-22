@@ -154,9 +154,6 @@ std::unique_ptr<can::InputControl> Builder::buildCan(CanBus& canbus)
                 LogINFO("dig IN {} {:X} {}, {:08b}", name, canAddr, offset, mask);
                 auto input = std::make_unique<can::DigiInItem>(name, mask, offset);
                 digInputs.emplace_back(*input);
-                input->Changed.subscribe(event::subscr([name](bool v) {
-                    LogINFO("not used digInput {} {}", name, v);
-                }));
                 insertInputItem(inputsMap, canAddr, std::move(input));
             }
         }
@@ -168,7 +165,7 @@ std::unique_ptr<can::InputControl> Builder::buildCan(CanBus& canbus)
                 auto offset = (it->second)["addr"][1].as<unsigned>();
                 auto mask = 1 << (it->second)["addr"][2].as<unsigned>();
                 LogINFO("dig OUT {} {:X} {}, {:08b}", name, canAddr, offset, mask);
-                auto idx = outObj.addCanObj(canAddr, offset + 1);
+                auto idx = outObj.addCanObj(canAddr, offset + sizeof(uint8_t));
                 auto digiOut = std::make_unique<CanDigiOut>();
                 auto& item = digiOut->getCanItem();
                 item.offset = offset;
@@ -176,6 +173,25 @@ std::unique_ptr<can::InputControl> Builder::buildCan(CanBus& canbus)
                 item.idx = idx;
                 item.busOutControl = outputControl;
                 digiOutputs.emplace(name, std::move(digiOut));
+            }
+        }
+        if(it->second["Pwm16At90"]) {
+            auto pwmOutNode = it->second["Pwm16At90"];
+            auto params = pwmOutNode["params"];
+            auto channels = pwmOutNode["channels"];
+            LogINFO("Pwm16At90 top: {} prescaler: {}", params["top"].as<unsigned>(), params["prescaler"].as<unsigned>());
+            for(auto it = channels.begin(); it != channels.end(); ++it) {
+                auto name = it->first.as<std::string>();
+                auto canAddr = (it->second)["addr"][0].as<unsigned>();
+                auto offset = (it->second)["addr"][1].as<unsigned>();
+                LogINFO("Pwm16At90 channel {} {:X} {}", name, canAddr, offset);
+                auto idx = outObj.addCanObj(canAddr, offset + sizeof(uint16_t));
+                auto pwmOut = std::make_unique<CanPwm16Out>(params["top"].as<uint16_t>());
+                auto& item = pwmOut->getCanItem();
+                item.offset = offset;
+                item.idx = idx;
+                item.busOutControl = outputControl;
+                pwmOutputs.emplace(name, std::move(pwmOut));
             }
         }
 
@@ -239,10 +255,21 @@ std::unique_ptr<IDigiOut> getDigOutputByName(std::map<std::string, std::unique_p
 {
     auto it = digiOutputs.find(name);
     if(it == std::cend(digiOutputs)) {
-        throw std::runtime_error(std::string("no such DigOutput ").append(name));
+        throw std::runtime_error(std::string("no such Digi Output").append(name));
     }
     auto rv = std::move(it->second);
     digiOutputs.erase(it);
+    return rv;
+}
+
+std::unique_ptr<IPwmDev> getPwmOutputByName(std::map<std::string, std::unique_ptr<IPwmDev>>& pwmOutputs, std::string name)
+{
+    auto it = pwmOutputs.find(name);
+    if(it == std::cend(pwmOutputs)) {
+        throw std::runtime_error(std::string("no such Pwm Output").append(name));
+    }
+    auto rv = std::move(it->second);
+    pwmOutputs.erase(it);
     return rv;
 }
 
@@ -316,10 +343,14 @@ void Builder::vypinace(boost::asio::io_service& io_context)
     auto& prevetranie = buildDevice("Vetranie", "prevetranie", vypinacZadverie->ClickedRD);
     buildDeviceInvertedOut("SvetloIzba", "svetloIzba", vypinacIzba->ClickedU);
     buildDeviceInvertedOut("SvetloPavlac", "svetloPavlac", vypinacZadverie->ClickedRU);
-    buildDeviceInvertedOut("SvetloWc", "svetloWc", vypinacZadverie->ClickedLD);
+    auto& svetloWc = buildDeviceInvertedOut("SvetloWc", "svetloWc", vypinacZadverie->ClickedLD);
 
     vypinacKuchyna->ClickedRD.subscribe(event::subscr([&prevetranie] { prevetranie.toggle(); }));
     vypinacSpalna->ClickedD.subscribe(event::subscr([&dev = svetloChodbicka] { dev.toggle(); }));
+    vypinacKuchyna->ClickedLD.subscribe(event::subscr([&dev = svetloWc] { dev.toggle(); }));
+    auto& svetloLedSTrip = components.devicesOnOff["SvetloLedStrip"];
+    vypinacLinka->ClickedLU.subscribe(event::subscr([&dev = svetloLedSTrip] { dev->toggle(); }));
+    vypinacLinka->ClickedLD.subscribe(event::subscr([&dev = svetloWc] { dev.toggle(); }));
 
     for(auto& dev : components.devicesOnOff) {
         if(dev.second.get() != &svetloSpalna)
@@ -353,6 +384,14 @@ void Builder::vypinace(boost::asio::io_service& io_context)
     components.plynomer = std::make_unique<Plynomer>(*mqtt, getDigInputByName(digInputs, "plynImp"));
 }
 
+void Builder::svetla(boost::asio::io_service& io_context)
+{
+    auto lm = std::make_unique<Light::Manager>(std::make_shared<Light::DimmEvent>(io_context));
+    auto linkaLedPasik = lm->add("linkaLedStrip", getPwmOutputByName(pwmOutputs, "linkaLedStrip"));
+    components.devicesOnOff.emplace("SvetloLedStrip", std::make_unique<OnOffDevice>(std::make_unique<Light::OnOffOutput>(linkaLedPasik), "SvetloLedStrip", mqtt, false));
+    components.lightManager = std::move(lm);
+}
+
 AppComponents Builder::getComponents()
 {
     return std::move(components);
@@ -377,3 +416,4 @@ ISensorInput& Builder::findSensor(std::string name)
         throw std::runtime_error(std::string("sensor not found ").append(name));
     return *rv;
 }
+

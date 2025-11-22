@@ -112,4 +112,17 @@ void OwTempItem::update(const Data& data, std::size_t len)
         sens.setValue(owval);
     }
 }
+
+void Pwm16Item::set(uint16_t v)
+{
+    if(v != value) {
+        value = v;
+        send();
+    }
+}
+
+void Pwm16Item::update(Data& data)
+{
+    *reinterpret_cast<uint16_t*>(&data[offset]) = value;
+}
 }

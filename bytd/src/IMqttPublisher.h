@@ -12,6 +12,7 @@ constexpr auto rootTopic = "rb/ctrl/";
 constexpr auto rootStat = "rb/stat";
 constexpr auto devicesTopic = "rb/ctrl/dev/";
 constexpr auto tevOverrideTopic = "rb/ctrl/override/tev/";
+constexpr auto lightDimable = "rb/ctrl/lightdimm/";
 constexpr auto kurenieSetpointTopic = "rb/ctrl/kurenie/sp/";
 }
 

@@ -5,6 +5,7 @@
 
 #include "Kurenie.h"
 #include "OnOffDevice.h"
+#include "LightManager.h"
 #include "Reku.h"
 #include "Ventil4w.h"
 #include "Vypinace.h"
@@ -27,6 +28,7 @@ struct AppComponents {
     VypinaceDuoList vypinaceDuo;
     VypinaceSingleList vypinaceSingle;
     OnOffDeviceList devicesOnOff;
+    std::unique_ptr<Light::Manager> lightManager;
     std::unique_ptr<MonoStableDev> brana;
     std::unique_ptr<MonoStableDev> dverePavlac;
     std::unique_ptr<Reku> reku;
@@ -43,6 +45,7 @@ class Builder {
     const YAML::Node config;
     IMqttPublisherSPtr mqtt;
     std::map<std::string, std::unique_ptr<IDigiOut>> digiOutputs;
+    std::map<std::string, std::unique_ptr<IPwmDev>> pwmOutputs;
     std::vector<std::reference_wrapper<DigInput>> digInputs;
     std::vector<std::reference_wrapper<ISensorInput>> sensors;
 
@@ -52,10 +55,10 @@ public:
     [[nodiscard]] std::unique_ptr<can::InputControl> buildCan(CanBus& canbus);
     [[nodiscard]] ow::SensorList buildBBoW();
     void vypinace(boost::asio::io_service& io_context);
+    void svetla(boost::asio::io_service& io_context);
     AppComponents getComponents();
 
 private:
-    // void buildDevice(std::string name, std::string outputName, std::string inputName = std::string());
     OnOffDevice& buildDevice(std::string name, std::string outputName, event::Event<>& controlEvent, bool outInverted = false);
     OnOffDevice& buildDeviceInvertedOut(std::string name, std::string outputName, event::Event<>& controlEvent)
     {

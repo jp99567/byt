@@ -15,10 +15,15 @@
 
 void I2CDiOut::i2cwrite(const char* buf, unsigned len)
 {
+#ifdef BYTD_SIMULATOR
+    std::ignore = buf;
+    std::ignore = len;
+#else
     int rv = ::write(fd, buf, len);
     if(rv == -1) {
         LogSYSDIE("I2CDiOut write");
     }
+#endif
 }
 
 void I2CDiOut::i2cwreg(int addr, uint8_t v)

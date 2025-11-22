@@ -1,6 +1,7 @@
 #pragma once
 
 #include "IIo.h"
+#include "IPwmDev.h"
 #include "IMqttPublisher.h"
 #include "OwTempSensor.h"
 #include "Sensorion.h"
@@ -11,6 +12,7 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <cmath>
 
 namespace can {
 
@@ -86,6 +88,14 @@ struct DigOutItem : OutputItem {
     bool value = false;
 
     void set(bool v);
+    void update(Data& data) override;
+};
+
+struct Pwm16Item : OutputItem {
+    unsigned offset;
+    uint16_t value = false;
+
+    void set(uint16_t v);
     void update(Data& data) override;
 };
 
@@ -175,4 +185,42 @@ public:
         return value;
     }
     can::DigOutItem& getCanItem() { return item; }
+};
+
+struct DaliConv
+{
+    const double top = 255;
+    DaliConv(double top):top(top){}
+    double conv(double vin) const
+    {
+        if(vin > 0){
+            vin *= 2.54;
+            double exp = 3 * (vin - 254)/253.0;
+            return std::pow(10.0, exp) * top;
+        }
+        return 0;
+    }
+};
+
+class CanPwm16Out : public IPwmDev {
+    can::Pwm16Item item;
+    const DaliConv conv;
+
+public:
+    explicit CanPwm16Out(uint16_t top):conv(top){}
+    operator float() const override
+    {
+        return item.value;
+    }
+    float operator()(float value) override
+    {
+        if(value > IPwmDev::fullRange)
+            value = IPwmDev::fullRange;
+        else if(value < 0)
+            value = 0;
+
+        item.set(conv.conv(value));
+        return value;
+    }
+    can::Pwm16Item& getCanItem() { return item; }
 };

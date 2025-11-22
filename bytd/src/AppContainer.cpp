@@ -122,6 +122,7 @@ void AppContainer::run()
     auto tsensors = builder->buildBBoW();
     auto canInputControl = builder->buildCan(canBus);
     builder->buildMisc(*slovpwm, *openTherm);
+    builder->svetla(io_service);
     builder->vypinace(io_service);
     components = builder->getComponents();
     builder = nullptr;
@@ -175,7 +176,12 @@ void AppContainer::run()
                 auto v = safeConvertF(topic, msg);
                 components.kurenie->override_pwm_TEV(room, v);
             }
-        } else if(topic == "rb/ctrl/override/setpointCH") {
+        }
+        else if(matchTopicBase(topic, mqtt::lightDimable)){
+            const auto dim_topic = topic.substr(std::char_traits<char>::length(mqtt::lightDimable));
+            components.lightManager->process(dim_topic, msg);
+        }
+        else if(topic == "rb/ctrl/override/setpointCH") {
             components.kurenie->override_t_CH(safeConvertF(topic, msg));
         } else if(topic == "rb/ctrl/ot/setpoint/dhw") {
             openTherm->dhwSetpoint = safeConvertF(topic, msg);
