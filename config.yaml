@@ -20,6 +20,8 @@ NodeCAN:
         svetloIzba: { addr: [ 0x115, 0, 1 ], pin: PE1 }
         svetloWc: { addr: [ 0x115, 0, 2 ], pin: PE2 }
         svetloPavlac: { addr: [ 0x115, 0, 3 ], pin: PE3 }
+      DigIN:
+        pirWC: { addr: [ 0x11E, 0, 0 ], pin: PA7 }
   Zadverie:
       id: 6
       DigIN:
@@ -75,7 +77,7 @@ NodeCAN:
 
 BBOw:
   tBoiler: { owRomCode : 284b7a0a06000089 }
-  tRecir: { owRomCode : 28625008060000eb }
+#  tRecir: { owRomCode : 28625008060000eb }
   tPavlac : { owRomCode : 28bf6f0a06000089 }
   tretKupelna: { owRomCode : 28aa97e33b14013c }
   tretKupelnaP: { owRomCode : 28a5db780c000088}

@@ -17,6 +17,8 @@ Builder::Builder(IMqttPublisherSPtr mqtt)
 {
 }
 
+DigInput& getDigInputByName(std::vector<std::reference_wrapper<DigInput>>& digInputs, std::string name);
+
 class PrevetranieReku : public IDigiOut {
     Reku& reku;
 
@@ -74,6 +76,12 @@ void Builder::buildMisc(slowswi2cpwm& ioexpander, OpenTherm& ot)
         ioexpander.dig1Out(on);
     },
         mqtt);
+
+    auto& pirWc = getDigInputByName(digInputs, "pirWC");
+    pirWc.Changed.subscribe(event::subscr([mqttSPtr = mqtt](bool on){
+        mqttSPtr->publish(std::string(mqtt::rootStat).append("/pirWC"), on);
+
+    }));
 }
 
 struct CanNodeInfo {
