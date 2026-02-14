@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.20)
 
 project(fw LANGUAGES C CXX ASM)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(PRG_NAME fw)
 set(MCU_TARGET at90can32)
 set(BOOTSTART 0x0)
