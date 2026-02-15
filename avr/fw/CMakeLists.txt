@@ -63,6 +63,7 @@ target_compile_definitions(${PRG_NAME} PRIVATE
 )
 
 target_link_options(${PRG_NAME} PRIVATE
+    -mmcu=${MCU_TARGET}
     -flto
     -Wl,-Map,${PRG_NAME}.map
     -Wl,--section-start=.text=${BOOTSTART}
