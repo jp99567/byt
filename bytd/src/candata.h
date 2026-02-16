@@ -189,7 +189,7 @@ public:
 
 struct DaliConv
 {
-    const double top = 255;
+    const double top;
     DaliConv(double top):top(top){}
     double conv(double vin) const
     {

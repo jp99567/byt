@@ -32,4 +32,5 @@ pru/gen/*
 avr/fw/SvcProtocol_generated.h
 .vscode
 .idea
+.cache
 __pycache__
