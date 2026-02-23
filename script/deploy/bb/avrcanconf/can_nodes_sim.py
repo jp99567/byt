@@ -2,7 +2,7 @@
 """CAN Node Simulator
 
 Simulates CAN nodes described in config.yaml for communication with bytd.
-Uses anyio with Trio backend, SocketCAN (raw Linux socket), and MQTT (paho).
+Uses anyio with asyncio backend, SocketCAN (raw Linux socket), and MQTT (aiomqtt).
 
 CAN items from config are categorised into:
   - Items sent TO bytd (DigIN, OwT, SensorionSHT11, SensorionSCD41):
@@ -22,16 +22,15 @@ from __future__ import annotations
 import argparse
 import logging
 import math
-import queue
 import signal
 import socket
 import struct
 import sys
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Callable
 
+import aiomqtt
 import anyio
-import paho.mqtt.client as paho_mqtt
 import yaml
 
 logger = logging.getLogger("cansim")
@@ -142,35 +141,39 @@ class TxBuffer:
 class RxDispatcher:
     """Decodes received CAN frames (output items from bytd) and publishes state to MQTT."""
 
-    def __init__(self, mqtt_client: paho_mqtt.Client) -> None:
-        self.mqtt = mqtt_client
-        self._decoders: dict[int, list[Callable[[bytes, int], None]]] = {}
+    def __init__(self) -> None:
+        self._decoders: dict[int, list[Callable[[bytes, int], tuple[str, str] | None]]] = {}
 
     def add_digi_out(self, can_id: int, offset: int, bit: int, name: str) -> None:
         mask = 1 << bit
 
-        def decode(data: bytes, dlc: int) -> None:
+        def decode(data: bytes, dlc: int) -> tuple[str, str] | None:
             if offset < dlc:
                 val = 1 if (data[offset] & mask) else 0
-                self.mqtt.publish(f"{MQTT_PREFIX_STAT}{name}", str(val), retain=True)
                 logger.debug("RX DigOUT %s = %d", name, val)
+                return f"{MQTT_PREFIX_STAT}{name}", str(val)
+            return None
 
         self._decoders.setdefault(can_id, []).append(decode)
 
     def add_pwm16(self, can_id: int, offset: int, name: str) -> None:
-        def decode(data: bytes, dlc: int) -> None:
+        def decode(data: bytes, dlc: int) -> tuple[str, str] | None:
             if offset + 2 <= dlc:
                 val = struct.unpack_from("<H", data, offset)[0]
-                self.mqtt.publish(f"{MQTT_PREFIX_STAT}{name}", str(val), retain=True)
                 logger.debug("RX Pwm16 %s = %d", name, val)
+                return f"{MQTT_PREFIX_STAT}{name}", str(val)
+            return None
 
         self._decoders.setdefault(can_id, []).append(decode)
 
-    def dispatch(self, can_id: int, data: bytes, dlc: int) -> None:
+    async def dispatch(self, can_id: int, data: bytes, dlc: int, mqtt: aiomqtt.Client) -> None:
         decoders = self._decoders.get(can_id)
         if decoders:
             for dec in decoders:
-                dec(data, dlc)
+                result = dec(data, dlc)
+                if result is not None:
+                    topic, payload = result
+                    await mqtt.publish(topic, payload, retain=True)
 
 
 # ---------------------------------------------------------------------------
@@ -361,7 +364,7 @@ def build_items(config: dict, tx: TxBuffer, rx: RxDispatcher, binder: MqttInputB
 # Async tasks
 # ---------------------------------------------------------------------------
 
-async def can_receive_loop(sock: socket.socket, rx: RxDispatcher) -> None:
+async def can_receive_loop(sock: socket.socket, rx: RxDispatcher, mqtt: aiomqtt.Client) -> None:
     """Read CAN frames from the socket and dispatch to RxDispatcher."""
     while True:
         await anyio.wait_socket_readable(sock)
@@ -374,7 +377,7 @@ async def can_receive_loop(sock: socket.socket, rx: RxDispatcher) -> None:
         if len(raw) < CAN_FRAME_SIZE:
             continue
         can_id, data, dlc = unpack_can_frame(raw)
-        rx.dispatch(can_id, data, dlc)
+        await rx.dispatch(can_id, data, dlc, mqtt)
 
 
 async def can_transmit_loop(sock: socket.socket, tx: TxBuffer) -> None:
@@ -391,20 +394,12 @@ async def can_transmit_loop(sock: socket.socket, tx: TxBuffer) -> None:
                 await anyio.sleep(0.1)
 
 
-async def mqtt_receive_loop(
-    msg_queue: queue.Queue[tuple[str, str]],
-    binder: MqttInputBinder,
-) -> None:
-    """Bridge MQTT messages from the paho thread to the async world."""
-    while True:
-        try:
-            topic, payload = await anyio.to_thread.run_sync(
-                lambda: msg_queue.get(timeout=0.25),
-                abandon_on_cancel=True,
-            )
-            binder.on_message(topic, payload)
-        except queue.Empty:
-            pass
+async def mqtt_message_loop(mqtt: aiomqtt.Client, binder: MqttInputBinder) -> None:
+    """Receive MQTT messages and dispatch to the input binder."""
+    async for message in mqtt.messages:
+        topic = message.topic.value
+        payload = message.payload.decode() if isinstance(message.payload, bytes) else str(message.payload)
+        binder.on_message(topic, payload)
 
 
 async def signal_handler(scope: anyio.CancelScope) -> None:
@@ -414,37 +409,6 @@ async def signal_handler(scope: anyio.CancelScope) -> None:
             logger.info("Received signal %d, shutting down…", signum)
             scope.cancel()
             return
-
-
-# ---------------------------------------------------------------------------
-# MQTT client setup (paho, threaded loop — bridged via queue)
-# ---------------------------------------------------------------------------
-
-def make_mqtt_client(
-    host: str,
-    port: int,
-    topics: list[str],
-    msg_queue: queue.Queue[tuple[str, str]],
-) -> paho_mqtt.Client:
-    client = paho_mqtt.Client(paho_mqtt.CallbackAPIVersion.VERSION2, client_id="cansim")
-
-    def on_connect(client: paho_mqtt.Client, _ud: Any, _flags: Any, rc: Any, _props: Any = None) -> None:
-        logger.info("MQTT connected (rc=%s)", rc)
-        for t in topics:
-            client.subscribe(t, qos=0)
-            logger.debug("MQTT subscribe %s", t)
-
-    def on_message(_client: Any, _ud: Any, msg: paho_mqtt.MQTTMessage) -> None:
-        try:
-            msg_queue.put_nowait((msg.topic, msg.payload.decode()))
-        except Exception:
-            logger.exception("MQTT on_message error")
-
-    client.on_connect = on_connect
-    client.on_message = on_message
-    client.connect_async(host, port)
-    client.loop_start()
-    return client
 
 
 # ---------------------------------------------------------------------------
@@ -458,18 +422,10 @@ async def async_main(args: argparse.Namespace) -> None:
 
     # -- Build items ----------------------------------------------------------
     tx = TxBuffer()
-    msg_queue: queue.Queue[tuple[str, str]] = queue.Queue()
-    mqtt_client = make_mqtt_client(args.mqtt_host, args.mqtt_port, [], msg_queue)
-
-    rx = RxDispatcher(mqtt_client)
+    rx = RxDispatcher()
     binder = MqttInputBinder(tx)
 
     topics = build_items(config, tx, rx, binder)
-
-    # Re-subscribe now that we know the topics
-    for t in topics:
-        mqtt_client.subscribe(t, qos=0)
-        logger.debug("MQTT subscribe %s", t)
 
     # -- CAN socket -----------------------------------------------------------
     can_sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
@@ -477,22 +433,29 @@ async def async_main(args: argparse.Namespace) -> None:
     can_sock.bind((args.can_if,))
     logger.info("CAN socket bound to %s", args.can_if)
 
-    logger.info(
-        "Simulator running — TX frames: %d, MQTT subscriptions: %d",
-        len(tx.frames),
-        len(topics),
-    )
+    # -- MQTT + Run -----------------------------------------------------------
+    async with aiomqtt.Client(
+        hostname=args.mqtt_host,
+        port=args.mqtt_port,
+        identifier="cansim",
+    ) as mqtt:
+        for t in topics:
+            await mqtt.subscribe(t, qos=0)
+            logger.debug("MQTT subscribe %s", t)
 
-    # -- Run ------------------------------------------------------------------
-    async with anyio.create_task_group() as tg:
-        tg.start_soon(signal_handler, tg.cancel_scope)
-        tg.start_soon(can_receive_loop, can_sock, rx)
-        tg.start_soon(can_transmit_loop, can_sock, tx)
-        tg.start_soon(mqtt_receive_loop, msg_queue, binder)
+        logger.info(
+            "Simulator running — TX frames: %d, MQTT subscriptions: %d",
+            len(tx.frames),
+            len(topics),
+        )
+
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(signal_handler, tg.cancel_scope)
+            tg.start_soon(can_receive_loop, can_sock, rx, mqtt)
+            tg.start_soon(can_transmit_loop, can_sock, tx)
+            tg.start_soon(mqtt_message_loop, mqtt, binder)
 
     # -- Cleanup --------------------------------------------------------------
-    mqtt_client.loop_stop()
-    mqtt_client.disconnect()
     can_sock.close()
     logger.info("Simulator finished")
 
@@ -513,7 +476,7 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
 
-    anyio.run(async_main, args, backend="trio")
+    anyio.run(async_main, args, backend="asyncio")
 
 
 if __name__ == "__main__":
