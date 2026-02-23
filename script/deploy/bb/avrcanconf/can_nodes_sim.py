@@ -45,9 +45,6 @@ CAN_FRAME_SIZE = struct.calcsize(CAN_FRAME_FMT)
 MQTT_PREFIX_STAT = "cansim/stat/"
 MQTT_PREFIX_CTRL = "cansim/ctrl/"
 
-# Periodic TX interval in seconds
-TX_INTERVAL = 1.0
-
 
 def pack_can_frame(can_id: int, data: bytes | bytearray, dlc: int | None = None) -> bytes:
     if dlc is None:
@@ -185,16 +182,17 @@ class MqttInputBinder:
 
     def __init__(self, tx: TxBuffer) -> None:
         self.tx = tx
-        self.handlers: dict[str, Callable[[str], None]] = {}
+        self.handlers: dict[str, Callable[[str], int | None]] = {}
 
     # -- DigIN ---------------------------------------------------------------
     def add_digi_in(self, can_id: int, offset: int, bit: int, name: str) -> None:
         topic = f"{MQTT_PREFIX_CTRL}{name}"
 
-        def handle(payload: str) -> None:
+        def handle(payload: str) -> int:
             val = bool(int(float(payload)))
             self.tx.set_bit(can_id, offset, bit, val)
             logger.debug("MQTT→TX DigIN %s = %s", name, val)
+            return can_id
 
         self.handlers[topic] = handle
 
@@ -202,13 +200,14 @@ class MqttInputBinder:
     def add_owt(self, can_id: int, offset: int, name: str, factor: float) -> None:
         topic = f"{MQTT_PREFIX_CTRL}{name}"
 
-        def handle(payload: str) -> None:
+        def handle(payload: str) -> int | None:
             temp = float(payload)
             if math.isnan(temp):
-                return
+                return None
             raw = owt_to_raw(temp, factor)
             self.tx.set_int16(can_id, offset, raw)
             logger.debug("MQTT→TX OwT %s = %.2f (raw %d)", name, temp, raw)
+            return can_id
 
         self.handlers[topic] = handle
 
@@ -217,17 +216,19 @@ class MqttInputBinder:
         topic_t = f"{MQTT_PREFIX_CTRL}{name_t}"
         topic_rh = f"{MQTT_PREFIX_CTRL}{name_rh}"
 
-        def handle_t(payload: str) -> None:
+        def handle_t(payload: str) -> int:
             temp = float(payload)
             raw = sht11_t_to_raw(temp)
             self.tx.set_uint16(can_id, 0, raw)
             logger.debug("MQTT→TX SHT11 T %s = %.2f (raw %d)", name_t, temp, raw)
+            return can_id
 
-        def handle_rh(payload: str) -> None:
+        def handle_rh(payload: str) -> int:
             rh = float(payload)
             raw = sht11_rh_to_raw(rh)
             self.tx.set_uint16(can_id, 2, raw)
             logger.debug("MQTT→TX SHT11 RH %s = %.1f%% (raw %d)", name_rh, rh, raw)
+            return can_id
 
         self.handlers[topic_t] = handle_t
         self.handlers[topic_rh] = handle_rh
@@ -238,36 +239,41 @@ class MqttInputBinder:
         topic_rh = f"{MQTT_PREFIX_CTRL}{name_rh}"
         topic_co2 = f"{MQTT_PREFIX_CTRL}{name_co2}"
 
-        def handle_t(payload: str) -> None:
+        def handle_t(payload: str) -> int:
             temp = float(payload)
             raw = scd41_t_to_raw(temp)
             self.tx.set_uint16(can_id, 0, raw)
             logger.debug("MQTT→TX SCD41 T %s = %.2f (raw %d)", name_t, temp, raw)
+            return can_id
 
-        def handle_rh(payload: str) -> None:
+        def handle_rh(payload: str) -> int:
             rh = float(payload)
             raw = scd41_rh_to_raw(rh)
             self.tx.set_uint16(can_id, 2, raw)
             logger.debug("MQTT→TX SCD41 RH %s = %.1f%% (raw %d)", name_rh, rh, raw)
+            return can_id
 
-        def handle_co2(payload: str) -> None:
+        def handle_co2(payload: str) -> int:
             co2 = float(payload)
             raw = scd41_co2_to_raw(co2)
             self.tx.set_uint16(can_id, 4, raw)
             logger.debug("MQTT→TX SCD41 CO2 %s = %.0f ppm (raw %d)", name_co2, co2, raw)
+            return can_id
 
         self.handlers[topic_t] = handle_t
         self.handlers[topic_rh] = handle_rh
         self.handlers[topic_co2] = handle_co2
 
     # -- dispatch incoming MQTT message --------------------------------------
-    def on_message(self, topic: str, payload: str) -> None:
+    def on_message(self, topic: str, payload: str) -> int | None:
+        """Process MQTT message and return affected CAN ID, or None."""
         handler = self.handlers.get(topic)
         if handler is not None:
             try:
-                handler(payload)
+                return handler(payload)
             except Exception:
                 logger.exception("Error handling MQTT message on %s", topic)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -380,26 +386,26 @@ async def can_receive_loop(sock: socket.socket, rx: RxDispatcher, mqtt: aiomqtt.
         await rx.dispatch(can_id, data, dlc, mqtt)
 
 
-async def can_transmit_loop(sock: socket.socket, tx: TxBuffer) -> None:
-    """Periodically send all TX frames on the CAN bus."""
-    while True:
-        await anyio.sleep(TX_INTERVAL)
-        for can_id, buf in tx.frames.items():
-            dlc = tx.sizes.get(can_id, len(buf))
-            frame = pack_can_frame(can_id, buf, dlc)
-            try:
-                sock.send(frame)
-            except OSError as exc:
-                logger.error("CAN send 0x%03X error: %s", can_id, exc)
-                await anyio.sleep(0.1)
-
-
-async def mqtt_message_loop(mqtt: aiomqtt.Client, binder: MqttInputBinder) -> None:
-    """Receive MQTT messages and dispatch to the input binder."""
+async def mqtt_message_loop(
+    mqtt: aiomqtt.Client,
+    binder: MqttInputBinder,
+    can_sock: socket.socket,
+    tx: TxBuffer,
+) -> None:
+    """Receive MQTT messages, update TX buffer, and send affected CAN frames."""
     async for message in mqtt.messages:
         topic = message.topic.value
         payload = message.payload.decode() if isinstance(message.payload, bytes) else str(message.payload)
-        binder.on_message(topic, payload)
+        can_id = binder.on_message(topic, payload)
+        if can_id is not None:
+            buf = tx.frames.get(can_id)
+            if buf is not None:
+                dlc = tx.sizes.get(can_id, len(buf))
+                frame = pack_can_frame(can_id, buf, dlc)
+                try:
+                    can_sock.send(frame)
+                except OSError as exc:
+                    logger.error("CAN send 0x%03X error: %s", can_id, exc)
 
 
 async def signal_handler(scope: anyio.CancelScope) -> None:
@@ -452,8 +458,7 @@ async def async_main(args: argparse.Namespace) -> None:
         async with anyio.create_task_group() as tg:
             tg.start_soon(signal_handler, tg.cancel_scope)
             tg.start_soon(can_receive_loop, can_sock, rx, mqtt)
-            tg.start_soon(can_transmit_loop, can_sock, tx)
-            tg.start_soon(mqtt_message_loop, mqtt, binder)
+            tg.start_soon(mqtt_message_loop, mqtt, binder, can_sock, tx)
 
     # -- Cleanup --------------------------------------------------------------
     can_sock.close()
