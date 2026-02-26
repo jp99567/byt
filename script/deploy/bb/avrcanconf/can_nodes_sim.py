@@ -45,6 +45,23 @@ PRU_SIM_SOCKET_PATH = "/tmp/pru_sim_socket"
 
 # ResponseCode
 PRU_RSP_ERROR = 0
+PRU_RSP_OW_PRESENCE_OK = 1
+PRU_RSP_OW_BUS_FAILURE0 = 2
+PRU_RSP_OW_BUS_FAILURE1 = 3
+PRU_RSP_OW_NO_PRESENCE = 4
+PRU_RSP_OW_BUS_FAILURE_TIMEOUT = 5
+PRU_RSP_OW_READ_BITS_OK = 6
+PRU_RSP_OW_READ_BITS_FAILURE = 7
+PRU_RSP_OW_WRITE_BITS_OK = 8
+PRU_RSP_OW_WRITE_BITS_FAILURE = 9
+PRU_RSP_OW_SEARCH_RESULT_0 = 10
+PRU_RSP_OW_SEARCH_RESULT_1 = 11
+PRU_RSP_OW_SEARCH_RESULT_11 = 12
+PRU_RSP_OW_SEARCH_RESULT_00 = 13
+PRU_RSP_OT_NO_RESPONSE = 14
+PRU_RSP_OT_FRAME_ERROR = 15
+PRU_RSP_OT_BUS_ERROR = 16
+PRU_RSP_OT_OK = 17
 
 # Commands
 PRU_CMD_HALT = 0
@@ -448,11 +465,45 @@ async def signal_handler(scope: anyio.CancelScope) -> None:
 
 
 # ---------------------------------------------------------------------------
-# PRU peripheral stubs — OwBus and OtGasBoiler
+# PRU peripherals — OwBus, OwTemperatureSensor, OtGasBoiler
 # ---------------------------------------------------------------------------
 
+class OwTemperatureSensor:
+    """Simulated 1-Wire temperature sensor.
+
+    Holds the 8-byte ROM code and a current temperature value.
+    """
+
+    def __init__(self, name: str, rom_code: bytes) -> None:
+        if len(rom_code) != 8:
+            raise ValueError(f"ROM code must be 8 bytes, got {len(rom_code)}")
+        self.name = name
+        self.rom_code = rom_code  # 8 bytes: family(1) + serial(6) + crc(1)
+        self.temperature: float = float("nan")  # °C, set via MQTT later
+
+    def __repr__(self) -> str:
+        return f"OwTemperatureSensor({self.name!r}, rc={self.rom_code.hex()})"
+
+
 class OwBus:
-    """Stub for 1-Wire bus simulation.  Will be implemented later."""
+    """Simulated 1-Wire bus.
+
+    Loads sensor definitions from the BBOw section of *config* and
+    handles PRU OW commands.
+    """
+
+    def __init__(self, config: dict) -> None:
+        self.sensors: list[OwTemperatureSensor] = []
+        bb_ow = config.get("BBOw", {})
+        if bb_ow is None:
+            bb_ow = {}
+        for name, props in bb_ow.items():
+            rc_hex = props["owRomCode"]
+            rc_bytes = bytes.fromhex(rc_hex)
+            sensor = OwTemperatureSensor(name, rc_bytes)
+            self.sensors.append(sensor)
+            logger.info("OwBus: loaded sensor %s  rc=%s", name, rc_hex)
+        logger.info("OwBus: %d sensor(s) on bus", len(self.sensors))
 
     def handle(self, cmd: int, data: bytes) -> bytes:
         """Process an OW command and return a response datagram.
@@ -461,9 +512,20 @@ class OwBus:
         *data* is the full raw datagram received from bytd (including header).
         Returns bytes to send back.
         """
-        logger.debug("OwBus: cmd=%d  len=%d  data=%s", cmd, len(data), data.hex())
-        # Default: respond with eRspError
+        if cmd == PRU_CMD_OW_INIT:
+            return self._handle_init()
+
+        logger.debug("OwBus: unhandled cmd=%d  len=%d  data=%s", cmd, len(data), data.hex())
         return struct.pack("<I", PRU_RSP_ERROR)
+
+    def _handle_init(self) -> bytes:
+        """Respond to eCmdOwInit (presence detect)."""
+        if self.sensors:
+            logger.debug("OwBus: init → eOwPresenceOk (%d sensors)", len(self.sensors))
+            return struct.pack("<I", PRU_RSP_OW_PRESENCE_OK)
+        else:
+            logger.debug("OwBus: init → eOwNoPresence (no sensors)")
+            return struct.pack("<I", PRU_RSP_OW_NO_PRESENCE)
 
 
 class OtGasBoiler:
@@ -567,7 +629,7 @@ async def async_main(args: argparse.Namespace) -> None:
     topics = build_items(config, tx, rx, binder)
 
     # -- PRU peripherals -------------------------------------------------------
-    ow_bus = OwBus()
+    ow_bus = OwBus(config)
     ot_boiler = OtGasBoiler()
 
     # -- CAN socket -----------------------------------------------------------
