@@ -19,7 +19,7 @@ namespace hwif {
 int open_pru()
 {
 #ifdef BYTD_SIMULATOR
-    auto serverSocket = socket(AF_UNIX, SOCK_STREAM, 0);
+    auto serverSocket = socket(AF_UNIX, SOCK_DGRAM, 0);
     struct sockaddr_un server_addr;
     server_addr.sun_family = AF_UNIX;
     strcpy(server_addr.sun_path, "/tmp/pru_sim_socket");
