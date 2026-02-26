@@ -16,6 +16,9 @@ add_executable(tests
     ../src/OwTempSensor.cpp
     ../src/SimpleSensor.cpp
     ../src/Kurenie.cpp
+    ../src/candata.cpp
+    ../src/canbus.cpp
+    ../src/hwif.cpp
     ../src/OnOffDevice.cpp
     kurenie.cpp
     svetla.cpp

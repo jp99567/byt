@@ -76,7 +76,7 @@ public:
 };
 
 struct OutputItem : IOutputItem {
-    std::size_t idx;
+    std::size_t idx = 0;
     std::shared_ptr<IOutputControl> busOutControl;
 
     void send();
@@ -205,22 +205,14 @@ struct DaliConv
 class CanPwm16Out : public IPwmDev {
     can::Pwm16Item item;
     const DaliConv conv;
+    //float lastVal = 0.0;
 
 public:
     explicit CanPwm16Out(uint16_t top):conv(top){}
-    operator float() const override
+ /*   operator float() const override
     {
-        return item.value;
-    }
-    float operator()(float value) override
-    {
-        if(value > IPwmDev::fullRange)
-            value = IPwmDev::fullRange;
-        else if(value < 0)
-            value = 0;
-
-        item.set(conv.conv(value));
-        return value;
-    }
+        return lastVal;
+    }*/
+    float operator()(float value) override;
     can::Pwm16Item& getCanItem() { return item; }
 };

@@ -126,3 +126,15 @@ void Pwm16Item::update(Data& data)
     *reinterpret_cast<uint16_t*>(&data[offset]) = value;
 }
 }
+
+float CanPwm16Out::operator()(float value)
+{
+    if (value > IPwmDev::fullRange)
+        value = IPwmDev::fullRange;
+    else if (value < 0)
+        value = 0;
+
+    item.set(conv.conv(value));
+    // lastVal = value;
+    return value;
+}

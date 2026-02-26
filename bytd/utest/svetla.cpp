@@ -3,6 +3,21 @@
 
 #include "../src/candata.h"
 
+class OutputControlMock : public can::IOutputControl
+{
+public:
+    void update(std::size_t idx, can::IOutputItem& item) override
+    {
+        ++calls;
+        lastIdx = idx;
+        lastItem = &item;
+    }
+
+    std::size_t calls = 0;
+    std::size_t lastIdx = 0;
+    can::IOutputItem* lastItem = nullptr;
+};
+
 TEST_CASE("DaliConv zero and negative", "[dali]")
 {
     DaliConv conv(255);
@@ -31,4 +46,19 @@ TEST_CASE("DaliConv top scaling", "[dali]")
     const double v255 = conv255.conv(vin);
     const double v510 = conv510.conv(vin);
     CHECK(v510 == Catch::Approx(v255 * 2.0));
+}
+
+TEST_CASE("CanPwm16Out", "[can]")
+{
+    CanPwm16Out out(12345);
+    auto outControl = std::make_shared<OutputControlMock>();
+    can::Data data;
+    out.getCanItem().offset = 0;
+    out.getCanItem().busOutControl = outControl;
+    CHECK(out(100) == 100);
+    out.getCanItem().update(data);
+    CHECK(*reinterpret_cast<uint16_t*>(&data[0]) == 12345);
+    CHECK(out(0) == 0);
+    out.getCanItem().update(data);
+    CHECK(*reinterpret_cast<uint16_t*>(&data[0]) == 0);
 }
