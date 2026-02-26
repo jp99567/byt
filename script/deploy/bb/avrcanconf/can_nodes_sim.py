@@ -509,6 +509,10 @@ class OwBus:
             logger.info("OwBus: loaded sensor %s  rc=%s", name, rc_hex)
         logger.info("OwBus: %d sensor(s) on bus", len(self.sensors))
 
+        # Search state — reset on every eCmdOwInit
+        self._search_participating: list[OwTemperatureSensor] = []
+        self._search_bit_idx: int = 0
+
     def handle(self, cmd: int, data: bytes) -> bytes:
         """Process an OW command and return a response datagram.
 
@@ -518,20 +522,95 @@ class OwBus:
         """
         if cmd == PRU_CMD_OW_INIT:
             return self._handle_init()
+        if cmd == PRU_CMD_OW_SEARCH_DIR0:
+            return self._handle_search(direction=0)
+        if cmd == PRU_CMD_OW_SEARCH_DIR1:
+            return self._handle_search(direction=1)
 
         logger.debug("OwBus: unhandled cmd=%d  len=%d  data=%s", cmd, len(data), data.hex())
         return struct.pack("<I", PRU_RSP_ERROR)
 
     def _handle_init(self) -> bytes:
-        """Respond to eCmdOwInit (presence detect)."""
+        """Respond to eCmdOwInit (presence detect).
+
+        Resets all sensors and search state.  Response is 8 bytes:
+        [ResponseCode(i32), param(i32)] as bytd expects for presence replies.
+        """
         for sensor in self.sensors:
             sensor.reset()
+        self._search_participating = list(self.sensors)
+        self._search_bit_idx = 0
         if self.sensors:
             logger.debug("OwBus: init → eOwPresenceOk (%d sensors)", len(self.sensors))
-            return struct.pack("<I", PRU_RSP_OW_PRESENCE_OK)
+            return struct.pack("<Ii", PRU_RSP_OW_PRESENCE_OK, 0)
         else:
             logger.debug("OwBus: init → eOwNoPresence (no sensors)")
-            return struct.pack("<I", PRU_RSP_OW_NO_PRESENCE)
+            return struct.pack("<Ii", PRU_RSP_OW_NO_PRESENCE, 0)
+
+    def _handle_search(self, direction: int) -> bytes:
+        """Respond to eCmdOwSearchDir0 / eCmdOwSearchDir1.
+
+        Implements a single search-triplet step of the 1-Wire search algorithm.
+        For the current bit position the wired-AND of all participating sensors
+        is computed (actual bit and complement bit).  The combined two-bit value
+        determines the response:
+
+        - ``0b00``  both 0 and 1 present (conflict) → *direction* selects
+        - ``0b01``  all sensors have 1
+        - ``0b10``  all sensors have 0
+        - ``0b11``  no sensor on bus
+
+        Sensors whose bit does not match the selected direction are removed
+        from the participating set.  The bit index is then advanced.
+        """
+        if not self._search_participating:
+            logger.debug("OwBus: search bit %d → eOwSearchResult11 (no participants)",
+                         self._search_bit_idx)
+            return struct.pack("<I", PRU_RSP_OW_SEARCH_RESULT_11)
+
+        byte_idx = self._search_bit_idx // 8
+        bit_mask = 1 << (self._search_bit_idx % 8)
+
+        has_one = False
+        has_zero = False
+        for s in self._search_participating:
+            if s.rom_code[byte_idx] & bit_mask:
+                has_one = True
+            else:
+                has_zero = True
+            if has_one and has_zero:
+                break  # conflict already determined
+
+        if has_one and has_zero:
+            # v=0b00: conflict — master chooses direction
+            selected_bit = direction
+            rsp_code = PRU_RSP_OW_SEARCH_RESULT_00
+        elif has_one:
+            # v=0b01: all participating sensors have 1
+            selected_bit = 1
+            rsp_code = PRU_RSP_OW_SEARCH_RESULT_0
+        elif has_zero:
+            # v=0b10: all participating sensors have 0
+            selected_bit = 0
+            rsp_code = PRU_RSP_OW_SEARCH_RESULT_1
+        else:
+            # should not happen
+            return struct.pack("<I", PRU_RSP_OW_SEARCH_RESULT_11)
+
+        # Eliminate sensors whose bit doesn't match the selected direction
+        self._search_participating = [
+            s for s in self._search_participating
+            if bool(s.rom_code[byte_idx] & bit_mask) == bool(selected_bit)
+        ]
+
+        logger.debug(
+            "OwBus: search bit %d  dir=%d  sel=%d  rsp=%d  remaining=%d",
+            self._search_bit_idx, direction, selected_bit, rsp_code,
+            len(self._search_participating),
+        )
+
+        self._search_bit_idx += 1
+        return struct.pack("<I", rsp_code)
 
 
 class OtGasBoiler:
