@@ -40,9 +40,30 @@ logger = logging.getLogger("cansim")
 PRU_SIM_SOCKET_PATH = "/tmp/pru_sim_socket"
 
 # ---------------------------------------------------------------------------
-# PRU ResponseCode enum values (from pru/rpm_iface.h)
+# PRU enum values (from pru/rpm_iface.h)
 # ---------------------------------------------------------------------------
+
+# ResponseCode
 PRU_RSP_ERROR = 0
+
+# Commands
+PRU_CMD_HALT = 0
+PRU_CMD_OW_INIT = 1
+PRU_CMD_OW_SEARCH_DIR0 = 2
+PRU_CMD_OW_SEARCH_DIR1 = 3
+PRU_CMD_OW_WRITE = 4
+PRU_CMD_OW_READ = 5
+PRU_CMD_OW_WRITE_POWER = 6
+PRU_CMD_OT_TRANSMIT = 7
+
+_PRU_OW_CMDS = frozenset({
+    PRU_CMD_OW_INIT,
+    PRU_CMD_OW_SEARCH_DIR0,
+    PRU_CMD_OW_SEARCH_DIR1,
+    PRU_CMD_OW_WRITE,
+    PRU_CMD_OW_READ,
+    PRU_CMD_OW_WRITE_POWER,
+})
 
 # ---------------------------------------------------------------------------
 # SocketCAN helpers
@@ -427,14 +448,55 @@ async def signal_handler(scope: anyio.CancelScope) -> None:
 
 
 # ---------------------------------------------------------------------------
-# PRU simulator — Unix DGRAM socket server
+# PRU peripheral stubs — OwBus and OtGasBoiler
 # ---------------------------------------------------------------------------
 
-async def pru_sim_server(scope: anyio.CancelScope) -> None:
+class OwBus:
+    """Stub for 1-Wire bus simulation.  Will be implemented later."""
+
+    def handle(self, cmd: int, data: bytes) -> bytes:
+        """Process an OW command and return a response datagram.
+
+        *cmd* is one of PRU_CMD_OW_* values.
+        *data* is the full raw datagram received from bytd (including header).
+        Returns bytes to send back.
+        """
+        logger.debug("OwBus: cmd=%d  len=%d  data=%s", cmd, len(data), data.hex())
+        # Default: respond with eRspError
+        return struct.pack("<I", PRU_RSP_ERROR)
+
+
+class OtGasBoiler:
+    """Stub for OpenTherm gas boiler simulation.  Will be implemented later."""
+
+    def handle(self, data: bytes) -> bytes:
+        """Process an OT transmit command and return a response datagram.
+
+        *data* is the full raw datagram received from bytd (including the
+        eCmdOtTransmit header and the 32-bit OT frame).
+        Returns bytes to send back.
+        """
+        logger.debug("OtGasBoiler: len=%d  data=%s", len(data), data.hex())
+        # Default: respond with eRspError
+        return struct.pack("<I", PRU_RSP_ERROR)
+
+
+# ---------------------------------------------------------------------------
+# PRU simulator — Unix DGRAM socket server with command dispatching
+# ---------------------------------------------------------------------------
+
+async def pru_sim_server(
+    scope: anyio.CancelScope,
+    ow_bus: OwBus,
+    ot_boiler: OtGasBoiler,
+) -> None:
     """Serve the PRU simulator Unix DGRAM socket.
 
-    Binds to PRU_SIM_SOCKET_PATH and replies with eRspError (uint32 = 0)
-    to every received datagram.  Only one client is expected.
+    Binds to PRU_SIM_SOCKET_PATH and dispatches incoming datagrams based on
+    the 32-bit command header (pru::Commands enum from rpm_iface.h):
+      - eCmdHalt        → ignored (no response)
+      - eCmdOw*         → forwarded to *ow_bus*
+      - eCmdOtTransmit  → forwarded to *ot_boiler*
     """
     # Remove stale socket file if present
     try:
@@ -447,8 +509,6 @@ async def pru_sim_server(scope: anyio.CancelScope) -> None:
     sock.bind(PRU_SIM_SOCKET_PATH)
     logger.info("PRU sim socket listening on %s", PRU_SIM_SOCKET_PATH)
 
-    response = struct.pack("<i", PRU_RSP_ERROR)
-
     try:
         while True:
             await anyio.wait_socket_readable(sock)
@@ -458,9 +518,25 @@ async def pru_sim_server(scope: anyio.CancelScope) -> None:
                 logger.error("PRU sim recvfrom error: %s", exc)
                 await anyio.sleep(0.1)
                 continue
-            if not data:
+            if len(data) < 4:
+                logger.warning("PRU sim rx too short (%d bytes)", len(data))
                 continue
-            logger.debug("PRU sim rx %d bytes: %s", len(data), data.hex())
+
+            cmd = struct.unpack_from("<I", data, 0)[0]
+            logger.debug("PRU sim rx cmd=%d  len=%d  data=%s", cmd, len(data), data.hex())
+
+            if cmd == PRU_CMD_HALT:
+                logger.debug("PRU sim: eCmdHalt — ignored")
+                continue
+
+            if cmd in _PRU_OW_CMDS:
+                response = ow_bus.handle(cmd, data)
+            elif cmd == PRU_CMD_OT_TRANSMIT:
+                response = ot_boiler.handle(data)
+            else:
+                logger.warning("PRU sim: unknown command %d", cmd)
+                response = struct.pack("<I", PRU_RSP_ERROR)
+
             try:
                 sock.sendto(response, client_addr)
             except OSError as exc:
@@ -490,6 +566,10 @@ async def async_main(args: argparse.Namespace) -> None:
 
     topics = build_items(config, tx, rx, binder)
 
+    # -- PRU peripherals -------------------------------------------------------
+    ow_bus = OwBus()
+    ot_boiler = OtGasBoiler()
+
     # -- CAN socket -----------------------------------------------------------
     can_sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
     can_sock.setblocking(False)
@@ -514,7 +594,7 @@ async def async_main(args: argparse.Namespace) -> None:
 
         async with anyio.create_task_group() as tg:
             tg.start_soon(signal_handler, tg.cancel_scope)
-            tg.start_soon(pru_sim_server, tg.cancel_scope)
+            tg.start_soon(pru_sim_server, tg.cancel_scope, ow_bus, ot_boiler)
             tg.start_soon(can_receive_loop, can_sock, rx, mqtt)
             tg.start_soon(mqtt_message_loop, mqtt, binder, can_sock, tx)
 
