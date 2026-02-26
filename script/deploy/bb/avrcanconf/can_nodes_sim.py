@@ -420,7 +420,7 @@ def build_items(config: dict, tx: TxBuffer, rx: RxDispatcher, binder: MqttInputB
 async def can_receive_loop(sock: socket.socket, rx: RxDispatcher, mqtt: aiomqtt.Client) -> None:
     """Read CAN frames from the socket and dispatch to RxDispatcher."""
     while True:
-        await anyio.wait_socket_readable(sock)
+        await anyio.lowlevel.wait_readable(sock)
         try:
             raw = sock.recv(CAN_FRAME_SIZE)
         except OSError as exc:
@@ -658,7 +658,7 @@ async def pru_sim_server(
 
     try:
         while True:
-            await anyio.wait_socket_readable(sock)
+            await anyio.lowlevel.wait_readable(sock)
             try:
                 data, client_addr = sock.recvfrom(512)
             except OSError as exc:
