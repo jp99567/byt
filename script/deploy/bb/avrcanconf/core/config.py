@@ -218,7 +218,7 @@ class ClassPwm16At90Info(Class16BitBaseInfo):
 
     def initNodeObject(self, nodebus, mobs, mobSize):
         params = self.node['params']
-        data = pack('BH', int(params['prescaler']), int(params['top']))
+        data = pack('<BH', int(params['prescaler']), int(params['top']))
         nodebus.svcTransfer(SvcProtocol.CmdSetPwm16At90Params, data)
 
         channels = self.node['channels']
