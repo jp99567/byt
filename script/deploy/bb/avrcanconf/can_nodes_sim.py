@@ -481,6 +481,10 @@ class OwTemperatureSensor:
         self.rom_code = rom_code  # 8 bytes: family(1) + serial(6) + crc(1)
         self.temperature: float = float("nan")  # °C, set via MQTT later
 
+    def reset(self) -> None:
+        """Reset sensor to initial state (called on eCmdOwInit)."""
+        pass
+
     def __repr__(self) -> str:
         return f"OwTemperatureSensor({self.name!r}, rc={self.rom_code.hex()})"
 
@@ -520,6 +524,8 @@ class OwBus:
 
     def _handle_init(self) -> bytes:
         """Respond to eCmdOwInit (presence detect)."""
+        for sensor in self.sensors:
+            sensor.reset()
         if self.sensors:
             logger.debug("OwBus: init → eOwPresenceOk (%d sensors)", len(self.sensors))
             return struct.pack("<I", PRU_RSP_OW_PRESENCE_OK)
