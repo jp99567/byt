@@ -29,11 +29,20 @@ import sys
 from dataclasses import dataclass, field
 from typing import Callable
 
+import os
+
 import aiomqtt
 import anyio
 import yaml
 
 logger = logging.getLogger("cansim")
+
+PRU_SIM_SOCKET_PATH = "/tmp/pru_sim_socket"
+
+# ---------------------------------------------------------------------------
+# PRU ResponseCode enum values (from pru/rpm_iface.h)
+# ---------------------------------------------------------------------------
+PRU_RSP_ERROR = 0
 
 # ---------------------------------------------------------------------------
 # SocketCAN helpers
@@ -418,6 +427,54 @@ async def signal_handler(scope: anyio.CancelScope) -> None:
 
 
 # ---------------------------------------------------------------------------
+# PRU simulator — Unix DGRAM socket server
+# ---------------------------------------------------------------------------
+
+async def pru_sim_server(scope: anyio.CancelScope) -> None:
+    """Serve the PRU simulator Unix DGRAM socket.
+
+    Binds to PRU_SIM_SOCKET_PATH and replies with eRspError (uint32 = 0)
+    to every received datagram.  Only one client is expected.
+    """
+    # Remove stale socket file if present
+    try:
+        os.unlink(PRU_SIM_SOCKET_PATH)
+    except FileNotFoundError:
+        pass
+
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    sock.setblocking(False)
+    sock.bind(PRU_SIM_SOCKET_PATH)
+    logger.info("PRU sim socket listening on %s", PRU_SIM_SOCKET_PATH)
+
+    response = struct.pack("<i", PRU_RSP_ERROR)
+
+    try:
+        while True:
+            await anyio.wait_socket_readable(sock)
+            try:
+                data, client_addr = sock.recvfrom(512)
+            except OSError as exc:
+                logger.error("PRU sim recvfrom error: %s", exc)
+                await anyio.sleep(0.1)
+                continue
+            if not data:
+                continue
+            logger.debug("PRU sim rx %d bytes: %s", len(data), data.hex())
+            try:
+                sock.sendto(response, client_addr)
+            except OSError as exc:
+                logger.error("PRU sim sendto error: %s", exc)
+    finally:
+        sock.close()
+        try:
+            os.unlink(PRU_SIM_SOCKET_PATH)
+        except FileNotFoundError:
+            pass
+        logger.info("PRU sim socket closed")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -457,6 +514,7 @@ async def async_main(args: argparse.Namespace) -> None:
 
         async with anyio.create_task_group() as tg:
             tg.start_soon(signal_handler, tg.cancel_scope)
+            tg.start_soon(pru_sim_server, tg.cancel_scope)
             tg.start_soon(can_receive_loop, can_sock, rx, mqtt)
             tg.start_soon(mqtt_message_loop, mqtt, binder, can_sock, tx)
 
