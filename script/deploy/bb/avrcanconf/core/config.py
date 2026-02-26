@@ -358,7 +358,7 @@ class ConfigNode:
 
         for idx, canid in enumerate(self.canmobsList):
             endIoIdx = self.canmobSize[canid]['start'] + self.canmobSize[canid]['size']
-            data = pack('BBH', idx, endIoIdx, canid)
+            data = pack('<BBH', idx, endIoIdx, canid)
             trans.svcTransfer(SvcProtocol.CmdSetCanMob, data)
 
 

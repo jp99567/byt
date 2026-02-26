@@ -89,7 +89,7 @@ if args.stat or args.config or args.fw_upload:
 def decode_git_version(data):
     if len(data) == 7:
         data.append(0)
-        git_ver32bit, build_time = struct.unpack('II', bytearray(data))
+        git_ver32bit, build_time = struct.unpack('<II', bytearray(data))
         dirty = build_time & 1 == 1
         build_epoch = fw_build_epoch_base + (build_time >> 1) * 60
         build_datetime = datetime.datetime.fromtimestamp(build_epoch)
@@ -314,9 +314,9 @@ def sniff():
             nodeid, minor = bytcan.canIdCheck(msg.arbitration_id)
             if minor == 0b11:
                 if len(data) == 8:
-                    CANSIT, CANEN = struct.unpack('HH', msg.data[0:4])
+                    CANSIT, CANEN = struct.unpack('<HH', msg.data[0:4])
                     rest = [f"{v:02X}" for v in data[4:6]]
-                    tmp, = struct.unpack('H', msg.data[6:8])
+                    tmp, = struct.unpack('<H', msg.data[6:8])
                     print(f"debug({nodeid},{minor}) {CANSIT:04X} {CANEN:04X} {rest} {tmp:04X}")
                 else:
                     rest = [f"{v:02X}" for v in data]
@@ -495,7 +495,7 @@ def owReadTempSingle():
 
     owSkiprom(req)
     ow_scratchpad = owReadScratchPad(req, t)
-    v16, = struct.unpack('h', ow_scratchpad[:2])
+    v16, = struct.unpack('<h', ow_scratchpad[:2])
     print(f"{v16:02X} teplota: {v16 / 16}")
 
 
@@ -539,7 +539,7 @@ if args.ow_read_all:
     for sens in sensors:
         owMatchRom(req, t, sens)
         ow_scratchpad = owReadScratchPad(req, t)
-        v16, tH, tL, conf, = struct.unpack('hBBB', ow_scratchpad[:5])
+        v16, tH, tL, conf, = struct.unpack('<hBBB', ow_scratchpad[:5])
         factor = 1 / 16
         if conf == 0xFF: factor = 1 / 2
         print(f"{sens.hex()} teplota: {v16 * factor}deg  (0x{v16:04X} tH:0x{tH:02X} tL:0x{tL:02X} conf:0b{conf:08b})")
