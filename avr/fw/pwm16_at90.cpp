@@ -5,8 +5,8 @@ namespace Pwm16At90 {
 
 void init(uint8_t prescaler, uint16_t top)
 {
-    ICR3 = top;
     TCCR3B = 1 << WGM33; //mode 8 PWM, Phase and Frequency Correct
+    ICR3 = top;
     TCCR3B |= (prescaler & 0x07);
 }
 
