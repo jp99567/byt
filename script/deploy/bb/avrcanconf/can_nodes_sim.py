@@ -29,8 +29,6 @@ import sys
 from dataclasses import dataclass, field
 from typing import Callable
 
-import os
-
 import aiomqtt
 import anyio
 import yaml
@@ -645,26 +643,13 @@ async def pru_sim_server(
       - eCmdOw*         → forwarded to *ow_bus*
       - eCmdOtTransmit  → forwarded to *ot_boiler*
     """
-    # Remove stale socket file if present
-    try:
-        os.unlink(PRU_SIM_SOCKET_PATH)
-    except FileNotFoundError:
-        pass
+    async with await anyio.create_unix_datagram_socket(
+        local_path=PRU_SIM_SOCKET_PATH,
+    ) as sock:
+        logger.info("PRU sim socket listening on %s", PRU_SIM_SOCKET_PATH)
 
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-    sock.setblocking(False)
-    sock.bind(PRU_SIM_SOCKET_PATH)
-    logger.info("PRU sim socket listening on %s", PRU_SIM_SOCKET_PATH)
-
-    try:
         while True:
-            await anyio.lowlevel.wait_readable(sock)
-            try:
-                data, client_addr = sock.recvfrom(512)
-            except OSError as exc:
-                logger.error("PRU sim recvfrom error: %s", exc)
-                await anyio.sleep(0.1)
-                continue
+            data, client_path = await sock.receive()
             if len(data) < 4:
                 logger.warning("PRU sim rx too short (%d bytes)", len(data))
                 continue
@@ -684,17 +669,7 @@ async def pru_sim_server(
                 logger.warning("PRU sim: unknown command %d", cmd)
                 response = struct.pack("<I", PRU_RSP_ERROR)
 
-            try:
-                sock.sendto(response, client_addr)
-            except OSError as exc:
-                logger.error("PRU sim sendto error: %s", exc)
-    finally:
-        sock.close()
-        try:
-            os.unlink(PRU_SIM_SOCKET_PATH)
-        except FileNotFoundError:
-            pass
-        logger.info("PRU sim socket closed")
+            await sock.send((response, client_path))
 
 
 # ---------------------------------------------------------------------------
