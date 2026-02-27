@@ -418,7 +418,7 @@ def build_items(config: dict, tx: TxBuffer, rx: RxDispatcher, binder: MqttInputB
 async def can_receive_loop(sock: socket.socket, rx: RxDispatcher, mqtt: aiomqtt.Client) -> None:
     """Read CAN frames from the socket and dispatch to RxDispatcher."""
     while True:
-        await anyio.lowlevel.wait_readable(sock)
+        await anyio.wait_socket_readable(sock)
         try:
             raw = sock.recv(CAN_FRAME_SIZE)
         except OSError as exc:
@@ -427,6 +427,7 @@ async def can_receive_loop(sock: socket.socket, rx: RxDispatcher, mqtt: aiomqtt.
             continue
         if len(raw) < CAN_FRAME_SIZE:
             continue
+
         can_id, data, dlc = unpack_can_frame(raw)
         await rx.dispatch(can_id, data, dlc, mqtt)
 
@@ -649,7 +650,7 @@ async def pru_sim_server(
         logger.info("PRU sim socket listening on %s", PRU_SIM_SOCKET_PATH)
 
         while True:
-            data, client_path = await sock.receive()
+            data, unused_val = await sock.receive()
             if len(data) < 4:
                 logger.warning("PRU sim rx too short (%d bytes)", len(data))
                 continue
@@ -669,7 +670,7 @@ async def pru_sim_server(
                 logger.warning("PRU sim: unknown command %d", cmd)
                 response = struct.pack("<I", PRU_RSP_ERROR)
 
-            await sock.send((response, client_path))
+            await sock.send((response, PRU_SIM_SOCKET_PATH))
 
 
 # ---------------------------------------------------------------------------
