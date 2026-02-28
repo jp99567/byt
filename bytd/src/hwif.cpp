@@ -20,6 +20,11 @@ int open_pru()
 {
 #ifdef BYTD_SIMULATOR
     auto serverSocket = socket(AF_UNIX, SOCK_DGRAM, 0);
+    struct sockaddr_un client_addr;
+    client_addr.sun_family = AF_UNIX;
+    strcpy(client_addr.sun_path, "/tmp/pru_sim_client");
+    ::unlink(client_addr.sun_path);
+    ::bind(serverSocket, (struct sockaddr *)&client_addr, sizeof(client_addr));
     struct sockaddr_un server_addr;
     server_addr.sun_family = AF_UNIX;
     strcpy(server_addr.sun_path, "/tmp/pru_sim_socket");

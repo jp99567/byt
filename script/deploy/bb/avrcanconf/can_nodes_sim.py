@@ -472,7 +472,7 @@ async def pru_sim_server(
         logger.info("PRU sim socket listening on %s", PRU_SIM_SOCKET_PATH)
 
         while True:
-            data, unused_val = await sock.receive()
+            data, client_path = await sock.receive()
             if len(data) < 4:
                 logger.warning("PRU sim rx too short (%d bytes)", len(data))
                 continue
@@ -492,7 +492,7 @@ async def pru_sim_server(
                 logger.warning("PRU sim: unknown command %d", cmd)
                 response = struct.pack("<I", PRU_RSP_ERROR)
 
-            await sock.send((response, PRU_SIM_SOCKET_PATH))
+            await sock.send((response, client_path))
 
 
 # ---------------------------------------------------------------------------
