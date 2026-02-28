@@ -107,6 +107,32 @@ class OwBus:
         self._search_participating: list[OwTemperatureSensor] = []
         self._search_bit_idx: int = 0
 
+        # MQTT topic → sensor mapping
+        self._topic_to_sensor: dict[str, OwTemperatureSensor] = {
+            f"cansim/ctrl/{s.name}": s for s in self.sensors
+        }
+
+    @property
+    def subscribe_topics(self) -> list[str]:
+        """MQTT topics to subscribe to for temperature updates."""
+        return list(self._topic_to_sensor)
+
+    def on_mqtt_message(self, topic: str, payload: str) -> bool:
+        """Handle an incoming MQTT message.
+
+        If *topic* matches a sensor, updates its ``temperature`` and returns
+        ``True``; otherwise returns ``False``.
+        """
+        sensor = self._topic_to_sensor.get(topic)
+        if sensor is None:
+            return False
+        try:
+            sensor.temperature = float(payload)
+            logger.debug("MQTT→OwT %s = %.2f °C", sensor.name, sensor.temperature)
+        except ValueError:
+            logger.warning("OwBus: invalid temperature payload %r for %s", payload, sensor.name)
+        return True
+
     def handle(self, cmd: int, data: bytes) -> bytes:
         """Process an OW command and return a response datagram.
 

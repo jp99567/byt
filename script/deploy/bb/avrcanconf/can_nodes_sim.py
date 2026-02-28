@@ -402,11 +402,13 @@ async def mqtt_message_loop(
     binder: MqttInputBinder,
     can_sock: socket.socket,
     tx: TxBuffer,
+    ow_bus: OwBus,
 ) -> None:
     """Receive MQTT messages, update TX buffer, and send affected CAN frames."""
     async for message in mqtt.messages:
         topic = message.topic.value
         payload = message.payload.decode() if isinstance(message.payload, bytes) else str(message.payload)
+        ow_bus.on_mqtt_message(topic, payload)
         can_id = binder.on_message(topic, payload)
         if can_id is not None:
             buf = tx.frames.get(can_id)
@@ -470,7 +472,7 @@ async def pru_sim_server(
         logger.info("PRU sim socket listening on %s", PRU_SIM_SOCKET_PATH)
 
         while True:
-            data = await sock.receive()[0]
+            data, unused_val = await sock.receive()
             if len(data) < 4:
                 logger.warning("PRU sim rx too short (%d bytes)", len(data))
                 continue
@@ -479,7 +481,7 @@ async def pru_sim_server(
             logger.debug("PRU sim rx cmd=%d  len=%d  data=%s", cmd, len(data), data.hex())
 
             if cmd == PRU_CMD_HALT:
-                logger.debug("PRU sim: eCmdHalt — ignored")
+                logger.info("PRU sim: eCmdHalt — ignored")
                 continue
 
             if cmd in _PRU_OW_CMDS:
@@ -520,26 +522,28 @@ async def async_main(args: argparse.Namespace) -> None:
     logger.info("CAN socket bound to %s", args.can_if)
 
     # -- MQTT + Run -----------------------------------------------------------
+    all_topics = topics + ow_bus.subscribe_topics
+
     async with aiomqtt.Client(
         hostname=args.mqtt_host,
         port=args.mqtt_port,
         identifier="cansim",
     ) as mqtt:
-        for t in topics:
+        for t in all_topics:
             await mqtt.subscribe(t, qos=0)
             logger.debug("MQTT subscribe %s", t)
 
         logger.info(
             "Simulator running — TX frames: %d, MQTT subscriptions: %d",
             len(tx.frames),
-            len(topics),
+            len(all_topics),
         )
 
         async with anyio.create_task_group() as tg:
             tg.start_soon(signal_handler, tg.cancel_scope)
             tg.start_soon(pru_sim_server, tg.cancel_scope, ow_bus, ot_boiler)
             tg.start_soon(can_receive_loop, can_sock, rx, mqtt)
-            tg.start_soon(mqtt_message_loop, mqtt, binder, can_sock, tx)
+            tg.start_soon(mqtt_message_loop, mqtt, binder, can_sock, tx, ow_bus)
 
     # -- Cleanup --------------------------------------------------------------
     can_sock.close()
