@@ -11,7 +11,7 @@ struct ThermScratchpad {
     int8_t alarmH;
     int8_t alarmL;
     uint8_t conf;
-    char reserved[3];
+    uint8_t reserved[3];
     uint8_t crc;
 } __attribute__((__packed__));
 
