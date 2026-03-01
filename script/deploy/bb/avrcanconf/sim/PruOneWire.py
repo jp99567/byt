@@ -5,8 +5,11 @@ Contains PRU enum constants, OwTemperatureSensor, and OwBus.
 
 from __future__ import annotations
 
+import datetime
+import enum
 import logging
 import struct
+import bitarray
 
 logger = logging.getLogger("cansim")
 
@@ -53,10 +56,37 @@ _PRU_OW_CMDS = frozenset({
     PRU_CMD_OW_WRITE_POWER,
 })
 
+def dallas_crc8(data):
+    crc = 0
+    for c in data:
+        for i in range(0, 8):
+            b = (crc & 1) ^ ((int(c) & (1 << i)) >> i)
+            crc = (crc ^ (b * 0x118)) >> 1
+    return crc
+
 
 # ---------------------------------------------------------------------------
 # OwTemperatureSensor
 # ---------------------------------------------------------------------------
+
+class OwSensorState(enum.Enum):
+    IDLE = 0
+    IGNORING = 1
+    SELECTED = 2
+    MATCH_ROM = 3
+    SEARCH = 4
+    CONVERTING = 5
+
+
+class OwThermCmd(enum.IntEnum):
+    """1-Wire thermometer commands (ow::OwThermNet::Cmd from OwThermNet.h)."""
+    READ_ROM        = 0x33
+    CONVERT         = 0x44
+    MATCH_ROM       = 0x55
+    READ_SCRATCHPAD = 0xBE
+    SKIP_ROM        = 0xCC
+    SEARCH          = 0xF0
+
 
 class OwTemperatureSensor:
     """Simulated 1-Wire temperature sensor.
@@ -69,15 +99,164 @@ class OwTemperatureSensor:
             raise ValueError(f"ROM code must be 8 bytes, got {len(rom_code)}")
         self.name = name
         self.rom_code = rom_code  # 8 bytes: family(1) + serial(6) + crc(1)
-        self.temperature: float = float("nan")  # °C, set via MQTT later
+        self.temperature: float = -12.3456  # °C, set via MQTT later
+        self.measured_temp = 85 << 4  # DS18B20 power-on reset value, 4 fractional bits (1 LSB = 1/16 °C)
+        self.state = OwSensorState.IDLE
+        self.bits_in = bitarray.bitarray(endian="little")  # bits received from master, for current command
+        self.bits_out = bitarray.bitarray(endian="little")  # bits to send to master, for current command
+        self.search_bit_idx = 0  # for SEARCH command
 
     def reset(self) -> None:
         """Reset sensor to initial state (called on eCmdOwInit)."""
-        pass
+        self.bits_in.clear()
+        self.bits_out.clear()
+        self.search_bit_idx = 0
+        if self.state == OwSensorState.CONVERTING:
+            if datetime.datetime.now() - self.convert_start_time >= datetime.timedelta(seconds=0.75):
+                if not self.temperature == self.temperature:  # NaN check
+                    logger.warning("OwSensor %s: CONVERT completed but temperature is NaN", self.name)
+                else:
+                    self.measured_temp = int(self.temperature * (1<<4))  # convert °C to raw value with 4 fractional bits
+        self.state = OwSensorState.IDLE
 
     def __repr__(self) -> str:
         return f"OwTemperatureSensor({self.name!r}, rc={self.rom_code.hex()})"
+    
+    def read(self, num_bits: int) -> bitarray.bitarray:
+        """Read bits to send to master (called on eCmdOwRead).
 
+        Returns up to *num_bits* bits from the current response buffer.
+        """
+
+        if self.state == OwSensorState.IGNORING:
+            self.bits_out.clear()  # discard any pending response bits
+        
+        if num_bits > len(self.bits_out):
+            padding = bitarray.bitarray(num_bits - len(self.bits_out), endian="little")
+            padding.setall(1)
+            self.bits_out.extend(padding)
+        bits = self.bits_out[:num_bits]
+        self.bits_out = self.bits_out[num_bits:]
+        return bits
+        
+    
+    def write(self, bits: bitarray.bitarray, power: bool) -> None:
+        """Handle bits written to the bus (called on eCmdOwWrite / eCmdOwWritePower).
+
+        *bits* are the bits written by the master, in little-endian order.
+        *power* is ``True`` if the bus is powered during the write (for
+        parasitically powered sensors).
+        """
+
+        self.bits_in.extend(bits)
+        while self.bits_in:
+            wait_for_more = self.process(power)
+            if wait_for_more:
+                break
+
+    def process(self, power: bool) -> bool:
+        wait_for_more_bits = False  # if True, master should wait for more bits before next process() call
+        if self.state == OwSensorState.IDLE:
+            if len(self.bits_in) >= 8:
+                cmd = int.from_bytes(self.bits_in[0:8].tobytes(), "little")
+                self.bits_in = self.bits_in[8:]
+                if cmd == OwThermCmd.SKIP_ROM:
+                    self.state = OwSensorState.SELECTED
+                elif cmd == OwThermCmd.MATCH_ROM:
+                    self.state = OwSensorState.MATCH_ROM
+                elif cmd == OwThermCmd.SEARCH:
+                    self.state = OwSensorState.SEARCH
+                    if len(self.bits_in) > 0:
+                        logger.warning("OwSensor %s: received extra bits after SEARCH command — ignoring", self.name)
+                        self.state = OwSensorState.IGNORING
+                    else:
+                        # Prepare for SEARCH command by setting search_bit_idx to 0
+                        self.search_bit_idx = 0
+                        rom_code_bits = bitarray.bitarray(endian="little")
+                        rom_code_bits.frombytes(self.rom_code)
+                        self.bits_out = bitarray.bitarray((rom_code_bits[self.search_bit_idx],
+                                                           (~rom_code_bits)[self.search_bit_idx]),
+                                                           endian="little")
+                else:
+                    self.state = OwSensorState.IGNORING
+            else:
+                wait_for_more_bits = True
+        elif self.state == OwSensorState.MATCH_ROM:
+            if len(self.bits_in) >= 64:
+                rom_code = self.bits_in[0:64].tobytes()
+                self.bits_in = self.bits_in[64:]
+                if rom_code == self.rom_code:
+                    self.state = OwSensorState.SELECTED
+                else:
+                    self.state = OwSensorState.IGNORING
+            else:
+                wait_for_more_bits = True   
+        elif self.state == OwSensorState.SELECTED:
+            if len(self.bits_in) >= 8:
+                cmd = int.from_bytes(self.bits_in[0:8].tobytes(), "little")
+                self.bits_in = self.bits_in[8:]
+                if cmd == OwThermCmd.CONVERT:
+                    self.measured_temp = 85 << 4  # DS18B20 default value during CONVERT
+                    self.convert_start_time = datetime.datetime.now()
+                    if not power:
+                        logger.warning("OwSensor %s: CONVERT command received without power — ignoring", self.name)
+                        self.state = OwSensorState.IGNORING
+                    elif len(self.bits_in) > 0:
+                        logger.warning("OwSensor %s: received extra bits after CONVERT command — ignoring", self.name)
+                        self.state = OwSensorState.IGNORING
+                    else:
+                        self.state = OwSensorState.CONVERTING
+                elif cmd == OwThermCmd.READ_SCRATCHPAD:
+                    if len(self.bits_in) > 0:
+                        logger.warning("OwSensor %s: received extra bits after READ_SCRATCHPAD command — ignoring", self.name)
+                        self.state = OwSensorState.IGNORING
+                    else:
+                        # ThermScratchpad: int16_t temp | int8_t alarmH | int8_t alarmL | uint8_t conf | char[3] reserved | uint8_t crc
+                        scratchpad = bytearray(struct.pack("<hbbB3sB",
+                            self.measured_temp,  # temperature (raw, LSB = 1/16 °C)
+                            0,                   # alarmH
+                            0,                   # alarmL
+                            0x7F,                # conf (12-bit resolution)
+                            b'\xFF\xFF\x10',     # reserved
+                            0,                   # crc (not verified by bytd sim)
+                        ))
+                        scratchpad[-1] = dallas_crc8(scratchpad[:-1])
+                        ba = bitarray.bitarray(endian="little")
+                        ba.frombytes(bytes(scratchpad))
+                        self.bits_out.extend(ba)
+                else:
+                    logger.warning("OwSensor %s: unrecognized command 0x%02X — ignoring", self.name, cmd)
+                    self.state = OwSensorState.IGNORING
+        elif self.state == OwSensorState.IGNORING:
+            self.bits_in.clear()  # discard bits until next command
+        elif self.state == OwSensorState.SEARCH:
+            if len(self.bits_in) == 1:
+                rom_code_bits = bitarray.bitarray(endian="little")
+                rom_code_bits.frombytes(self.rom_code)
+                if rom_code_bits[self.search_bit_idx] == self.bits_in[0]:
+                        rom_code_bits = bitarray.bitarray(endian="little")
+                        rom_code_bits.frombytes(self.rom_code)
+                        self.bits_out = bitarray.bitarray((rom_code_bits[self.search_bit_idx],
+                                                           (~rom_code_bits)[self.search_bit_idx]),
+                                                           endian="little")
+                        self.search_bit_idx += 1
+                        if self.search_bit_idx >= 64:
+                            self.state = OwSensorState.IGNORING
+                            logger.warning("OwSensor %s: completed SEARCH response but master sent extra bits — ignoring", self.name)
+                else:
+                    self.state = OwSensorState.IGNORING
+            else:
+                logger.warning("OwSensor %s: expected 1 bit for SEARCH response, got %d — ignoring", self.name, len(self.bits_in))
+                self.state = OwSensorState.IGNORING
+            self.bits_in.clear()
+        elif self.state == OwSensorState.CONVERTING:
+            if datetime.datetime.now() - self.convert_start_time < datetime.timedelta(seconds=0.75):
+                logger.warning("OwSensor %s: received write during CONVERT — ignoring", self.name)
+                self.state = OwSensorState.IGNORING
+            self.bits_in.clear()
+        return wait_for_more_bits
+        
+            
 
 # ---------------------------------------------------------------------------
 # OwBus
@@ -102,10 +281,6 @@ class OwBus:
             self.sensors.append(sensor)
             logger.info("OwBus: loaded sensor %s  rc=%s", name, rc_hex)
         logger.info("OwBus: %d sensor(s) on bus", len(self.sensors))
-
-        # Search state — reset on every eCmdOwInit
-        self._search_participating: list[OwTemperatureSensor] = []
-        self._search_bit_idx: int = 0
 
         # MQTT topic → sensor mapping
         self._topic_to_sensor: dict[str, OwTemperatureSensor] = {
@@ -142,6 +317,13 @@ class OwBus:
         """
         if cmd == PRU_CMD_OW_INIT:
             return self._handle_init()
+        if cmd in (PRU_CMD_OW_WRITE, PRU_CMD_OW_WRITE_POWER):
+            num_bits = struct.unpack_from("<I", data, 4)[0]
+            self._handle_write(num_bits, data[8:], power=(cmd == PRU_CMD_OW_WRITE_POWER))
+            return struct.pack("<I", PRU_RSP_OW_WRITE_BITS_OK)
+        if cmd == PRU_CMD_OW_READ:
+            num_bits = struct.unpack_from("<I", data, 4)[0]
+            return struct.pack("<I", PRU_RSP_OW_READ_BITS_OK) + self._handle_read(num_bits).tobytes()
         if cmd == PRU_CMD_OW_SEARCH_DIR0:
             return self._handle_search(direction=0)
         if cmd == PRU_CMD_OW_SEARCH_DIR1:
@@ -150,6 +332,34 @@ class OwBus:
         logger.debug("OwBus: unhandled cmd=%d  len=%d  data=%s", cmd, len(data), data.hex())
         return struct.pack("<I", PRU_RSP_ERROR)
 
+    def _handle_read(self, num_bits: int) -> bitarray.bitarray:
+        """Handle eCmdOwRead.
+
+        Payload is 4 bytes: number of bits to read (u32).  Response is the
+        bits read from the bus, in little-endian order.
+        """
+
+        logger.debug(f"OwBus: read {num_bits=} bits")
+        bits = bitarray.bitarray(num_bits, endian="little")
+        bits.setall(1)  # default to 1 (bus idle) if no sensor drives it low
+        for sensor in self.sensors:
+            bits &= sensor.read(num_bits)
+        return bits
+    
+    def _handle_write(self, bitsize: int, payload: bytes, power: bool) -> None:
+        """Handle eCmdOwWrite / eCmdOwWritePower.
+
+        Payload is the bytes to write to the bus.  If *power* is ``True``, the
+        bus is also powered during the write (for parasitically powered sensors).
+        """
+
+        bits = bitarray.bitarray(endian="little")
+        bits.frombytes(payload)
+        bits = bits[:bitsize]
+        logger.debug(f"OwBus: write {bitsize=} {power=}  {bits=}")
+        for sensor in self.sensors:
+            sensor.write(bits, power)
+        
     def _handle_init(self) -> bytes:
         """Respond to eCmdOwInit (presence detect).
 
@@ -158,8 +368,7 @@ class OwBus:
         """
         for sensor in self.sensors:
             sensor.reset()
-        self._search_participating = list(self.sensors)
-        self._search_bit_idx = 0
+
         if self.sensors:
             logger.debug("OwBus: init → eOwPresenceOk (%d sensors)", len(self.sensors))
             return struct.pack("<Ii", PRU_RSP_OW_PRESENCE_OK, 0)
@@ -170,64 +379,29 @@ class OwBus:
     def _handle_search(self, direction: int) -> bytes:
         """Respond to eCmdOwSearchDir0 / eCmdOwSearchDir1.
 
-        Implements a single search-triplet step of the 1-Wire search algorithm.
-        For the current bit position the wired-AND of all participating sensors
-        is computed (actual bit and complement bit).  The combined two-bit value
-        determines the response:
-
         - ``0b00``  both 0 and 1 present (conflict) → *direction* selects
         - ``0b01``  all sensors have 1
         - ``0b10``  all sensors have 0
         - ``0b11``  no sensor on bus
-
-        Sensors whose bit does not match the selected direction are removed
-        from the participating set.  The bit index is then advanced.
         """
-        if not self._search_participating:
-            logger.debug("OwBus: search bit %d → eOwSearchResult11 (no participants)",
-                         self._search_bit_idx)
-            return struct.pack("<I", PRU_RSP_OW_SEARCH_RESULT_11)
 
-        byte_idx = self._search_bit_idx // 8
-        bit_mask = 1 << (self._search_bit_idx % 8)
+        code_bits = self._handle_read(2)
 
-        has_one = False
-        has_zero = False
-        for s in self._search_participating:
-            if s.rom_code[byte_idx] & bit_mask:
-                has_one = True
-            else:
-                has_zero = True
-            if has_one and has_zero:
-                break  # conflict already determined
-
-        if has_one and has_zero:
+        if code_bits == bitarray.bitarray("00", endian="little"):
             # v=0b00: conflict — master chooses direction
-            selected_bit = direction
             rsp_code = PRU_RSP_OW_SEARCH_RESULT_00
-        elif has_one:
+        elif code_bits == bitarray.bitarray("01", endian="little"):
             # v=0b01: all participating sensors have 1
-            selected_bit = 1
             rsp_code = PRU_RSP_OW_SEARCH_RESULT_0
-        elif has_zero:
+        elif code_bits == bitarray.bitarray("10", endian="little"):
             # v=0b10: all participating sensors have 0
-            selected_bit = 0
             rsp_code = PRU_RSP_OW_SEARCH_RESULT_1
         else:
             # should not happen
             return struct.pack("<I", PRU_RSP_OW_SEARCH_RESULT_11)
 
-        # Eliminate sensors whose bit doesn't match the selected direction
-        self._search_participating = [
-            s for s in self._search_participating
-            if bool(s.rom_code[byte_idx] & bit_mask) == bool(selected_bit)
-        ]
+        dirbit = bitarray.bitarray("1" if direction else "0", endian="little")
+        for sensor in self.sensors:
+            sensor.write(dirbit, power=False)
 
-        logger.debug(
-            "OwBus: search bit %d  dir=%d  sel=%d  rsp=%d  remaining=%d",
-            self._search_bit_idx, direction, selected_bit, rsp_code,
-            len(self._search_participating),
-        )
-
-        self._search_bit_idx += 1
         return struct.pack("<I", rsp_code)
