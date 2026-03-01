@@ -32,10 +32,6 @@ PRU_RSP_OW_SEARCH_RESULT_0 = 10
 PRU_RSP_OW_SEARCH_RESULT_1 = 11
 PRU_RSP_OW_SEARCH_RESULT_11 = 12
 PRU_RSP_OW_SEARCH_RESULT_00 = 13
-PRU_RSP_OT_NO_RESPONSE = 14
-PRU_RSP_OT_FRAME_ERROR = 15
-PRU_RSP_OT_BUS_ERROR = 16
-PRU_RSP_OT_OK = 17
 
 # Commands
 PRU_CMD_HALT = 0
@@ -116,7 +112,7 @@ class OwTemperatureSensor:
                 if not self.temperature == self.temperature:  # NaN check
                     logger.warning("OwSensor %s: CONVERT completed but temperature is NaN", self.name)
                 else:
-                    self.measured_temp = int(self.temperature * (1<<4))  # convert °C to raw value with 4 fractional bits
+                    self.measured_temp = round(self.temperature * (1<<4))  # convert °C to raw value with 4 fractional bits
         self.state = OwSensorState.IDLE
 
     def __repr__(self) -> str:

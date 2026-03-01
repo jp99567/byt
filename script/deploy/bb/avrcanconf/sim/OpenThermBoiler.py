@@ -5,19 +5,29 @@ Contains the OtGasBoiler class.
 
 from __future__ import annotations
 
+import enum
 import logging
 import struct
 from typing import Callable
+from . import OpenThermFrame
 
 logger = logging.getLogger("cansim")
 
 MQTT_PREFIX_STAT = "cansim/stat/"
 MQTT_PREFIX_CTRL = "cansim/ctrl/"
 
-# PRU response codes used by OtGasBoiler
 PRU_RSP_OT_NO_RESPONSE = 14
+PRU_RSP_OT_FRAME_ERROR = 15
+PRU_RSP_OT_BUS_ERROR = 16
+PRU_RSP_OT_OK = 17
 
 
+class BoilerMode(enum.IntEnum):
+    Off = 0
+    Leto = 2
+    Zima = 3
+
+    
 class OtGasBoiler:
     """Simulated OpenTherm gas boiler.
 
@@ -43,6 +53,7 @@ class OtGasBoiler:
         # Input values (bytd → boiler → MQTT stat topics)
         self._spCH: float = 0.0
         self._spDHW: float = 0.0
+        self._mode: BoilerMode = BoilerMode.Off
 
         # Pending MQTT publications: list of (topic, payload) pairs
         # Drained by the async caller after each handle() invocation.
@@ -103,6 +114,17 @@ class OtGasBoiler:
             logger.debug("OtBoiler: spDHW = %.1f", value)
             self._publish(f"{MQTT_PREFIX_STAT}{self._PREFIX}spDHW", f"{value:.1f}")
 
+    @property
+    def mode(self) -> BoilerMode:
+        return self._mode
+
+    @mode.setter
+    def mode(self, value: BoilerMode) -> None:
+        if self._mode != value:
+            self._mode = value
+            logger.debug("OtBoiler: mode = %s", value.name)
+            self._publish(f"{MQTT_PREFIX_STAT}{self._PREFIX}mode", value.name)
+
     def _publish(self, topic: str, payload: str) -> None:
         """Queue a (topic, payload) pair for async publishing."""
         self.pending_publishes.append((topic, payload))
@@ -138,5 +160,62 @@ class OtGasBoiler:
         input value extraction will be implemented in a later step.
         Returns bytes to send back.
         """
-        logger.debug("OtGasBoiler: len=%d  data=%s", len(data), data.hex())
-        return struct.pack("<I", PRU_RSP_OT_NO_RESPONSE)
+
+        req_raw = struct.unpack_from("<I", data, offset=4)[0]
+        req = OpenThermFrame.Frame(req_raw)
+
+        # --- validity & parity checks (mirrors OpenTherm::transmit) ---------
+        if not req.is_valid():
+            logger.warning("OtBoiler: invalid frame 0x%08X", req_raw)
+            return struct.pack("<I", PRU_RSP_OT_FRAME_ERROR)
+
+        if req_raw != OpenThermFrame.parity(req_raw):
+            logger.warning("OtBoiler: parity error on frame 0x%08X", req_raw)
+            return struct.pack("<I", PRU_RSP_OT_FRAME_ERROR)
+
+        # --- build response -------------------------------------------------
+        rsp = OpenThermFrame.Frame(0)
+        rsp.set_id(req.get_id())
+
+        msg_type = req.get_type()
+
+        if msg_type == OpenThermFrame.MsgType.Mrd:
+            if req.get_id() == 25:      # tCH (boiler flow temperature)
+                rsp.set_type(OpenThermFrame.MsgType.Srdack)
+                rsp.set_v(OpenThermFrame.float2f88(self.tCH))
+            elif req.get_id() == 26:    # tDHW (DHW temperature)
+                rsp.set_type(OpenThermFrame.MsgType.Srdack)
+                rsp.set_v(OpenThermFrame.float2f88(self.tDHW))
+            elif req.get_id() == 0:     # status
+                rsp.set_type(OpenThermFrame.MsgType.Srdack)
+                status = 0
+                if self.flame:
+                    status |= 1 << 0
+                if self.ch_en:
+                    status |= 1 << 1
+                if self.dhw_en:
+                    status |= 1 << 2
+                rsp.set_v(status)
+                self.mode = BoilerMode(req.get_v() >> 8)
+            else:
+                rsp.set_type(OpenThermFrame.MsgType.Sunknown)
+
+        elif msg_type in (OpenThermFrame.MsgType.Mwr,
+                          OpenThermFrame.MsgType.Mwr2):
+            if req.get_id() == 1:       # CH setpoint
+                self.spCH = OpenThermFrame.float_from_f88(req.get_v())
+                rsp.set_type(OpenThermFrame.MsgType.Swrack)
+                rsp.set_v(req.get_v())
+            elif req.get_id() == 56:    # DHW setpoint
+                self.spDHW = OpenThermFrame.float_from_f88(req.get_v())
+                rsp.set_type(OpenThermFrame.MsgType.Swrack)
+                rsp.set_v(req.get_v())
+            else:
+                rsp.set_type(OpenThermFrame.MsgType.Sunknown)
+
+        else:
+            rsp.set_type(OpenThermFrame.MsgType.Sunknown)
+
+        rsp.data = OpenThermFrame.parity(rsp.data)
+        logger.debug("OtBoiler: req %s, rsp %s mode=%s", OpenThermFrame.frame_to_str(req), OpenThermFrame.frame_to_str(rsp), self.mode.name)
+        return struct.pack("<II", PRU_RSP_OT_OK, rsp.data)

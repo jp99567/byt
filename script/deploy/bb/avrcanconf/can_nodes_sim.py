@@ -37,7 +37,6 @@ from sim.PruOneWire import (
     PRU_RSP_ERROR,
     PRU_CMD_HALT,
     PRU_CMD_OT_TRANSMIT,
-    PRU_RSP_OT_OK,
     _PRU_OW_CMDS,
     OwBus,
 )
