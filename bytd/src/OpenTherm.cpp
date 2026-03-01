@@ -241,12 +241,13 @@ uint32_t OpenTherm::transmit(uint32_t frame)
             LogERR("OpenTherm buf invalid size {}", buf.size());
             return Frame::invalid;
         }
-        auto frame = pmsg[1];
-        if(frame != parity(frame)) {
+        auto rsp_frame = pmsg[1];
+        if(rsp_frame != parity(rsp_frame)) {
             LogERR("ot rx error parity");
             return Frame::invalid;
         }
-        return frame;
+        //LogINFO("OT req:{} ({:08X}) rsp:{} ({:08X})", frameToStr(frame), frame, frameToStr(rsp_frame), rsp_frame);
+        return rsp_frame;
     } break;
     default:
         LogERR("ot other rx error {}", pmsg[0]);
