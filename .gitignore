@@ -20,6 +20,7 @@ CMakeLists.txt.user*
 *.kdev4
 *_generated.h
 bytif/gen-*
+byt_sim/
 
 #eclipse
 **/.cproject
