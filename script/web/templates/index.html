@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ústredné kúrenie</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f0f4f8;
+            color: #1a202c;
+            min-height: 100vh;
+            padding: 1.5rem;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #2d3748;
+        }
+
+        .boiler-info {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .boiler-info .label { color: #718096; }
+
+        .boiler-temp {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #e53e3e;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #a0aec0;
+            flex-shrink: 0;
+            transition: background 0.3s;
+        }
+        .status-dot.connected { background: #48bb78; }
+
+        .zones-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+
+        .zone-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,.07);
+            transition: box-shadow 0.2s;
+        }
+
+        .zone-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.10); }
+
+        .zone-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .zone-name {
+            font-weight: 600;
+            font-size: 1rem;
+            color: #2d3748;
+        }
+
+        .valve-badge {
+            font-size: 0.75rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .valve-open   { background: #c6f6d5; color: #276749; }
+        .valve-partial{ background: #feebc8; color: #7b341e; }
+        .valve-closed { background: #fed7d7; color: #822727; }
+        .valve-unknown{ background: #e2e8f0; color: #4a5568; }
+
+        .temps {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .temp-block { flex: 1; }
+
+        .temp-block .label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #a0aec0;
+            margin-bottom: 0.15rem;
+        }
+
+        .temp-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #2d3748;
+        }
+
+        .temp-value.unknown { color: #a0aec0; font-size: 1.1rem; font-weight: 400; }
+
+        .temp-setpoint { color: #3182ce; }
+
+        .setpoint-form {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .setpoint-form label {
+            font-size: 0.8rem;
+            color: #718096;
+            white-space: nowrap;
+        }
+
+        .sp-input {
+            width: 5rem;
+            padding: 0.3rem 0.5rem;
+            border: 1px solid #cbd5e0;
+            border-radius: 0.4rem;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .sp-input:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 2px rgba(66,153,225,.3);
+        }
+
+        .btn-set {
+            padding: 0.3rem 0.75rem;
+            background: #4299e1;
+            color: #fff;
+            border: none;
+            border-radius: 0.4rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: background 0.15s;
+        }
+
+        .btn-set:hover { background: #3182ce; }
+        .btn-set:active { background: #2b6cb0; }
+
+        .valve-bar-wrap {
+            height: 6px;
+            background: #edf2f7;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 0.75rem;
+        }
+
+        .valve-bar {
+            height: 100%;
+            border-radius: 3px;
+            background: #68d391;
+            transition: width 0.5s ease;
+        }
+
+        footer {
+            margin-top: 2rem;
+            text-align: center;
+            font-size: 0.75rem;
+            color: #a0aec0;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🔥 Ústredné kúrenie</h1>
+    <div class="boiler-info">
+        <span class="status-dot" id="mqtt-dot" title="MQTT connection"></span>
+        <span class="label">Kotol CH:</span>
+        <span class="boiler-temp" id="boiler-sp">
+            {%- if state.boiler_setpoint is not none -%}
+                {{ "%.1f"|format(state.boiler_setpoint) }} °C
+            {%- else -%}
+                —
+            {%- endif -%}
+        </span>
+    </div>
+</header>
+
+<div class="zones-grid" id="zones-grid">
+{% for zone in state.zones %}
+    <div class="zone-card" id="card-{{ zone.room_id }}">
+        <div class="zone-header">
+            <span class="zone-name">{{ zone.display_name }}</span>
+            <span class="valve-badge {{ valve_class(zone.tev_pwm) }}" id="badge-{{ zone.room_id }}">
+                {{ valve_label(zone.tev_pwm) }}
+            </span>
+        </div>
+
+        <div class="temps">
+            <div class="temp-block">
+                <div class="label">Teplota</div>
+                <div class="temp-value {% if zone.current_temp is none %}unknown{% endif %}"
+                     id="temp-{{ zone.room_id }}">
+                    {%- if zone.current_temp is not none -%}
+                        {{ "%.1f"|format(zone.current_temp) }} °C
+                    {%- else -%}
+                        —
+                    {%- endif -%}
+                </div>
+            </div>
+            <div class="temp-block">
+                <div class="label">Požadovaná</div>
+                <div class="temp-value temp-setpoint {% if zone.setpoint is none %}unknown{% endif %}"
+                     id="sp-{{ zone.room_id }}">
+                    {%- if zone.setpoint is not none -%}
+                        {{ "%.1f"|format(zone.setpoint) }} °C
+                    {%- else -%}
+                        —
+                    {%- endif -%}
+                </div>
+            </div>
+        </div>
+
+        <div class="valve-bar-wrap">
+            <div class="valve-bar" id="bar-{{ zone.room_id }}"
+                 style="width: {{ zone.tev_pwm if zone.tev_pwm is not none else 0 }}%"></div>
+        </div>
+
+        <form class="setpoint-form" action="/setpoint" method="post">
+            <input type="hidden" name="room_id" value="{{ zone.room_id }}">
+            <label for="sp-in-{{ zone.room_id }}">Nastav °C:</label>
+            <input class="sp-input" type="number" id="sp-in-{{ zone.room_id }}" name="value"
+                   min="5" max="30" step="0.5"
+                   value="{{ "%.1f"|format(zone.setpoint) if zone.setpoint is not none else '' }}"
+                   placeholder="5–30">
+            <button class="btn-set" type="submit">Nastav</button>
+        </form>
+    </div>
+{% endfor %}
+</div>
+
+<footer>
+    byt central heating control &mdash; updates via SSE
+</footer>
+
+<script>
+(function () {
+    "use strict";
+
+    const dot = document.getElementById("mqtt-dot");
+    const boilerSp = document.getElementById("boiler-sp");
+
+    function fmtTemp(v) {
+        return v !== null ? v.toFixed(1) + " °C" : "—";
+    }
+
+    function valveClass(pwm) {
+        if (pwm === null) return "valve-unknown";
+        if (pwm >= 80)    return "valve-open";
+        if (pwm > 10)     return "valve-partial";
+        return "valve-closed";
+    }
+
+    function valveLabel(pwm) {
+        if (pwm === null) return "—";
+        return pwm.toFixed(0) + "%";
+    }
+
+    function applyState(state) {
+        // Boiler
+        boilerSp.textContent = fmtTemp(state.boiler_setpoint);
+
+        // Zones
+        state.zones.forEach(function (z) {
+            const tempEl  = document.getElementById("temp-" + z.room_id);
+            const spEl    = document.getElementById("sp-" + z.room_id);
+            const badgeEl = document.getElementById("badge-" + z.room_id);
+            const barEl   = document.getElementById("bar-" + z.room_id);
+
+            if (!tempEl) return;
+
+            tempEl.textContent = fmtTemp(z.current_temp);
+            tempEl.className   = "temp-value" + (z.current_temp === null ? " unknown" : "");
+
+            spEl.textContent = fmtTemp(z.setpoint);
+            spEl.className   = "temp-value temp-setpoint" + (z.setpoint === null ? " unknown" : "");
+
+            const cls = valveClass(z.tev_pwm);
+            badgeEl.className   = "valve-badge " + cls;
+            badgeEl.textContent = valveLabel(z.tev_pwm);
+
+            barEl.style.width = (z.tev_pwm !== null ? z.tev_pwm : 0) + "%";
+        });
+    }
+
+    // Server-Sent Events
+    if (typeof EventSource !== "undefined") {
+        const es = new EventSource("/events");
+
+        es.onopen = function () {
+            dot.classList.add("connected");
+        };
+
+        es.onmessage = function (evt) {
+            try {
+                applyState(JSON.parse(evt.data));
+            } catch (e) {
+                console.error("SSE parse error", e);
+            }
+        };
+
+        es.onerror = function () {
+            dot.classList.remove("connected");
+        };
+    }
+})();
+</script>
+
+</body>
+</html>
