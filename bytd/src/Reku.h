@@ -17,6 +17,7 @@ public:
     ~Reku();
     float FlowPercent = 30;
     float FlowExhaustPercent = std::numeric_limits<float>::quiet_NaN();
+    bool letnyRezim = false;
 
 private:
     bool bypass = false;

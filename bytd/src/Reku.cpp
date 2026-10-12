@@ -60,13 +60,19 @@ Reku::Reku(IMqttPublisherSPtr mqtt, const char* ttydev)
                 if(not std::isnan(FlowExhaustPercent)) {
                     pwm8Exht = f2pwm8(FlowPercent);
                 }
-/*
-                //leto
-                if(temperature[reku::EXHT].value() > temperature[reku::INTK].value() + 0.1)
-                    bypass = true;
-                else if(temperature[reku::EXHT].value() + 0.1 < temperature[reku::INTK].value()  )
-                    bypass = false;
-*/
+
+                if(letnyRezim){
+                    bool bypassNew = bypass;
+                    if(temperature[reku::EXHT].value() > temperature[reku::INTK].value() + 0.1)
+                        bypassNew = true;
+                    else if(temperature[reku::EXHT].value() + 0.1 < temperature[reku::INTK].value()  )
+                        bypassNew = false;
+                    if(bypassNew != bypass){
+                        bypass = bypassNew;
+                        LogINFO("bypass:{} Intake:{} Exhaust:{}", bypass, temperature[reku::INTK].value(), temperature[reku::EXHT].value());
+                    }
+                }
+
                 control.pwm[reku::INTK] = pwm8;
                 control.pwm[reku::EXHT] = pwm8Exht;
 
