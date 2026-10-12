@@ -46,6 +46,7 @@ private:
         over };
     Reg room_regulation_state(ROOM room) const;
     bool error = false;
+    int error_autoclear_count = 0;
     bool tevs_set_default = false;
     void set_t_CH();
     void set_pwm_TEV();

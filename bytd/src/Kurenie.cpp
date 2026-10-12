@@ -29,6 +29,16 @@ void Kurenie::process(std::chrono::steady_clock::time_point tp)
     dump_state();
     check();
     update();
+
+    if(error){
+        if(error_autoclear_count++ > 30*3){
+            error = false;
+            error_autoclear_count = 0;
+        }
+    }
+    else{
+        error_autoclear_count = 0;
+    }
 }
 
 void Kurenie::override_pwm_TEV(ROOM room, float pwm)
