@@ -63,7 +63,7 @@ void Builder::buildMisc(slowswi2cpwm& ioexpander, OpenTherm& ot)
 
     assignSensor(kurenie::ROOM::Obyvka, findSensor("tObyvka"));
     assignSensor(kurenie::ROOM::Spalna, findSensor("tSpalna2"));
-    assignSensor(kurenie::ROOM::Kuchyna, findSensor("tZadverie"));
+    assignSensor(kurenie::ROOM::Kuchyna, findSensor("tKuchyna"));
     assignSensor(kurenie::ROOM::Izba, findSensor("tIzba"));
     assignSensor(kurenie::ROOM::Kupelka, findSensor("KupelnaT"));
     assignSensor(kurenie::ROOM::Podlahovka, findSensor("tPodlahovka"));
